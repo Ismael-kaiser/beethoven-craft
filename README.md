@@ -48,7 +48,7 @@ Guía completa: [docs/daw.md](docs/daw.md)
 No hay descargas listas todavía: se compila. Hace falta [Rust](https://rustup.rs) y `ffmpeg`.
 
 ```sh
-git clone <dirección de este repositorio>
+git clone https://github.com/Ismael-kaiser/beethoven-craft.git
 cd beethoven-craft
 
 # Mac: deja «Beethoven Craft.app» en la carpeta
