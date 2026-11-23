@@ -14,12 +14,14 @@ pub enum Soltar {
     Titulo(usize),
     Medio(PathBuf),
     Estilo(usize),
+    Filtro(usize),
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Seccion {
     Medios,
     Estilos,
+    Filtros,
     FxVideo,
     Transiciones,
     Titulos,
@@ -87,6 +89,7 @@ impl App {
         let todas = [
             (Medios, "Medios"),
             (Estilos, "Estilos"),
+            (Filtros, "Filtros"),
             (FxVideo, "Efectos de video"),
             (Transiciones, "Transiciones"),
             (Titulos, "Títulos"),
@@ -116,6 +119,18 @@ impl App {
             match s {
                 Medios => self.medios_ui(ui, &mut poner),
                 Grabar => self.opciones_grabar(ui),
+                Filtros => {
+                    let mut g = "";
+                    for (i, e) in crate::filtros::FILTROS.iter().enumerate().filter(|e| contiene(e.1.nombre, &q) || contiene(e.1.grupo, &q)) {
+                        if g != e.grupo {
+                            g = e.grupo;
+                            ui.label(RichText::new(crate::idioma::t(g)).color(MAIN).size(13.0));
+                        }
+                        if renglon(ui, &tabler::STAR, crate::idioma::t(e.nombre), Soltar::Filtro(i)) {
+                            poner = Some(Soltar::Filtro(i));
+                        }
+                    }
+                }
                 Estilos => {
                     for (i, e) in crate::estilos::ESTILOS.iter().enumerate() {
                         if renglon(ui, &tabler::STAR, e.nombre, Soltar::Estilo(i)) {
@@ -357,6 +372,24 @@ impl App {
         self.clip = Some(id);
     }
 
+    /// Un filtro es una «Mezcla de color»; poner otro reemplaza al anterior.
+    pub fn poner_filtro(&mut self, clip: Option<u64>, i: usize) {
+        let id = self.p.id();
+        let Some(c) = clip.and_then(|x| self.p.clip_video(x)) else {
+            self.avisar(crate::idioma::t("Pon el cursor sobre un clip de video o elígelo"), false);
+            return;
+        };
+        let Some(f) = crate::filtros::efecto(id, i) else { return };
+        match c.fx.iter_mut().find(|x| x.tipo == "bc:color") {
+            Some(x) => *x = f,
+            None => c.fx.push(f),
+        }
+        self.clip = clip;
+        self.panel_izq = PanelIzq::Controles;
+        let n = crate::idioma::t(crate::filtros::FILTROS[i].nombre);
+        self.avisar(crate::idioma::tf("Filtro «{}» puesto", &[&n]), false);
+    }
+
     pub fn poner_estilo(&mut self, clip: Option<u64>, i: usize) {
         match clip {
             Some(id) => {
@@ -397,7 +430,7 @@ impl App {
         use Seccion::*;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            for (s, n) in [(Estilos, "Estilos listos"), (FxVideo, "Video"), (Transiciones, "Transiciones"), (FxAudio, "Audio"), (Titulos, "Títulos")] {
+            for (s, n) in [(Estilos, "Estilos listos"), (Filtros, "Filtros"), (FxVideo, "Video"), (Transiciones, "Transiciones"), (FxAudio, "Audio"), (Titulos, "Títulos")] {
                 if pestana_chica(ui, n, self.lib.seccion == s).clicked() {
                     self.lib.seccion = s;
                 }
@@ -413,7 +446,7 @@ impl App {
                 self.pedir_muestras();
             }
         });
-        if matches!(self.lib.seccion, Estilos | FxVideo) {
+        if matches!(self.lib.seccion, Estilos | Filtros | FxVideo) {
             ui.checkbox(&mut self.lib.a_todo, crate::idioma::t("Aplicar a todo el video")).on_hover_text(crate::idioma::t("Pone el efecto en un clip vacío encima de todo: afecta videos, imágenes y textos"));
         }
         ui.add_space(2.0);
@@ -422,6 +455,7 @@ impl App {
         // (grupo, nombre, ayuda, clave de la muestra, qué pone)
         let todo: Vec<(&str, &str, &str, String, Soltar)> = match s {
             Estilos => crate::estilos::ESTILOS.iter().enumerate().map(|(i, e)| ("Estilos listos", e.nombre, e.ayuda, format!("estilo:{i}"), Soltar::Estilo(i))).collect(),
+            Filtros => crate::filtros::FILTROS.iter().enumerate().map(|(i, e)| (e.grupo, e.nombre, "", format!("filtro:{i}"), Soltar::Filtro(i))).collect(),
             Transiciones => nombres::TRANSICIONES.iter().map(|e| (e.0, e.1, "", format!("tr:{}", e.2), Soltar::Transicion(e.2))).collect(),
             FxAudio => TipoFx::GRUPOS.iter().flat_map(|g| TipoFx::TODOS.into_iter().filter(move |t| t.grupo() == *g).map(move |t| (*g, t.nombre(), t.ayuda(), String::new(), Soltar::FxAudio(t)))).collect(),
             Titulos => (0..titulos::PLANTILLAS).map(|i| ("Títulos", titulos::plantilla(i).0, "", String::new(), Soltar::Titulo(i))).collect(),
@@ -449,7 +483,7 @@ impl App {
             }
         });
         if let Some(s) = poner {
-            if self.lib.a_todo && matches!(s, Soltar::FxVideo(_) | Soltar::Estilo(_)) {
+            if self.lib.a_todo && matches!(s, Soltar::FxVideo(_) | Soltar::Estilo(_) | Soltar::Filtro(_)) {
                 // El mismo clip vacío recibe los siguientes.
                 let fin = self.p.fin();
                 let ya = self.clip.filter(|id| self.p.video.iter().any(|c| c.id == *id && c.contenido == Contenido::Ajuste)).or_else(|| {
@@ -462,6 +496,7 @@ impl App {
                 match s {
                     Soltar::FxVideo(f) => self.agregar_fx_video(id, f),
                     Soltar::Estilo(i) => self.poner_estilo(Some(id), i),
+                    Soltar::Filtro(i) => self.poner_filtro(Some(id), i),
                     _ => {}
                 }
                 return;
@@ -497,6 +532,10 @@ impl App {
             }
             (Soltar::Titulo(i), _) => self.poner_titulo(i, t, None),
             (Soltar::Medio(r), _) => self.importar(r),
+            (Soltar::Filtro(i), _) => {
+                let id = video.or_else(|| (0..self.p.capas.len()).rev().find_map(|i| self.p.video_en(i, t)).map(|c| c.id));
+                self.poner_filtro(id, i);
+            }
             (Soltar::Estilo(i), _) => {
                 let id = video.or_else(|| (0..self.p.capas.len()).rev().find_map(|i| self.p.video_en(i, t)).map(|c| c.id));
                 self.poner_estilo(id, i);

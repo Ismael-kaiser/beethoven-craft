@@ -410,7 +410,7 @@ fn pestanas_y_catalogo() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     assert!(h.state().muestras_listas(), "{} muestras", h.state().muestras.len());
-    for s in ["Estilos listos", "Video", "Transiciones", "Audio", "Títulos"] {
+    for s in ["Estilos listos", "Filtros", "Video", "Transiciones", "Audio", "Títulos"] {
         // Hay pestañas con el mismo nombre: la pastilla del catálogo es la última.
         h.get_all_by_label(s).last().unwrap().click();
         h.run_steps(4);
@@ -660,4 +660,52 @@ fn cambiar_atajos() {
     h.get_by_label("Listo").click();
     h.run_steps(3);
     assert!(!h.state().atajos.abierto);
+}
+
+#[test]
+fn pestana_nodos() {
+    use toma_uno::nodos::{Clase, ENTRADA, SALIDA};
+    let (mut h, ids) = con_clips();
+    h.state_mut().clip = Some(ids[0]);
+    pestana(&mut h, "Nodos");
+    h.run_steps(4);
+    let g = |h: &Harness<App>| h.state().p.video.iter().find(|c| c.id == ids[0]).unwrap().nodos.clone();
+    assert!(g(&h).is_none());
+    h.get_by_label("Nodo Mezcla de color").click();
+    h.run_steps(4);
+    let x = g(&h).unwrap();
+    assert!(x.nodos.len() == 3 && x.llega(ENTRADA, SALIDA) && x.cables.len() == 2);
+    h.get_by_label("Nodo Máscara").click();
+    h.run_steps(4);
+    assert!(g(&h).unwrap().cables.iter().any(|c| c.puerto == 1), "la máscara se engancha al efecto elegido");
+    h.get_by_label("Nodo Resplandor").click();
+    h.run_steps(5);
+    assert!(g(&h).unwrap().nodos.iter().any(|n| n.clase == Clase::Fusionar));
+    foto(&mut h, "nodos");
+    // Jalar un cable de la entrada a otro nodo lo conecta de verdad.
+    let antes = g(&h).unwrap().cables.clone();
+    let r = h.get_by_label("En el lienzo: Fusionar").rect();
+    let e = h.get_by_label("En el lienzo: Clip").rect();
+    let (a, b) = (eframe::egui::pos2(e.right(), e.top() + 13.0 * e.width() / 150.0), eframe::egui::pos2(r.left(), r.top() + (26.0 + 22.0 * 2.5) * r.width() / 150.0));
+    h.hover_at(a);
+    h.run_steps(2);
+    h.drag_at(a);
+    h.run_steps(2);
+    for k in 1..=6 {
+        h.hover_at(a + (b - a) * (k as f32 / 6.0));
+        h.run_steps(1);
+    }
+    foto(&mut h, "nodos-cable");
+    h.drop_at(b);
+    h.run_steps(3);
+    assert_eq!(g(&h).unwrap().cables.len(), antes.len() + 1, "{:?}", g(&h).unwrap().cables);
+    // Borrar el nodo elegido, no el clip.
+    let n = g(&h).unwrap().nodos.len();
+    h.state_mut().nodos.elegido = g(&h).unwrap().nodos.iter().find(|n| n.clase == Clase::Fusionar).map(|n| n.id);
+    h.state_mut().hacer_atajo("borrar");
+    h.run_steps(2);
+    assert_eq!(g(&h).unwrap().nodos.len(), n - 1);
+    h.get_by_label("Nodo Mezcla de color").click();
+    h.run_steps(4);
+    foto(&mut h, "nodos-ruedas");
 }

@@ -386,7 +386,7 @@ fn trans_ui(ui: &mut Ui, n: &str, tr: &mut Option<Transicion>, tope: f64) {
 }
 
 /// Controles de un efecto de video, según lo que declara EffectCraft.
-fn fx_ui(ui: &mut Ui, f: &mut FxVideo, t: f64) {
+pub fn fx_ui(ui: &mut Ui, f: &mut FxVideo, t: f64) {
     if let Some(d) = f.tipo.strip_prefix("fc:").and_then(ct::find_video) {
         fc_ui(ui, f, d, t);
         return;
@@ -394,11 +394,33 @@ fn fx_ui(ui: &mut Ui, f: &mut FxVideo, t: f64) {
     if let Some(d) = crate::vpropios::buscar(&f.tipo) {
         for k in d.ctl {
             match k {
+                crate::vpropios::Ctl::N("sombras_l" | "medios_l" | "luces_l", ..) => {}
                 crate::vpropios::Ctl::N(id, n, a, b, def, u) => {
                     if let Some(p) = f.p.get_mut(*id) {
                         numero(ui, n, p, t, *a, *b, *def, u);
                     }
                 }
+                crate::vpropios::Ctl::O(id, n, o) => {
+                    if let Some(p) = f.p.get_mut(*id) {
+                        ui.horizontal(|ui| {
+                            ui.add_space(20.0);
+                            etiqueta(ui, n);
+                            let Valor::Op(mut x) = p.en(t) else { return };
+                            let antes = x;
+                            ComboBox::from_id_salt((f.id, *id)).selected_text(crate::idioma::t(o.get(x as usize).copied().unwrap_or(""))).show_ui(ui, |ui| {
+                                for (i, s) in o.iter().enumerate() {
+                                    ui.selectable_value(&mut x, i as u32, crate::idioma::t(s));
+                                }
+                            });
+                            if x != antes {
+                                p.poner(t, Valor::Op(x));
+                            }
+                        });
+                    }
+                }
+                // Las tres ruedas van juntas, con su brillo abajo.
+                crate::vpropios::Ctl::R("sombras", _) => ruedas(ui, f, t),
+                crate::vpropios::Ctl::R(..) => {}
                 crate::vpropios::Ctl::C(id, n, _) => {
                     if let Some(p) = f.p.get_mut(*id) {
                         ui.horizontal(|ui| {
@@ -571,4 +593,72 @@ fn fc_ui(ui: &mut Ui, f: &mut FxVideo, d: &ct::EffectDef, t: f64) {
             }
         }
     }
+}
+
+/// Ruedas de color de sombras, medios y luces.
+fn ruedas(ui: &mut Ui, f: &mut FxVideo, t: f64) {
+    let lado = ((ui.available_width() - 28.0) / 3.0).clamp(64.0, 150.0);
+    ui.horizontal(|ui| {
+        for (k, n) in [("sombras", "Sombras"), ("medios", "Medios"), ("luces", "Luces")] {
+            ui.allocate_ui_with_layout(vec2(lado, lado + 62.0), Layout::top_down(Align::Center), |ui| {
+                ui.set_width(lado);
+                ui.spacing_mut().item_spacing.y = 3.0;
+                if let Some(p) = f.p.get_mut(k) {
+                    ui.horizontal(|ui| {
+                        if rombo(ui, !p.claves.is_empty(), p.clave_en(t).is_some()).clicked() {
+                            p.alternar_clave(t);
+                        }
+                        ui.label(RichText::new(crate::idioma::t(n)).size(13.0).color(TEXT_DIM));
+                    });
+                    let (r, resp) = ui.allocate_exact_size(Vec2::splat(lado - 4.0), Sense::click_and_drag());
+                    resp.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, crate::idioma::t(n)));
+                    let rad = r.width() / 2.0 - 3.0;
+                    rueda_color(ui.painter(), r.center(), rad);
+                    let Valor::Punto(v) = p.en(t) else { return };
+                    let mut v = v;
+                    if resp.dragged() {
+                        // Fino: medio punto por pixel, con Shift menos.
+                        let k = if ui.input(|i| i.modifiers.shift) { 0.2 } else { 0.7 } / rad as f64;
+                        v[0] += resp.drag_delta().x as f64 * k;
+                        v[1] -= resp.drag_delta().y as f64 * k;
+                        let m = v[0].hypot(v[1]).max(1.0);
+                        p.poner(t, Valor::Punto([v[0] / m, v[1] / m]));
+                    } else if resp.double_clicked() {
+                        p.poner(t, Valor::Punto([0.0; 2]));
+                    }
+                    let o = r.center() + vec2(v[0] as f32, -v[1] as f32) * rad;
+                    ui.painter().line_segment([r.center(), o], Stroke::new(1.0, Color32::from_white_alpha(120)));
+                    ui.painter().circle(o, 5.0, Color32::WHITE, Stroke::new(1.5, Color32::BLACK));
+                    resp.on_hover_text(crate::idioma::t("Arrastra hacia un color; Shift va más fino; doble clic lo quita"));
+                }
+                if let Some(p) = f.p.get_mut(&format!("{k}_l")) {
+                    let mut v = p.en(t).num();
+                    ui.spacing_mut().slider_width = lado - 8.0;
+                    if ui.add(Slider::new(&mut v, -100.0..=100.0).show_value(false)).on_hover_text(crate::idioma::t("Brillo")).changed() {
+                        p.poner(t, Valor::Num(v));
+                    }
+                }
+            });
+        }
+    });
+}
+
+fn rueda_color(p: &Painter, o: Pos2, r: f32) {
+    let mut m = Mesh::default();
+    let n = 48;
+    m.colored_vertex(o, c(0x6a6a6a));
+    for i in 0..=n {
+        let g = std::f32::consts::TAU * i as f32 / n as f32;
+        // Igual que la rueda: rojo a la derecha, verde arriba a la izquierda, azul abajo a la izquierda.
+        let e = |d: f32| ((g - d.to_radians()).cos() * 0.5 + 0.5).powf(0.8);
+        let col = Color32::from_rgb((e(0.0) * 220.0) as u8 + 20, (e(120.0) * 220.0) as u8 + 20, (e(240.0) * 220.0) as u8 + 20);
+        m.colored_vertex(o + vec2(g.cos(), -g.sin()) * r, col);
+        if i > 0 {
+            m.add_triangle(0, i, i + 1);
+        }
+    }
+    p.add(Shape::mesh(m));
+    p.circle_stroke(o, r, Stroke::new(2.0, c(0x1c1c1c)));
+    p.line_segment([o - vec2(r, 0.0), o + vec2(r, 0.0)], Stroke::new(0.5, Color32::from_black_alpha(90)));
+    p.line_segment([o - vec2(0.0, r), o + vec2(0.0, r)], Stroke::new(0.5, Color32::from_black_alpha(90)));
 }

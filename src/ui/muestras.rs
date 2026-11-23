@@ -88,6 +88,13 @@ pub fn calcular(cuadro: Vec<u8>, entregar: impl Fn(String, Vec<u8>) -> bool) {
             return;
         }
     }
+    for i in 0..crate::filtros::FILTROS.len() {
+        let mut p = base();
+        p.video[0].fx.extend(crate::filtros::efecto(5, i));
+        if !entregar(format!("filtro:{i}"), composicion::componer(&p, 1.0, AN, AL, &mut f)) {
+            return;
+        }
+    }
     for e in nombres::EFECTOS {
         let mut p = base();
         if let Some(x) = fx_nuevo(5, e.2) {

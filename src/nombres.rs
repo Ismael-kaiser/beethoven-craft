@@ -3,6 +3,7 @@
 
 /// (categoría, nombre, id en EffectCraft)
 pub const EFECTOS: &[(&str, &str, &str)] = &[
+    ("Color", "Mezcla de color", "bc:color"),
     ("Al ritmo", "Zoom al ritmo", "bc:ritmo_zoom"),
     ("Al ritmo", "Destello al ritmo", "bc:ritmo_destello"),
     ("Al ritmo", "Cambio de color al ritmo", "bc:ritmo_color"),
@@ -795,6 +796,9 @@ pub fn opcion(s: &str) -> &str {
     OPCIONES.iter().find(|(a, _)| *a == s).map_or(s, |(_, b)| b)
 }
 pub fn efecto(id: &str) -> &str {
+    if let Some(d) = crate::vpropios::buscar(id) {
+        return d.nombre;
+    }
     EFECTOS.iter().find(|e| e.2 == id).map_or(id, |e| e.1)
 }
 pub fn transicion(id: &str) -> &str {
@@ -813,7 +817,7 @@ pub fn control(tipo: &str, id: &str) -> String {
             .ctl
             .iter()
             .find_map(|c| match c {
-                N(k, n, ..) | C(k, n, _) if *k == id => Some(t(n).to_string()),
+                N(k, n, ..) | C(k, n, _) | O(k, n, _) | R(k, n) if *k == id => Some(t(n).to_string()),
                 _ => None,
             })
             .unwrap_or(id.into());

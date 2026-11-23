@@ -59,7 +59,8 @@ fn efectos_propios_de_video() {
     };
     let dif = |a: &effectcraft_raster::Image, b: &effectcraft_raster::Image| a.data.iter().zip(&b.data).map(|(a, b)| (0..4).map(|k| (a[k] - b[k]).abs()).sum::<f32>()).sum::<f32>() / a.data.len() as f32;
     let o = img(320, 180);
-    for d in &DEFS {
+    // La mezcla de color llega en neutro: se prueba en `nodos`.
+    for d in DEFS.iter().filter(|d| d.id != "bc:color") {
         let f = nuevo(7, d);
         // El volteo no cambia en el primer golpe: se prueba en el segundo.
         let ini = std::time::Instant::now();

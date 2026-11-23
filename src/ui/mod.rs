@@ -10,6 +10,7 @@ pub mod estilo;
 pub mod inspector;
 pub mod linea;
 pub mod muestras;
+pub mod nodos;
 pub mod musica;
 pub mod origen;
 pub mod pestanas;
@@ -47,6 +48,7 @@ pub enum Espacio {
     Playlist,
     Efectos,
     Animacion,
+    Nodos,
 }
 
 impl Espacio {
@@ -56,7 +58,7 @@ impl Espacio {
             Espacio::Video => Some(0),
             Espacio::Audio => Some(1),
             Espacio::Efectos => Some(2),
-            Espacio::Playlist | Espacio::Animacion => None,
+            Espacio::Playlist | Espacio::Animacion | Espacio::Nodos => None,
         }
     }
 }
@@ -141,6 +143,7 @@ pub struct App {
     /// Pestaña de animación.
     pub anim: animacion::Estado,
     pub atajos: atajos::Estado,
+    pub nodos: nodos::Estado,
     aplicado: Option<Proyecto>,
     ultimo: Proyecto,
     deshacer: Vec<Proyecto>,
@@ -242,6 +245,7 @@ impl App {
             inicio: inicio::Estado::default(),
             anim: animacion::Estado::default(),
             atajos: Default::default(),
+            nodos: Default::default(),
             aplicado: None,
             ultimo: p.clone(),
             guardado: p.clone(),
@@ -273,7 +277,7 @@ impl App {
             medidor_tex: None,
             espacio: Espacio::Playlist,
             panel_izq: PanelIzq::Controles,
-            pestanas: vec![Espacio::Playlist, Espacio::Video, Espacio::Audio, Espacio::Efectos, Espacio::Animacion],
+            pestanas: vec![Espacio::Playlist, Espacio::Video, Espacio::Audio, Espacio::Efectos, Espacio::Animacion, Espacio::Nodos],
             ventanas: [false; 3],
             muestras: HashMap::new(),
             muestras_hechas: 0,
@@ -697,7 +701,7 @@ impl App {
     }
 
     pub fn muestras_listas(&self) -> bool {
-        self.muestras_hechas >= crate::estilos::ESTILOS.len() + crate::nombres::EFECTOS.len() + crate::nombres::TRANSICIONES.len()
+        self.muestras_hechas >= crate::estilos::ESTILOS.len() + crate::filtros::FILTROS.len() + crate::nombres::EFECTOS.len() + crate::nombres::TRANSICIONES.len()
     }
 
     /// Rehace las miniaturas con el cuadro que se está viendo.
@@ -1208,6 +1212,7 @@ impl App {
             "rehacer" => self.volver(false),
             "dividir" => self.dividir(),
             "borrar" if animando && !self.anim.claves.is_empty() => self.borrar_claves(),
+            "borrar" if self.espacio == Espacio::Nodos => self.quitar_nodo(),
             "borrar" => self.borrar_elegidos(false),
             "borrar_cerrar" => self.borrar_elegidos(true),
             "todo" => self.seleccion = self.p.tramos().iter().map(|x| x.id).collect(),
@@ -1248,6 +1253,7 @@ impl App {
             "p_audio" => self.abrir_pestana(Espacio::Audio),
             "p_efectos" => self.abrir_pestana(Espacio::Efectos),
             "p_animacion" => self.abrir_pestana(Espacio::Animacion),
+            "p_nodos" => self.abrir_pestana(Espacio::Nodos),
             "animar" => {
                 if let Some(id) = self.clip.filter(|id| self.p.video.iter().any(|c| c.id == *id)) {
                     self.animar(id);
@@ -1320,6 +1326,7 @@ impl App {
                 Espacio::Audio if !self.ventanas[1] => self.espacio_audio(ui, true),
                 Espacio::Efectos if !self.ventanas[2] => self.espacio_efectos(ui, true),
                 Espacio::Animacion => self.espacio_animacion(ui),
+                Espacio::Nodos => self.espacio_nodos(ui),
                 _ => self.espacio_playlist(ui),
             }
             self.ventanas_ui(&ctx);

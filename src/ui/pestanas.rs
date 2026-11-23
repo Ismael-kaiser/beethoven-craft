@@ -2,12 +2,13 @@
 use super::estilo::*;
 use super::*;
 
-pub const TODAS: [(Espacio, &str, &tabler::TablerIcon); 5] = [
+pub const TODAS: [(Espacio, &str, &tabler::TablerIcon); 6] = [
     (Espacio::Playlist, "Playlist", &tabler::PLAYLIST),
     (Espacio::Video, "Video", &tabler::LAYOUT_ROWS),
     (Espacio::Audio, "Audio", &tabler::ADJUSTMENTS),
     (Espacio::Efectos, "Efectos", &tabler::FLASK_2),
     (Espacio::Animacion, "Animación", &tabler::KEYFRAME),
+    (Espacio::Nodos, "Nodos", &tabler::BLEND_MODE),
 ];
 
 fn datos(e: Espacio) -> (&'static str, &'static tabler::TablerIcon) {

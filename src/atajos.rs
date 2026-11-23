@@ -76,6 +76,7 @@ pub const ACCIONES: &[Accion] = &[
     a("p_audio", "Vista", "Pestaña Audio", "Cmd+3"),
     a("p_efectos", "Vista", "Pestaña Efectos", "Cmd+4"),
     a("p_animacion", "Vista", "Pestaña Animación", "Cmd+5"),
+    a("p_nodos", "Vista", "Pestaña Nodos", "Cmd+6"),
     a("animar", "Animación", "Animar el clip elegido", "Shift+A"),
     a("clave", "Animación", "Poner cuadro clave", "Shift+K"),
     a("clave_antes", "Animación", "Cuadro clave anterior", "Shift+J"),

@@ -10,6 +10,10 @@ pub enum Ctl {
     /// Nombre, mínimo, máximo, inicial, unidad.
     N(&'static str, &'static str, f64, f64, f64, &'static str),
     C(&'static str, &'static str, [f32; 4]),
+    /// Lista de opciones.
+    O(&'static str, &'static str, &'static [&'static str]),
+    /// Rueda de color; su brillo es el control que sigue, `<id>_l`.
+    R(&'static str, &'static str),
 }
 use Ctl::*;
 
@@ -31,19 +35,43 @@ const VEL: Ctl = n("vel", "Velocidad", 0.0, 400.0, 100.0, "%");
 const CANT: Ctl = n("cant", "Cantidad", 5.0, 400.0, 100.0, "%");
 const TAM: Ctl = n("tam", "Tamaño", 10.0, 400.0, 100.0, "%");
 
-const R: &str = "Al ritmo";
+const RI: &str = "Al ritmo";
 const PA: &str = "Pantallas y cámaras";
 const AD: &str = "Adornos";
 const CO: &str = "Cómic y color";
 const ES: &str = "Espejos y ondas";
 
-pub const DEFS: [Def; 24] = [
-    Def { id: "bc:ritmo_zoom", nombre: "Zoom al ritmo", grupo: R, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 60.0, 12.0, "%"), n("caida", "Caída", 40.0, 800.0, 180.0, "ms")] },
-    Def { id: "bc:ritmo_destello", nombre: "Destello al ritmo", grupo: R, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 100.0, 70.0, "%"), n("caida", "Caída", 40.0, 800.0, 160.0, "ms"), C("color", "Color", [1.0, 1.0, 1.0, 1.0])] },
-    Def { id: "bc:ritmo_color", nombre: "Cambio de color al ritmo", grupo: R, ctl: &[BPM, CADA, DESF, n("paso", "Giro por golpe", 0.0, 360.0, 60.0, "°")] },
-    Def { id: "bc:ritmo_sacudida", nombre: "Sacudida al ritmo", grupo: R, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 200.0, 45.0, ""), n("caida", "Caída", 40.0, 800.0, 200.0, "ms")] },
-    Def { id: "bc:ritmo_rgb", nombre: "Separar RGB al ritmo", grupo: R, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 200.0, 50.0, ""), n("caida", "Caída", 40.0, 800.0, 220.0, "ms")] },
-    Def { id: "bc:ritmo_vueltas", nombre: "Volteo al ritmo", grupo: R, ctl: &[BPM, CADA, DESF] },
+pub const DEFS: [Def; 25] = [
+    Def {
+        id: "bc:color",
+        nombre: "Mezcla de color",
+        grupo: CO,
+        ctl: &[
+            R("sombras", "Sombras"),
+            n("sombras_l", "Brillo de sombras", -100.0, 100.0, 0.0, ""),
+            R("medios", "Medios"),
+            n("medios_l", "Brillo de medios", -100.0, 100.0, 0.0, ""),
+            R("luces", "Luces"),
+            n("luces_l", "Brillo de luces", -100.0, 100.0, 0.0, ""),
+            n("exp", "Exposición", -4.0, 4.0, 0.0, ""),
+            n("con", "Contraste", -100.0, 100.0, 0.0, ""),
+            n("sat", "Saturación", 0.0, 300.0, 100.0, "%"),
+            n("vib", "Intensidad", -100.0, 100.0, 0.0, ""),
+            n("temp", "Temperatura", -100.0, 100.0, 0.0, ""),
+            n("tinte", "Tinte", -100.0, 100.0, 0.0, ""),
+            n("giro", "Girar tonos", -180.0, 180.0, 0.0, "°"),
+            n("deslavar", "Deslavado", 0.0, 100.0, 0.0, "%"),
+            n("vin", "Viñeta", 0.0, 100.0, 0.0, "%"),
+            n("grano", "Grano", 0.0, 100.0, 0.0, "%"),
+            MEZ,
+        ],
+    },
+    Def { id: "bc:ritmo_zoom", nombre: "Zoom al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 60.0, 12.0, "%"), n("caida", "Caída", 40.0, 800.0, 180.0, "ms")] },
+    Def { id: "bc:ritmo_destello", nombre: "Destello al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 100.0, 70.0, "%"), n("caida", "Caída", 40.0, 800.0, 160.0, "ms"), C("color", "Color", [1.0, 1.0, 1.0, 1.0])] },
+    Def { id: "bc:ritmo_color", nombre: "Cambio de color al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF, n("paso", "Giro por golpe", 0.0, 360.0, 60.0, "°")] },
+    Def { id: "bc:ritmo_sacudida", nombre: "Sacudida al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 200.0, 45.0, ""), n("caida", "Caída", 40.0, 800.0, 200.0, "ms")] },
+    Def { id: "bc:ritmo_rgb", nombre: "Separar RGB al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF, n("fuerza", "Fuerza", 0.0, 200.0, 50.0, ""), n("caida", "Caída", 40.0, 800.0, 220.0, "ms")] },
+    Def { id: "bc:ritmo_vueltas", nombre: "Volteo al ritmo", grupo: RI, ctl: &[BPM, CADA, DESF] },
     Def { id: "bc:tv", nombre: "Televisión vieja", grupo: PA, ctl: &[n("curva", "Curvatura", 0.0, 100.0, 40.0, "%"), n("lineas", "Líneas", 0.0, 100.0, 55.0, "%"), n("vin", "Orillas oscuras", 0.0, 100.0, 60.0, "%")] },
     Def { id: "bc:cinta", nombre: "Cinta dañada", grupo: PA, ctl: &[n("cant", "Daño", 0.0, 200.0, 100.0, "%"), VEL] },
     Def { id: "bc:nocturna", nombre: "Visión nocturna", grupo: PA, ctl: &[n("brillo", "Ganancia", 50.0, 400.0, 180.0, "%"), n("ruido", "Ruido", 0.0, 100.0, 35.0, "%"), C("color", "Color", [0.25, 1.0, 0.35, 1.0])] },
@@ -64,8 +92,16 @@ pub const DEFS: [Def; 24] = [
     Def { id: "bc:agua", nombre: "Bajo el agua", grupo: ES, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 35.0, "%"), n("tam", "Tamaño de ola", 2.0, 40.0, 12.0, "%"), VEL] },
 ];
 
+/// Los que no están en el catálogo de efectos: la mezcla de color y los nodos.
+pub const DEFS_NODO: [Def; 4] = [
+    Def { id: "nodo:fusionar", nombre: "Fusionar", grupo: "Nodos", ctl: &[O("modo", "Modo", &["Normal", "Multiplicar", "Pantalla", "Superponer", "Luz suave", "Luz dura", "Sumar", "Aclarar", "Oscurecer", "Diferencia", "Tono", "Color"]), n("opacidad", "Opacidad", 0.0, 100.0, 100.0, "%")] },
+    Def { id: "nodo:mascara", nombre: "Máscara", grupo: "Nodos", ctl: &[O("forma", "Forma", &["Elipse", "Rectángulo", "Degradado"]), n("x", "Posición X", -100.0, 100.0, 0.0, "%"), n("y", "Posición Y", -100.0, 100.0, 0.0, "%"), n("ancho", "Ancho", 1.0, 400.0, 70.0, "%"), n("alto", "Alto", 1.0, 300.0, 70.0, "%"), n("giro", "Giro", -180.0, 180.0, 0.0, "°"), n("suave", "Suavidad", 0.0, 100.0, 30.0, "%"), n("fuerza", "Fuerza", 0.0, 100.0, 100.0, "%"), O("invertir", "Invertir", &["No", "Sí"])] },
+    Def { id: "nodo:calificador", nombre: "Calificador de color", grupo: "Nodos", ctl: &[n("tono", "Tono", 0.0, 360.0, 20.0, "°"), n("ancho", "Amplitud", 1.0, 360.0, 50.0, "°"), n("sat_min", "Saturación desde", 0.0, 100.0, 15.0, "%"), n("sat_max", "Saturación hasta", 0.0, 100.0, 100.0, "%"), n("luz_min", "Brillo desde", 0.0, 100.0, 0.0, "%"), n("luz_max", "Brillo hasta", 0.0, 100.0, 100.0, "%"), n("suave", "Suavidad", 0.0, 100.0, 15.0, "%"), O("invertir", "Invertir", &["No", "Sí"])] },
+    Def { id: "nodo:fondo", nombre: "Color", grupo: "Nodos", ctl: &[C("color", "Color", [0.1, 0.1, 0.1, 1.0])] },
+];
+
 pub fn buscar(tipo: &str) -> Option<&'static Def> {
-    DEFS.iter().find(|d| d.id == tipo)
+    DEFS.iter().chain(&DEFS_NODO).find(|d| d.id == tipo)
 }
 
 pub fn nuevo(id: u64, d: &Def) -> FxVideo {
@@ -76,6 +112,8 @@ pub fn nuevo(id: u64, d: &Def) -> FxVideo {
             let (k, v) = match c {
                 N(k, _, _, _, x, _) => (*k, Valor::Num(*x)),
                 C(k, _, x) => (*k, Valor::Color(*x)),
+                O(k, _, _) => (*k, Valor::Op(0)),
+                R(k, _) => (*k, Valor::Punto([0.0; 2])),
             };
             (k.to_string(), Prop { v, claves: vec![], curvas: vec![] })
         })
@@ -268,6 +306,65 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
     };
 
     match f.tipo.as_str() {
+        "bc:color" => {
+            let pto = |k: &str| match f.p.get(k).map(|p| p.en(t)) {
+                Some(Valor::Punto(v)) => [v[0] as f32, v[1] as f32],
+                _ => [0.0; 2],
+            };
+            // Color de cada rueda, sin cambiar el brillo.
+            let rueda = |k: &str| {
+                let [x, y] = pto(k);
+                let b = num(&format!("{k}_l")) as f32 / 100.0 * 0.5;
+                let e = |g: f32| x * g.to_radians().cos() + y * g.to_radians().sin();
+                [e(0.0) * 0.5 + b, e(120.0) * 0.5 + b, e(240.0) * 0.5 + b]
+            };
+            let (so, me, lu) = (rueda("sombras"), rueda("medios"), rueda("luces"));
+            let exp = 2f32.powf(num("exp") as f32 / 2.2);
+            let con = num("con") as f32 / 100.0;
+            let con = if con > 0.0 { 1.0 + con * 1.5 } else { 1.0 + con * 0.8 };
+            let (sat, vib) = (por("sat"), por("vib"));
+            let (te, ti) = (por("temp") * 0.22, por("tinte") * 0.16);
+            let giro = (num("giro") as f32).to_radians();
+            let (des, vin, gra) = (por("deslavar"), por("vin"), por("grano"));
+            pintar(&|x, y, p| {
+                let mut c = [p[0] * exp * (1.0 + te), p[1] * exp * (1.0 + ti), p[2] * exp * (1.0 - te)];
+                for k in 0..3 {
+                    c[k] = (c[k] - 0.45) * con + 0.45;
+                }
+                let l = luz([c[0], c[1], c[2], 1.0]).clamp(0.0, 1.0);
+                let (ws, wl) = ((1.0 - l) * (1.0 - l), l * l);
+                let wm = 1.0 - ws - wl;
+                for k in 0..3 {
+                    c[k] += so[k] * ws + me[k] * wm * 1.4 + lu[k] * wl;
+                }
+                let l = luz([c[0], c[1], c[2], 1.0]);
+                let (max, min) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
+                // La intensidad cuida lo que ya está saturado.
+                let s = sat * (1.0 + vib * (1.0 - (max - min).clamp(0.0, 1.0)));
+                for v in &mut c {
+                    *v = l + (*v - l) * s;
+                }
+                if giro != 0.0 {
+                    let q = girar_tono([c[0], c[1], c[2], 1.0], giro);
+                    c = [q[0], q[1], q[2]];
+                }
+                if des > 0.0 {
+                    for v in &mut c {
+                        *v = v.max(0.0) * (1.0 - 0.28 * des) + 0.16 * des;
+                    }
+                }
+                if vin > 0.0 {
+                    let d = ((x - cx) / cx).powi(2) * 0.5 + ((y - cy) / cy).powi(2) * 0.5;
+                    let k = 1.0 - vin * 0.85 * escalon(0.25, 1.05, d);
+                    c.iter_mut().for_each(|v| *v *= k);
+                }
+                if gra > 0.0 {
+                    let g = (azar((x / e.max(0.5)) as i32 + cua * 97, (y / e.max(0.5)) as i32) - 0.5) * gra * 0.35;
+                    c.iter_mut().for_each(|v| *v += g);
+                }
+                [c[0], c[1], c[2], p[3]]
+            })
+        }
         "bc:ritmo_zoom" => {
             let z = 1.0 + por("fuerza") * g.1;
             pintar(&|x, y, _| s.en(cx + (x - cx) / z, cy + (y - cy) / z))

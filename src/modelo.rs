@@ -488,6 +488,9 @@ pub struct ClipVideo {
     /// Está en la ventana de animación.
     #[serde(default)]
     pub animado: bool,
+    /// Efectos conectados por nodos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nodos: Option<crate::nodos::Grafo>,
 }
 
 impl ClipVideo {
@@ -507,6 +510,7 @@ impl ClipVideo {
         self.contenido == Contenido::Archivo
             && self.mov == Movimiento::default()
             && !self.fx.iter().any(|f| f.activo)
+            && !self.nodos.as_ref().is_some_and(|g| g.activo)
             && self.entrada.is_none()
             && self.salida.is_none()
     }
@@ -777,6 +781,7 @@ impl Proyecto {
             salida: None,
             grupo: None,
             animado: false,
+            nodos: None,
         }
     }
 

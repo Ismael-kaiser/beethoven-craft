@@ -415,6 +415,10 @@ impl App {
                         let id = self.clip_vacio(t, 5.0);
                         self.agregar_fx_video(id, f);
                     }
+                    Soltar::Filtro(i) => {
+                        let id = self.clip_vacio(t, 5.0);
+                        self.poner_filtro(Some(id), *i);
+                    }
                     Soltar::Estilo(i) => {
                         let id = self.clip_vacio(t, 5.0);
                         self.poner_estilo(Some(id), *i);
@@ -696,6 +700,10 @@ impl App {
                 }
             }
             Soltar::Titulo(i) => self.poner_titulo(i, t, capa),
+            Soltar::Filtro(i) => {
+                let v = clip.and_then(|id| pareja(&self.p, id, true)).map(|x| x.id);
+                self.poner_filtro(v, i);
+            }
             Soltar::Estilo(i) => {
                 let v = clip.and_then(|id| pareja(&self.p, id, true)).map(|x| x.id);
                 self.poner_estilo(v, i);

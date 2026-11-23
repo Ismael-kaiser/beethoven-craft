@@ -20,18 +20,18 @@ const CONTROLES: [(&str, &str, &str, f64, f64, f64); 15] = [
     ("Creativo", "Película deslavada", "creative/adjustments/fadedFilm", 0.0, 100.0, 0.0),
     ("Creativo", "Nitidez", "creative/adjustments/sharpen", -100.0, 100.0, 0.0),
     ("Creativo", "Intensidad", "creative/adjustments/vibrance", -100.0, 100.0, 0.0),
-    ("Viñeta", "Cantidad", "vignette/amount", -5.0, 5.0, 0.0),
-    ("Viñeta", "Punto medio", "vignette/midpoint", 0.0, 100.0, 50.0),
-    ("Viñeta", "Difuminado", "vignette/feather", 0.0, 100.0, 50.0),
+    ("Viñeta", "Cantidad", "vignette/vignetteAmount", -5.0, 5.0, 0.0),
+    ("Viñeta", "Punto medio", "vignette/vignetteMidpoint", 0.0, 100.0, 50.0),
+    ("Viñeta", "Difuminado", "vignette/vignetteFeather", 0.0, 100.0, 50.0),
 ];
 
 /// Estilos: cambios sobre lo neutro.
 const ESTILOS: [(&str, &[(&str, f64)]); 7] = [
     ("Cálido", &[("basicCorrection/whiteBalance/temperature", 35.0), ("basicCorrection/tone/contrast", 12.0), ("creative/adjustments/vibrance", 15.0)]),
     ("Frío", &[("basicCorrection/whiteBalance/temperature", -35.0), ("basicCorrection/tone/contrast", 10.0)]),
-    ("Cine", &[("basicCorrection/tone/contrast", 25.0), ("basicCorrection/tone/highlights", -25.0), ("basicCorrection/tone/shadows", 15.0), ("basicCorrection/saturation", 85.0), ("vignette/amount", -1.2)]),
+    ("Cine", &[("basicCorrection/tone/contrast", 25.0), ("basicCorrection/tone/highlights", -25.0), ("basicCorrection/tone/shadows", 15.0), ("basicCorrection/saturation", 85.0), ("vignette/vignetteAmount", -1.2)]),
     ("Blanco y negro", &[("basicCorrection/saturation", 0.0), ("basicCorrection/tone/contrast", 30.0)]),
-    ("Antiguo", &[("creative/adjustments/fadedFilm", 60.0), ("basicCorrection/whiteBalance/temperature", 25.0), ("basicCorrection/saturation", 70.0), ("vignette/amount", -1.5)]),
+    ("Antiguo", &[("creative/adjustments/fadedFilm", 60.0), ("basicCorrection/whiteBalance/temperature", 25.0), ("basicCorrection/saturation", 70.0), ("vignette/vignetteAmount", -1.5)]),
     ("Vivo", &[("basicCorrection/saturation", 130.0), ("basicCorrection/tone/contrast", 20.0), ("creative/adjustments/sharpen", 20.0)]),
     ("Noche", &[("basicCorrection/tone/exposure", -0.8), ("basicCorrection/whiteBalance/temperature", -45.0), ("basicCorrection/tone/contrast", 20.0)]),
 ];
@@ -110,7 +110,7 @@ impl App {
     }
 
     /// Forma de onda RGB, histograma y vectorscopio del cuadro que se ve.
-    fn medidores_imagen(&mut self, ui: &mut Ui) {
+    pub fn medidores_imagen(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             for (i, n) in ["Onda RGB", "Histograma", "Vectorscopio"].into_iter().enumerate() {
                 if biblioteca::pastilla(ui, n, self.medidor_img == i).clicked() {

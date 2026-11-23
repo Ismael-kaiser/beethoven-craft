@@ -523,6 +523,9 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
     for x in c.fx.iter().filter(|x| x.activo) {
         b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, pasado.as_ref());
     }
+    if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
+        b = crate::nodos::evaluar(g, b, tl, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, pasado.as_ref()));
+    }
     let m = &c.mov;
     let esc = (m.escala.en(tl).num() / 100.0).max(0.0001);
     let giro = m.giro.en(tl).num().to_radians();
@@ -595,6 +598,9 @@ pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) ->
                 let mut b = ec::Buf { img: l.clone(), offset: [0.0; 2], scale: escala as f64 };
                 for x in c.fx.iter().filter(|x| x.activo) {
                     b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, None);
+                }
+                if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
+                    b = crate::nodos::evaluar(g, b, tl, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, None));
                 }
                 // Los efectos pueden agrandar el buffer: se recorta al lienzo.
                 let (dx, dy) = (b.offset[0].round() as i64, b.offset[1].round() as i64);
