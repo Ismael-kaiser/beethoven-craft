@@ -181,12 +181,16 @@ pub fn paint(ui: &mut Ui, s: &State, r: Rect, f: &FrameInfo) {
     let outer = r;
     let inner = super::float_frame(ui, s, Win::Mixer, r);
     let r = inner.unwrap_or(r);
+    // The selected track's effects on the left, as its name reads; the strips after them.
+    let left = crate::tabs::on() && !s.is_detached(Win::Mixer);
+    let panel = if left { Rect::new(r.x, r.y, panel_w, r.h) } else { Rect::new(r.right() - panel_w, r.y, panel_w, r.h) };
+    let r = if left { Rect::new(r.x + panel_w, r.y, r.w, r.h) } else { r };
     let client = super::window_frame_ex(ui, Win::Mixer, Rect::new(r.x, r.y, r.w - panel_w, r.h), "", 0.0, false, inner.is_some());
     title_tools(ui, s, r);
     if r.h < 2.0 * TITLE_H {
         // Collapsed to the title bar: only the slot panel's title with the window buttons.
         s.cables.borrow_mut().clear();
-        slot_panel(ui, s, Rect::new(r.right() - panel_w, r.y, panel_w, r.h));
+        slot_panel(ui, s, panel);
         return;
     }
     let ly = Ly::new(r);
@@ -314,7 +318,7 @@ pub fn paint(ui: &mut Ui, s: &State, r: Rect, f: &FrameInfo) {
     chevron(ui, area.x + 5.0, bottom - 9.5, false, ui.t.s(0x5d6366));
     cables(ui, s, strips, &docks, bottom);
 
-    slot_panel(ui, s, Rect::new(r.right() - panel_w, r.y, panel_w, r.h));
+    slot_panel(ui, s, panel);
     resize_zones(ui, s, Win::Mixer, outer);
 }
 

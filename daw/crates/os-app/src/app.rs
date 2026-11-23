@@ -934,6 +934,8 @@ const PLUGIN_POPUPS: &str = "Menus of detached plugin windows on Linux (dock the
 
 #[derive(Debug, Clone)]
 pub enum Drag {
+    /// Writing on the Score tab's sheet.
+    Score(crate::page::Stroke),
     /// Settings > MIDI: a handle of the mapping curve window (0 start, 1 middle, 2 end).
     MidiCurve(u8),
     /// Settings > MIDI: a Port or offset box, a step per 8 px up or down (`steps` taken so far).
@@ -5721,6 +5723,7 @@ impl App {
         if let Some(d) = self.drag.clone() {
             match d {
                 Drag::Browser { item, label, m0, started } => self.browser_drag_move(label, m0, started, item),
+                Drag::Score(k) => self.score_drag(k),
                 Drag::Pl(d) => {
                     if let Some(g) = self.pl_grid {
                         crate::playlist::drag_move(self, d, g);
@@ -6216,6 +6219,9 @@ impl App {
             if hint != self.hint {
                 self.damage_band(HINT_RECT);
             }
+        }
+        if self.state.tabs.cur == crate::tabs::Tab::Score {
+            self.score_hover(hover == Some(Action::Page(crate::page::Hit::Paper)));
         }
         self.hover = hover;
         self.hover_rect = rect;
@@ -6757,6 +6763,7 @@ impl App {
             }
             // Settings > MIDI's Port and offset boxes: right-click resets (spec: ui/midi-settings.md §1).
             Some(Action::Settings(views::settings::SAct::Midi(m))) if m.is_value() => return self.midi_page_reset(*m),
+            Some(Action::Page(crate::page::Hit::Paper)) => return self.score_press(true),
             Some(Action::PatternNext) => {
                 self.state.pat_ui.menu_at = Some((x, y));
                 self.state.menu_open = Some(views::menus::PATTERNS);
@@ -7033,6 +7040,7 @@ impl App {
         }
         let had_overlay = self.state.piano.overlay.take().is_some();
         match self.drag.clone() {
+            Some(Drag::Score(k)) => self.score_release(k),
             Some(Drag::Slice) => {
                 if let Some(g) = self.piano_geom() {
                     let t = crate::piano_snap::place(&self.state, &g, g.tick_at(self.mouse.0), self.alt);
@@ -7137,7 +7145,7 @@ impl App {
     /// Set the key held with the mouse (lit on the keyboard). With `play` it sounds as a live note, like a typing-keyboard
     /// key, until another key is held or the button is released (§8).
     /// Notes clicked or dragged in the piano roll are auditioned, except while playback runs (it is heard already).
-    fn audition(&self) -> bool {
+    pub(crate) fn audition(&self) -> bool {
         !(self.state.session.transport.playing() && !self.state.session.transport.paused())
     }
 
@@ -7148,7 +7156,7 @@ impl App {
         (1.0 + 126.0 * ((x - left) / w).clamp(0.0, 1.0)).round() as u8
     }
 
-    fn hold_key(&mut self, key: Option<i32>, play: bool) {
+    pub(crate) fn hold_key(&mut self, key: Option<i32>, play: bool) {
         if self.state.piano.held == key {
             return;
         }
@@ -22475,7 +22483,7 @@ mod tests {
         // Help: the left click opens the help index; the right click is About, on the release over the button only.
         let help = hit_rect(&app, &Action::Util(Util::Help));
         click(&mut app, &mut c, help);
-        assert_eq!(app.state.message, Some(format!("Opening {}", crate::help_links::HELP_INDEX_URL)));
+        assert_eq!(app.state.message.as_deref(), Some("Online help isn't available yet"));
         assert!(app.state.dialogs.is_empty());
         right(&mut app, &mut c, help, (help.cx() + 40.0, help.cy()));
         assert!(!app.state.settings.open);

@@ -387,7 +387,7 @@ fn vista_previa_baja_la_calidad_si_no_alcanza() {
     };
     let mut anchos = vec![];
     for n in 0..12 {
-        anchos.push(pedir(n as f64 / 30.0, true).0);
+        anchos.push(pedir(n as f64 / p.fps.clamp(1.0, 30.0), true).0);
     }
     println!("reproduciendo: {anchos:?}");
     assert_eq!(anchos[0], 960, "empieza en calidad completa");

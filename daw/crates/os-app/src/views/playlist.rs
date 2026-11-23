@@ -1509,6 +1509,15 @@ fn header(ui: &mut Ui, s: &State, g: &PGeom, row: u16, heads: Rect) {
     let (top, bottom) = if super::beethoven(ui) { (base, base) } else { (base.shade(0.035), base.shade(-0.03)) };
     let k = if super::beethoven(ui) { lk::r_btn(t) + 1.0 } else { RADIUS }.min(bh / 2.0);
     ui.c.fill_rect_gradient(hr, top, bottom, k);
+    let own = crate::tabs::on();
+    if own && !strip {
+        // Its colour as a spine, and its number on it.
+        let c = colored.unwrap_or_else(|| super::rack::hue(usize::from(row)).mix(t.track_header, 0.25));
+        let c = if on { c } else { c.mix(t.grid_gap, 0.6) };
+        ui.c.fill_rrect(Rect::new(hr.x, hr.y, 22.0, hr.h), k, c);
+        ui.c.fill_rect(Rect::new(hr.x + 22.0 - k, hr.y, k, hr.h), c);
+        ui.c.text_center(Font::new(13), Rect::new(hr.x, hr.y, 22.0, hr.h), t.window_border, &(row + 1).to_string());
+    }
     // Square the corners that continue into the rows above / below.
     if member {
         ui.c.fill_rect(Rect::new(hr.x, hr.y, hr.w, k), top);
@@ -1536,7 +1545,7 @@ fn header(ui: &mut Ui, s: &State, g: &PGeom, row: u16, heads: Rect) {
     let text = if colored.is_some() || badge.is_some() { ui.t.tx(0xdce8f0) } else { t.text_faint };
     let text = if on { text } else { text.shade(-0.35) };
     let editing = matches!(s.playlist.edit.as_ref().map(|e| e.target), Some(pl::EditTarget::TrackName(r)) if r == row);
-    let mut name_x = hr.x + 2.0;
+    let mut name_x = hr.x + if own { 28.0 } else { 2.0 };
     if let Some((letter, hint)) = badge {
         let b = Rect::new(hr.x + 3.0, hr.y + 4.0, 11.0, 11.0);
         ui.c.fill_circle(b.cx(), b.cy(), 5.5, text);
@@ -1545,10 +1554,11 @@ fn header(ui: &mut Ui, s: &State, g: &PGeom, row: u16, heads: Rect) {
         name_x += 14.0;
     }
     if !editing {
+        let text = if own && on { t.text } else { text };
         let name_w = if short { hr.w - 26.0 } else { hr.w - 4.0 } - (name_x - hr.x - 2.0);
         ui.c.text_clip(Font::new(16), name_x, hr.y + 1.0, name_w, text, &pl::track_name(&s.session, row));
     }
-    if !short {
+    if !short && !own {
         ui.c.text(Font::new(14), hr.x + 14.0, led.y - 6.0, text.shade(-0.2), "...");
     }
     let info = pl::track_info(&s.session, row);

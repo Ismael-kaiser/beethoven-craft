@@ -29,7 +29,7 @@ pub const FLEX_EDIT_W: f32 = 16.0;
 /// The preset file's extension.
 pub const EXT: &str = "lstoolbar";
 /// The settings key of the layout.
-const KEY: &str = "toolbar_layout_2";
+const KEY: &str = "toolbar_layout";
 
 /// What the toolbar can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

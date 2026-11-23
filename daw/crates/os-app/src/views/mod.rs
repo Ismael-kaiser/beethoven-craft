@@ -37,6 +37,7 @@ pub mod touch;
 pub mod events;
 pub mod theme_preview;
 pub mod toolbar;
+pub mod topbar;
 pub mod typein;
 
 use std::borrow::Cow;
@@ -111,6 +112,9 @@ pub fn band_k(s: &State) -> f32 {
 /// Height of the top band in the window's px (shown or not): its rows' (`toolbar::Layout::band_h`, `WORK_Y` for two)
 /// at its scale.
 pub fn band_h(s: &State) -> f32 {
+    if crate::tabs::on() {
+        return topbar::H * band_k(s);
+    }
     s.bar.layout.band_h() * band_k(s)
 }
 
@@ -133,6 +137,13 @@ pub fn panel_at(s: &State, p: crate::toolbar::Panel) -> Option<crate::toolbar::A
 /// `app::HINT_RECT`, `patterns::PLUS_BOX_AT`...), in the window's px where that panel is drawn now. A panel that is not
 /// on the toolbar leaves `r` where it is (scaled).
 pub fn band_rect(s: &State, r: Rect) -> Rect {
+    if crate::tabs::on() {
+        // What hangs from the pattern's box hangs from it here too.
+        let p = topbar::pattern_rect(s.screen.0);
+        let y = if r.y > 60.0 { p.bottom() } else { p.y };
+        let x = if r.x > 900.0 { p.right() - 130.0 } else { p.x };
+        return Rect::new(x.min(s.screen.0 - 150.0), y, r.w, r.h);
+    }
     let a = crate::toolbar::Panel::at_home(r.x, r.y).and_then(|p| panel_at(s, p)).unwrap_or_default();
     scale_rect(a.r(r), band_k(s))
 }
@@ -140,6 +151,9 @@ pub fn band_rect(s: &State, r: Rect) -> Rect {
 /// The parts of rect `r` of the top band, given in its panels' home px (`band_rect`), in the window's px where each of
 /// those panels is drawn now: to repaint them (`App::damage_band`). Panels that are not on the toolbar give none.
 pub fn band_rects(s: &State, r: Rect) -> Vec<Rect> {
+    if crate::tabs::on() {
+        return vec![Rect::new(0.0, 0.0, s.screen.0, work_y(s))];
+    }
     let k = band_k(s);
     placed(s)
         .into_iter()
@@ -251,13 +265,17 @@ pub fn paint(ui: &mut Ui, s: &State, f: &FrameInfo) -> usize {
         ui.win = None;
     }
     if crate::tabs::on() {
-        page::strip(ui, s, Rect::new(0.0, top - crate::tabs::H, w, crate::tabs::H));
+        page::strip(ui, s, f, Rect::new(0.0, top - crate::tabs::H, w, crate::tabs::H));
+        topbar::strip_tools(ui, s, w);
+        if s.tabs.cur == crate::tabs::Tab::Rhythm && s.shown(Win::ChannelRack) && !s.is_detached(Win::ChannelRack) {
+            page::grooves(ui, s);
+        }
     }
     if !s.toolbar.hidden {
         // At Toolbars scaling (spec: ui/ui-scaling.md §1): the band works in its own px, `k` of the window's each, so
         // it is `w / k` of them wide; what doesn't fit is left out (`toolbar::room`).
         let scale = toolbar_scale(ui.c.scale);
-        ui.part(Seg::Toolbar, Rect::new(0.0, 0.0, w, band_h(s)), |ui| ui.scaled(scale, |ui, k| toolbar::paint(ui, s, f, w / k)));
+        ui.part(Seg::Toolbar, Rect::new(0.0, 0.0, w, band_h(s)), |ui| ui.scaled(scale, |ui, k| if crate::tabs::on() { topbar::paint(ui, s, f, w / k) } else { toolbar::paint(ui, s, f, w / k) }));
     }
     // The floating hint bar, over every window (spec: ui/toolbar-menu.md §4).
     if s.toolbar.hint_bar {
@@ -386,6 +404,10 @@ pub fn resize_zones(ui: &mut Ui, s: &State, win: Win, r: Rect) {
 
 /// Minimize / maximize / close buttons from `x0` at the title bar of a window at top `y`.
 pub fn window_buttons(ui: &mut Ui, win: Win, x0: f32, y: f32, _normal: Color, _hover: Color) {
+    // A tab has its own close button; only a window of its own needs these.
+    if crate::tabs::on() && crate::tabs::Tab::ALL.iter().any(|t| t.win() == win) {
+        return;
+    }
     let (mut hovered, mut down) = (None, None);
     for (i, (hint, action)) in [
         ("Minimize window", Action::MinWin(win)),

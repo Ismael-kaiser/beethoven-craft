@@ -528,6 +528,13 @@ impl App {
         if !started && (x - m0.0).hypot(y - m0.1) < DRAG_START {
             return;
         }
+        // Over a tab: it opens, so that what is carried can be dropped in it.
+        if let Some(Action::Tab(t)) = self.top_hit(x, y).map(|h| h.action.clone()) {
+            if t != self.state.tabs.cur {
+                crate::tabs::show(&mut self.state, t);
+                self.invalidate();
+            }
+        }
         let target = self.drop_target(&item);
         if target != self.state.drop_on {
             for (w, r) in [self.state.drop_on, target].into_iter().flatten() {
@@ -634,6 +641,13 @@ impl App {
             }
         }
         let (x, y) = self.mouse;
+        // A pattern left on the Arrange tab itself goes after its last clip.
+        if let (Item::Pattern(n), Some(Action::Tab(crate::tabs::Tab::Arrange))) = (&item, self.top_hit(x, y).map(|h| &h.action)) {
+            let s = &mut self.state;
+            s.set_pattern(*n);
+            s.message = Some(crate::page::to_arrange(s));
+            return;
+        }
         let win = self.top_hit(x, y).and_then(|h| h.win);
         let grid = self.pl_grid().filter(|g| g.contains(x, y) && win == Some(Win::Playlist));
         let alt = self.alt;

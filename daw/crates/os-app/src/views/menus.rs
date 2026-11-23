@@ -871,7 +871,12 @@ pub fn paint_dropdown(ui: &mut Ui, s: &State, menu: usize, k: f32) {
     let (ax, ay) = match (menu == PATTERNS, s.pat_ui.menu_at) {
         (true, Some(at)) => at,
         _ => {
-            let at = super::band_rect(s, Rect::new(x0 - 4.0, 78.0, 0.0, 0.0));
+            let at = if crate::tabs::on() {
+                let r = super::topbar::menu_rects(ui.c).get(menu).copied().unwrap_or(Rect::new(x0, 0.0, 0.0, 0.0));
+                Rect::new(r.x * super::band_k(s), super::topbar::H * super::band_k(s) - 6.0, 0.0, 0.0)
+            } else {
+                super::band_rect(s, Rect::new(x0 - 4.0, 78.0, 0.0, 0.0))
+            };
             (at.x, at.y)
         }
     };

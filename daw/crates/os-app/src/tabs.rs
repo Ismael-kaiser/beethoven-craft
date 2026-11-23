@@ -74,11 +74,13 @@ pub struct Tabs {
     pub cur: Tab,
     /// The tab before this one, gone back to when this one closes.
     pub last: Tab,
+    /// Set at the first `sync`: the windows the app starts with become the Arrange tab.
+    pub ready: bool,
 }
 
 impl Default for Tabs {
     fn default() -> Self {
-        Tabs { open: Tab::ALL.to_vec(), cur: Tab::Arrange, last: Tab::Arrange }
+        Tabs { open: Tab::ALL.to_vec(), cur: Tab::Arrange, last: Tab::Arrange, ready: false }
     }
 }
 
@@ -112,6 +114,7 @@ fn is_tab_win(w: Win) -> bool {
 
 /// Shows tab `t`'s window.
 pub fn show(s: &mut State, t: Tab) {
+    s.tabs.ready = true;
     s.tabs.go(t);
     let w = t.win();
     s.z.retain(|&o| !is_tab_win(o) || s.detached.iter().any(|d| d.0 == o));
@@ -126,6 +129,11 @@ pub fn sync(s: &mut State) -> bool {
         return false;
     }
     let before = (s.tabs.cur, s.z.len(), s.rack_pos, s.rack_size);
+    if !s.tabs.ready {
+        s.tabs.ready = true;
+        let t = s.tabs.cur;
+        show(s, t);
+    }
     let cur = s.tabs.cur.win();
     let live = |s: &State, w: Win| is_tab_win(w) && !s.is_detached(w);
     // Something else was opened or raised.
@@ -157,7 +165,7 @@ fn fill(s: &mut State) {
         s.rack_pos = (r.x, r.y);
         // The graph editor hangs below the rack: it keeps its room.
         let graph = crate::views::rack::graph_rect(s).map_or(0.0, |g| (g.bottom() - crate::views::rack::rect(s).bottom()).max(0.0));
-        s.rack_size = (r.w.max(crate::views::rack::min_w(s)), (r.h - graph).max(crate::views::rack::MIN_H));
+        s.rack_size = (r.w.max(crate::views::rack::min_w(s)), (r.h - crate::views::page::GROOVES_H - graph).max(crate::views::rack::MIN_H));
     }
 }
 

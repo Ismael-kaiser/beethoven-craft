@@ -1757,3 +1757,600 @@ your theme	tu tema
 zipped project	proyecto comprimido
 {} has no help page	{} no tiene página de ayuda
 © 2026 ItsAlphaNeon and contributors · Modified by mixter-ha99, 2026	© 2026 ItsAlphaNeon y colaboradores · Modificado por mixter-ha99, 2026
+Arrange	Arreglo
+Rhythm	Ritmo
+Mix	Mezcla
+Score	Partitura
+Ideas	Ideas
+Grooves	Ritmos listos
+Snare	Tarola
+Hi-hat	Contratiempo
+Percussion	Percusión
+Clear steps	Borrar pasos
++ Instrument	+ Instrumento
+Swing	Swing
+Library: show or hide it	Biblioteca: mostrarla u ocultarla
+Close tab	Cerrar pestaña
+Open the next closed tab	Abrir la siguiente pestaña cerrada
+Arrange: the song's parts in time (F5)	Arreglo: las partes de la canción en el tiempo (F5)
+Rhythm: instruments and their steps (F6)	Ritmo: los instrumentos y sus pasos (F6)
+Notes: the piano roll of the selected instrument (F7)	Notas: el piano roll del instrumento elegido (F7)
+Mix: levels, effects and routing (F9)	Mezcla: niveles, efectos y rutas (F9)
+Score: what you composed as sheet music	Partitura: lo que compusiste en pentagrama
+Ideas: chords, progressions, bass lines and melodies	Ideas: acordes, progresiones, bajos y melodías
+Export: audio, MIDI and sheet music	Exportar: audio, MIDI y partitura
+What you compose, written down as you go	Lo que compones, escrito mientras lo haces
+Export MusicXML	Exportar MusicXML
+A file that MuseScore, Sibelius, Finale or Dorico open	Un archivo que abren MuseScore, Sibelius, Finale o Dorico
+Larger	Más grande
+Smaller	Más chico
+The whole song, as arranged	La canción completa, como está en el arreglo
+Every instrument of the pattern	Todos los instrumentos del patrón
+Only the selected instrument	Solo el instrumento elegido
+Instrument	Instrumento
+Write some notes and they will appear here as sheet music	Escribe unas notas y aparecerán aquí como partitura
+The key below	El tono de abajo
+The key above	El tono de arriba
+Major / minor	Mayor / menor
+Change between major and minor	Cambiar entre mayor y menor
+Find it in the pattern	Buscarlo en el patrón
+Listens to the pattern's notes and finds their key	Escucha las notas del patrón y encuentra su tono
+Chords	Acordes
+Each one is written as the next bar of the selected instrument	Cada uno se escribe como el siguiente compás del instrumento elegido
+Write this chord as the next bar	Escribir este acorde en el siguiente compás
+A chord with more colour	Un acorde con más color
+The bars show where the last chord usually goes	Las barras muestran a dónde suele ir el último acorde
+Write a first chord and the next ones light up	Escribe un primer acorde y se iluminan los siguientes
+Progressions	Progresiones
+Four bars at once, by mood	Cuatro compases de una vez, según el ánimo
+Write this progression in the pattern	Escribir esta progresión en el patrón
+From your chords	A partir de tus acordes
+Written on the same instrument; undo takes it back	Se escribe en el mismo instrumento; deshacer lo quita
+Bass line	Línea de bajo
+Arpeggio	Arpegio
+Broken chords	Acordes quebrados
+Melody	Melodía
+Second voice	Segunda voz
+A bass from the chords in the pattern, an octave below	Un bajo a partir de los acordes del patrón, una octava abajo
+The chords note by note, going up and down	Los acordes nota por nota, subiendo y bajando
+Low, high, middle, high: the classical accompaniment	Grave, agudo, medio, agudo: el acompañamiento clásico
+The chords repeated with a syncopated rhythm	Los acordes repetidos con un ritmo sincopado
+A singable melody over the chords; press again for another	Una melodía cantable sobre los acordes; apriétalo otra vez para otra
+A third above every note of the channel, within the key	Una tercera arriba de cada nota del canal, dentro del tono
+For when the page is blank: everything becomes notes you can change	Para cuando la página está en blanco: todo se vuelve notas que puedes cambiar
+Luminous	Luminosa
+Nostalgic	Nostálgica
+Heroic	Heroica
+Ballad	Balada
+Dreamy	Soñadora
+Jazz turn	Vuelta de jazz
+Epic	Épica
+Farewell	Despedida
+Take your song out of here	Saca tu canción de aquí
+Audio	Audio
+WAV, FLAC, OGG or MP3, with stems and quality settings	WAV, FLAC, OGG o MP3, con pistas separadas y calidad a elegir
+Ready to send or upload	Listo para mandar o subir
+The notes, for another program or keyboard	Las notas, para otro programa o teclado
+Sheet music	Partitura
+MusicXML for MuseScore, Sibelius, Finale or Dorico	MusicXML para MuseScore, Sibelius, Finale o Dorico
+The project, as it is	El proyecto, como está
+New version	Versión nueva
+A numbered copy, so you can go back	Una copia numerada, para poder regresar
+Export score	Exportar partitura
+Which part of the groove this instrument plays	Qué parte del ritmo toca este instrumento
+Fewer hits	Menos golpes
+More hits, spread as evenly as they fit	Más golpes, repartidos lo más parejo posible
+Turn it left	Girarlo a la izquierda
+Turn it right	Girarlo a la derecha
+Takes every step off the selected instrument	Quita todos los pasos del instrumento elegido
+Writes this groove on the selected instrument	Escribe este ritmo en el instrumento elegido
+The pattern sounds in {}	El patrón suena en {}
+There are no notes in the pattern to find the key from	No hay notas en el patrón para encontrar el tono
+Ideas: select an instrument first	Ideas: elige primero un instrumento
+Ideas: write some chords in the pattern first	Ideas: escribe primero unos acordes en el patrón
+There are no notes to write as a score	No hay notas para escribir como partitura
+{}% sure	{}% seguro
+C major	Do mayor
+C minor	Do menor
+C# major	Do# mayor
+C# minor	Do# menor
+D major	Re mayor
+D minor	Re menor
+Eb major	Mib mayor
+Eb minor	Mib menor
+E major	Mi mayor
+E minor	Mi menor
+F major	Fa mayor
+F minor	Fa menor
+F# major	Fa# mayor
+F# minor	Fa# menor
+G major	Sol mayor
+G minor	Sol menor
+Ab major	Lab mayor
+Ab minor	Lab menor
+A major	La mayor
+A minor	La menor
+Bb major	Sib mayor
+Bb minor	Sib menor
+B major	Si mayor
+B minor	Si menor
+Spread	Reparto
+Drag it onto the Arrange tab and drop it on a track	Arrástralo a la pestaña Arreglo y suéltalo en una pista
+Put in the arrangement	Poner en el arreglo
+Adds this pattern to the arrangement, after its last clip	Agrega este patrón al arreglo, después de su último clip
+Drag the pattern to the Arrange tab and drop it where it should sound	Arrastra el patrón a la pestaña Arreglo y suéltalo donde deba sonar
+Click to write, drag a note to move it, right-click to erase	Clic para escribir, arrastra una nota para moverla, clic derecho para borrar
+Choose Instrument to write on the sheet	Elige Instrumento para escribir en la partitura
+Write on the sheet: it is the same music as the piano roll	Escribe en la partitura: es la misma música que la del piano roll
+Whole note	Redonda
+Half note	Blanca
+Quarter note	Negra
+Eighth note	Corchea
+Sixteenth note	Semicorchea
+Dotted: half as long again	Puntillo: dura la mitad más
+Sharp	Sostenido
+Flat	Bemol
+Natural	Becuadro
+Eraser (the right button erases too)	Borrador (el botón derecho también borra)
+Write on the score	Escribir en la partitura
+Erase on the score	Borrar en la partitura
+Score edit	Editar la partitura
+not available yet	todavía no disponible
+Set keyboard focus of all plugins to	Foco del teclado de todos los plugins
+Metronome	Metrónomo
+Auto scrolling	Desplazamiento automático
+Grouped clips move together	Los clips agrupados se mueven juntos
+Step edit	Edición por pasos
+Multi MIDI learn	Aprender varios MIDI
+Arrange windows	Acomodar ventanas
+Into workspace	Dentro del espacio de trabajo
+Align all channel editors	Alinear los editores de canal
+New (Empty)	Nuevo (vacío)
+New from template	Nuevo desde plantilla
+Open...	Abrir...
+Save as...	Guardar como...
+Save new version	Guardar versión nueva
+Save to new project folder...	Guardar en carpeta de proyecto nueva...
+Save as template...	Guardar como plantilla...
+Import	Importar
+Export audio...	Exportar audio...
+Export MP3...	Exportar MP3...
+Export MIDI...	Exportar MIDI...
+Exit	Salir
+More plugins...	Más plugins...
+Sampler	Sampler
+Misc	Varios
+Other	Otros
+Browse plugin library	Ver biblioteca de plugins
+Browse all installed plugins	Ver todos los plugins instalados
+Automation for the most recent parameter	Automatización del último parámetro
+New empty pattern...	Patrón vacío nuevo...
+Next empty pattern...	Siguiente patrón vacío...
+Next empty pattern (unnamed)	Siguiente patrón vacío (sin nombre)
+Random color	Color al azar
+Open in project browser	Abrir en el explorador del proyecto
+Set time signature...	Poner compás...
+Transpose...	Transportar...
+Insert one	Insertar uno
+Render to audio clip	Convertir a clip de audio
+Render as audio clip...	Convertir a clip de audio...
+Render and replace...	Convertir y reemplazar...
+Windows	Ventanas
+Script output	Salida de scripts
+Toolbars	Barras
+Layout	Distribución
+Close all windows	Cerrar todas las ventanas
+Close all plugin windows	Cerrar las ventanas de plugins
+Close all unfocused windows	Cerrar las ventanas sin foco
+Background	Fondo
+Instruments in use	Instrumentos en uso
+Effects in use	Efectos en uso
+MIDI settings	Ajustes de MIDI
+Audio settings	Ajustes de audio
+General settings	Ajustes generales
+File settings	Ajustes de archivos
+Theme settings	Ajustes del tema
+Project general settings	Ajustes del proyecto
+Project info	Datos del proyecto
+Enable MIDI remote control	Activar control remoto MIDI
+Enable MIDI output	Activar salida MIDI
+Enable MIDI master sync	Activar sincronía MIDI maestra
+Switches	Interruptores
+Computer MIDI keyboard	Teclado de la compu como MIDI
+Browser find...	Buscar en el explorador...
+Chord progression tool...	Herramienta de progresiones...
+Control builder	Constructor de controles
+Clipboard	Portapapeles
+MIDI capture	Captura MIDI
+Recent parameters	Parámetros recientes
+Most recent	El más reciente
+Second most recent	El penúltimo
+Project clean-up	Limpieza del proyecto
+Stop sound	Callar el sonido
+Cancel recording	Cancelar la grabación
+Set up for live performance	Preparar para tocar en vivo
+Select unused instruments	Elegir instrumentos sin usar
+Remove unused audio clips	Quitar clips de audio sin usar
+Lock all tracks to their clips	Fijar todas las pistas a sus clips
+Unlock all tracks from their clips	Soltar todas las pistas de sus clips
+Reset empty tracks	Restablecer pistas vacías
+Help index	Índice de ayuda
+Tutorials	Tutoriales
+Keyboard shortcuts	Atajos de teclado
+Support	Soporte
+Report a bug	Reportar un error
+Diagnostics	Diagnóstico
+What's new	Novedades
+Beethoven DAW website	Sitio de Beethoven DAW
+About...	Acerca de...
+Undo step seq edit	Deshacer edición de pasos
+Save MIDI clipboard to browser	Guardar el portapapeles MIDI en el explorador
+Save audio clipboard to browser	Guardar el portapapeles de audio en el explorador
+Clean up and save	Limpiar y guardar
+Remove all audio editor instances	Quitar todos los editores de audio
+Capture MIDI into pattern	Capturar MIDI en el patrón
+Clear log	Vaciar registro
+Retro audio capture	Captura de audio retroactiva
+Enabled	Activado
+Disabled	Desactivado
+Open capture in audio editor	Abrir la captura en el editor de audio
+Set all plugin windows to	Todas las ventanas de plugins
+Change click removal of selected channels to	Quitar chasquidos de los canales elegidos
+Set all audio clip channels to	Todos los canales de clips de audio
+Switch selected audio clip channels to	Cambiar los canales de audio elegidos a
+MIDI file...	Archivo MIDI...
+Older recent projects	Proyectos recientes más viejos
+Paint (B) - drag paints clips along the track	Pincel (B): arrastrar pinta clips en la pista
+Delete (D) - click or drag deletes clips	Borrar (D): clic o arrastrar borra clips
+Mute (T) - click or drag mutes / unmutes clips	Silenciar (T): clic o arrastrar silencia clips
+Slip (S) - drag moves a clip's content inside it	Correr (S): arrastrar mueve lo de adentro del clip
+Slice (C) - drag a line to cut clips	Cortar (C): arrastra una línea para cortar clips
+Zoom (Z) - drag a box to zoom, right-click toggles	Lupa (Z): arrastra un recuadro; clic derecho alterna
+Playback (Y) - hold to play from the mouse	Escuchar (Y): mantén presionado para tocar desde el ratón
+Make unique	Hacer único
+Make unique as sample	Hacer único como muestra
+Make unique as sample: no clip	Hacer único como muestra: no hay clip
+Make unique as sample: not an audio clip	Hacer único como muestra: no es clip de audio
+Make unique as sample: the clip's channel is gone	Hacer único como muestra: el canal del clip ya no existe
+Audio Clip	Clip de audio
+Automation Clip	Clip de automatización
+Add audio clip	Agregar clip de audio
+Add automation clip	Agregar clip de automatización
+Add layer	Agregar capa
+Arranger edit	Editar arreglo
+Shift left	Mover a la izquierda
+Shift right	Mover a la derecha
+Shift up	Mover arriba
+Shift down	Mover abajo
+Unmute	Quitar silencio
+Consolidate arranger selection	Consolidar lo elegido
+Export all arranger tracks	Exportar todas las pistas
+Tool	Herramienta
+Deselect	No elegir nada
+Select by selected source	Elegir los del mismo origen
+Select muted	Elegir los silenciados
+Invert selection	Invertir la selección
+Select time around selection	Elegir el tiempo de la selección
+Ungroup	Desagrupar
+Zoom out far	Alejar del todo
+Time markers	Marcas de tiempo
+Quantize song jumps	Cuantizar saltos de la canción
+Performance mode	Modo de presentación
+Performance clip progress	Avance de clips en vivo
+Performance track progress	Avance de pistas en vivo
+Velocity picks sub-clips	La fuerza elige subclips
+Add two...	Agregar dos...
+Add one...	Agregar una...
+Add auto	Agregar automático
+Add one every	Agregar una cada
+Add jump to next bar	Agregar salto al siguiente compás
+Add time signature change...	Agregar cambio de compás...
+Add key marker	Agregar marca de tonalidad
+Place loop	Poner bucle
+Change to marker loop	Cambiar a bucle por marcas
+Beats	Tiempos
+Bars	Compases
+Root note	Nota raíz
+Scale	Escala
+Red	Rojo
+Orange	Naranja
+Yellow	Amarillo
+Green	Verde
+Teal	Turquesa
+Blue	Azul
+Purple	Morado
+Grey	Gris
+Color	Color
+Mute all clips	Silenciar todos los clips
+Unmute all clips	Quitar silencio a todos los clips
+Group with above track	Agrupar con la pista de arriba
+Collapse group	Plegar grupo
+Delete one	Borrar una
+Performance settings	Ajustes de presentación
+Loop	Bucle
+Marker loop	Bucle de marcas
+Marker skip	Salto de marcas
+Marker pause	Pausa de marcas
+Time signature	Compás
+Start recording	Empezar a grabar
+Stop recording	Parar de grabar
+Add marker...	Agregar marca...
+Add time signature...	Agregar compás...
+Arranger delete clip	Borrar clip del arreglo
+Arrangements	Arreglos
+Current Arrangement	Arreglo actual
+Clone...	Duplicar...
+Merge with...	Unir con...
+Marker	Marca
+Continuous scrolling on	Desplazamiento continuo activado
+Continuous scrolling off	Desplazamiento continuo desactivado
+Make unique: select a pattern clip	Hacer único: elige un clip de patrón
+Group: select two or more clips first	Agrupar: elige primero dos o más clips
+Ungroup: no grouped clip is selected	Desagrupar: no hay un clip agrupado elegido
+Delete space: make a time selection first (right-drag the ruler)	Borrar espacio: elige primero un tramo (arrastra con clic derecho en la regla)
+Stretch mode on: resizing an audio clip stretches it	Estirar activado: cambiar el largo de un clip de audio lo estira
+Stretch mode off	Estirar desactivado
+Rename: the clip's channel is not in the rack	Renombrar: el canal del clip no está en Ritmo
+Clip color	Color del clip
+Delete arrangement	Borrar arreglo
+The only arrangement cannot be deleted	No se puede borrar el único arreglo
+No track has clips to lock to	Ninguna pista tiene clips a los que fijarse
+No track is locked to a clip	Ninguna pista está fija a un clip
+Lock tracks to clips	Fijar pistas a clips
+Unlock tracks from clips	Soltar pistas de clips
+Quick quantize: every clip already starts on the grid	Cuantizar: todos los clips ya empiezan en la cuadrícula
+Rendered	Convertido
+Export tracks: another render is running	Exportar pistas: hay otra exportación en curso
+Export tracks: the arranger has no clips to play	Exportar pistas: el arreglo no tiene clips
+Consolidate: another render is running	Consolidar: hay otra exportación en curso
+Consolidate: select clips or a time range first	Consolidar: elige primero clips o un tramo
+Consolidate: nothing to render	Consolidar: no hay nada que convertir
+Consolidating...	Consolidando...
+Consolidate: no file was written	Consolidar: no se escribió ningún archivo
+Presets	Ajustes guardados
+A/B compare	Comparar A/B
+Parameters	Parámetros
+Link all parameters...	Ligar todos los parámetros...
+Show all parameters	Mostrar todos los parámetros
+Allow threaded processing	Permitir proceso en hilos
+Threaded processing	Proceso en hilos
+Change icon...	Cambiar ícono...
+Attach	Fijar
+Detach	Soltar
+Attached	Fija
+Detached	Suelta
+Save channel state as...	Guardar estado del canal como...
+Browse channel states	Ver estados de canal
+Route to free mixer track	Mandar a un bus libre
+Muted	Silenciado
+Edit pattern	Editar patrón
+Select all similar clips	Elegir todos los clips parecidos
+Group selected...	Agrupar lo elegido...
+Edit sample...	Editar muestra...
+Load sample...	Cargar muestra...
+Load sample	Cargar muestra
+Chokes itself	Se corta a sí mismo
+Clone with links	Duplicar con enlaces
+Motion	Movimiento
+Trigger sync	Sincronía al disparar
+Queue	En fila
+Tolerant	Tolerante
+Position sync	Sincronía de posición
+Move content left	Mover contenido a la izquierda
+Move content right	Mover contenido a la derecha
+Action	Acción
+Compact 2	Compacto 2
+Compact alt	Compacto alterno
+Wide 2	Ancho 2
+Wide 3	Ancho 3
+Wide alt	Ancho alterno
+Extra large	Extra grande
+Remove 1 audio editor? Its audio is lost.	¿Quitar 1 editor de audio? Se pierde su audio.
+Stereo separation: Original	Separación estéreo: original
+Switch auto-bypass for all plugins	Alternar autoapagado de todos los plugins
+Mixer track swap	Intercambio de buses
+External input only	Solo entrada externa
+External and mixer input	Entrada externa y del mezclador
+Post effects	Después de efectos
+Post EQ	Después del ecualizador
+Post level and panning	Después de nivel y paneo
+Post track	Después del bus
+When armed	Cuando está armado
+Record	Grabar
+Monitor external input	Escuchar la entrada externa
+Route to this track	Mandar a este bus
+Route to this track only	Mandar solo a este bus
+Sidechain to this track	Sidechain a este bus
+Sidechain to this track only	Sidechain solo a este bus
+Create group	Crear grupo
+Create group...	Crear grupo...
+No tracks to select	No hay buses que elegir
+No unused mixer tracks	No hay buses sin usar
+Open mixer track state	Abrir estado de bus
+The master track can't be deleted	El maestro no se puede borrar
+Middle	Medio
+Gradient color...	Color en degradado...
+Gradient...	Degradado...
+Assign to new Audio track(s)	Asignar a pista(s) de audio nueva(s)
+Unassign from Audio track(s)	Quitar de pista(s) de audio
+Save mixer track state	Guardar estado de bus
+Render to wave file...	Convertir a WAV...
+Open audio editor	Abrir editor de audio
+Open audio editor and record	Abrir editor de audio y grabar
+Reset selected track(s) to default	Restablecer buses elegidos
+Routing	Envíos
+Route selected channels to this track	Mandar los canales elegidos a este bus
+Route selected channels starting from this track	Mandar los canales elegidos desde este bus en adelante
+Channels routed to this track	Canales que llegan a este bus
+Channels and playlist tracks routed to this track	Canales y pistas que llegan a este bus
+Tracks this one is routed to	Buses a los que va este
+Tracks routed to this one	Buses que llegan a este
+Reset selected track(s) routing	Restablecer envíos de los elegidos
+Unroute tracks routed to the selected track(s)	Quitar los buses que llegan a los elegidos
+Solo selected track(s)	Solo de los buses elegidos
+Alt solo selected track(s)	Solo alterno de los elegidos
+Arm selected track(s)	Armar buses elegidos
+Disarm selected track(s)	Desarmar buses elegidos
+Compensate for master latency	Compensar la latencia del maestro
+Separator	Separador
+Auto color group	Color automático del grupo
+Dock to	Acomodar en
+Move left	Mover a la izquierda
+Move right	Mover a la derecha
+Insert multiple...	Insertar varios...
+Insert from state	Insertar desde un estado
+Route selected tracks to this track	Mandar los buses elegidos a este
+Route selected tracks to this track only	Mandar los buses elegidos solo a este
+Sidechain selected tracks to this track	Sidechain de los elegidos a este bus
+Sidechain selected tracks to this track only	Sidechain de los elegidos solo a este bus
+Disk recording	Grabación a disco
+Auto-create audio clips	Crear clips de audio solo
+Plugin delay compensation	Compensación de retraso de plugins
+Automatic	Automático
+Waveforms	Formas de onda
+Extra properties	Más propiedades
+Trim unused tracks	Quitar buses sin usar
+Remove all (audio editor) instances	Quitar todos (editor de audio)
+Sidechain input	Entrada de sidechain
+View editor	Ver editor
+Help	Ayuda
+Remove audio editors	Quitar editores de audio
+Removed 1 audio editor	Se quitó 1 editor de audio
+Mixer track separator	Separador de buses
+Mixer track docking	Acomodo de buses
+Mixer track threading	Hilos del bus
+Auto-bypass for all plugins	Autoapagado de todos los plugins
+Not in a group	Sin grupo
+How many tracks to insert: type a number, Enter inserts them	Cuántos buses insertar: escribe un número y Enter
+No free effect slot on this track	No hay ranura libre en este bus
+No audio editors in the mixer	No hay editores de audio en el mezclador
+This slot's plugin is not hosted (no Beethoven DAW version of it yet)	El plugin de esta ranura no carga (aún no hay versión en Beethoven DAW)
+Set in ms...	Poner en ms...
+Set in samples...	Poner en muestras...
+Set in beats...	Poner en tiempos...
+Adjust position of recorded audio	Ajustar la posición de lo grabado
+Set from	Poner desde
+Delay audio output	Retrasar salida de audio
+Bypass track latency compensation	Omitir compensación de latencia
+Never	Nunca
+Always	Siempre
+When recording or not playing	Al grabar o sin reproducir
+Unlinked tracks only	Solo buses sin ligar
+Unlinked and non-empty tracks	Buses sin ligar y con algo
+Note	Nota
+Vel	Fuer
+Rel	Solt
+Fine	Fino
+Shift	Corr
+Rep	Rep
+Computer keyboard	Teclado de la compu
+Manual	Manual
+Fill every	Llenar cada
+Euclidean	Euclidiano
+Always show advanced controls	Mostrar siempre controles avanzados
+Focus selected channel on playback	Enfocar el canal elegido al reproducir
+Mute removed steps	Silenciar pasos quitados
+Show complete piano roll preview	Mostrar vista completa del piano roll
+Show a mute button on the piano roll preview	Botón de silencio en la vista del piano roll
+Auto switch display filter	Cambiar el filtro solo
+Transpose	Transportar
+A project keeps at least one channel	Un proyecto conserva al menos un canal
+No unused audio clips	No hay clips de audio sin usar
+Deleted the channel	Se borró el canal
+Filter group name	Nombre del grupo
+Swing mix (%)	Mezcla de swing (%)
+Size to fit	Ajustar al contenido
+Add one	Agregar uno
+Clone selected	Duplicar elegidos
+Delete selected...	Borrar elegidos...
+Create layer with selected channels	Crear capa con los canales elegidos
+Move selected up	Subir elegidos
+Move selected down	Bajar elegidos
+Sort by	Ordenar por
+Color selected	Color de los elegidos
+All...	Todos...
+Mute selected	Silenciar elegidos
+Unmute selected	Quitar silencio a elegidos
+Transpose selected...	Transportar elegidos...
+Set swing mix for selected	Swing de los elegidos
+Custom...	Otro...
+Set truncate swing notes for selected	Recortar notas con swing en los elegidos
+Turn on	Encender
+Turn off	Apagar
+Assign selected to free mixer track(s)	Mandar elegidos a buses libres
+Select mixer tracks for the selected channels	Elegir los buses de los canales elegidos
+Collapse selected	Plegar elegidos
+Expand all	Desplegar todo
+Restretch all	Volver a estirar todo
+Group arranger tracks created by Loop starter	Agrupar las pistas creadas por Loop starter
+Don't group tracks	No agrupar pistas
+Group tracks	Agrupar pistas
+Always create a track for the pattern clip	Crear siempre pista para el clip de patrón
+Auto resize	Tamaño automático
+Minimum height	Altura mínima
+Maximum height	Altura máxima
+Resize now	Ajustar ahora
+Colorful channel controls	Controles de canal con color
+Show mixer track selectors	Mostrar selector de bus
+Switch	Alternar
+Realtime	Tiempo real
+Special	Especial
+Legacy	Anterior
+Assign to new instrument track	Asignar a pista de instrumento nueva
+Fill each 2 steps	Llenar cada 2 pasos
+Fill each 4 steps	Llenar cada 4 pasos
+Fill each 8 steps	Llenar cada 8 pasos
+Advanced fill...	Relleno avanzado...
+Auto fill	Relleno automático
+MIDI channel through	Pasar canal MIDI
+Receive notes from	Recibir notas de
+Create instrument...	Crear instrumento...
+Burn MIDI to	Escribir MIDI en
+Show waveform preview	Mostrar forma de onda
+Unlock	Soltar
+Burn selected loops to pattern	Escribir bucles elegidos en el patrón
+Default (On)	Normal (encendido)
+Assign to free mixer track	Mandar a un bus libre
+Lock active/mute state	Fijar encendido / silencio
+Loop type	Tipo de bucle
+Loop step channels	Repetir canales de pasos
+Loop all channels	Repetir todos los canales
+Advanced looping	Bucle avanzado
+Burn to pattern	Escribir en el patrón
+Burn selected channels	Escribir canales elegidos
+Burn all looping channels	Escribir todos los que se repiten
+No stretched channels to restretch	No hay canales estirados
+Burn loops	Escribir bucles
+Set pattern loop mode	Poner modo de bucle
+Set advanced looping settings	Ajustar bucle avanzado
+Graph editor change velocity	Cambiar fuerza en la gráfica
+Graph editor change	Cambio en la gráfica
+Delete filter group	Borrar grupo
+Rename filter group	Renombrar grupo
+Add filter group	Agregar grupo
+Set to	Poner en
+Auto map outputs	Repartir salidas solo
+Outputs	Salidas
+This channel's plugin has no extra outputs	El plugin de este canal no tiene más salidas
+Cymbal	Platillo
+Clap	Palma
+Hats	Contratiempos
+Perc	Percusión
+Strings	Cuerdas
+Vocal	Voz
+Choir	Coro
+Guitar	Guitarra
+Brass	Metales
+Bells	Campanas
+Organ	Órgano
+Intro	Intro
+Pre-chorus	Precoro
+Hook	Gancho
+Bridge	Puente
+Breakdown	Pausa
+Build	Subida
+Outro	Final
+Insert pattern	Insertar patrón
+Move pattern	Mover patrón
+Plugin	Plugin
+TENSION	TENSIÓN

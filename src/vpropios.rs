@@ -228,6 +228,23 @@ fn golpe(t: f64, bpm: f64, cada: f64, desf: f64, caida: f64) -> (i32, f32) {
     (k as i32, (-((u - k) * b) / (caida / 1000.0).max(0.01)).exp() as f32)
 }
 
+fn recorrer<F: Fn(f32, f32, P4) -> P4 + Sync>(s: &Img, img: &Image, mezcla: f32, fun: F) -> Image {
+    let w = s.w;
+    let mut o = Image::new(img.width, img.height);
+    o.data.par_chunks_mut(w.max(1)).enumerate().for_each(|(y, fila)| {
+        for (x, q) in fila.iter_mut().enumerate() {
+            let base = s.d[y * w + x];
+            let mut p = fun(x as f32 + 0.5, y as f32 + 0.5, base);
+            if mezcla != 1.0 {
+                p = mez(base, p, mezcla);
+            }
+            let a = p[3].clamp(0.0, 1.0);
+            *q = [p[0].clamp(0.0, 1.0) * a, p[1].clamp(0.0, 1.0) * a, p[2].clamp(0.0, 1.0) * a, a];
+        }
+    });
+    o
+}
+
 pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
     let (w, h) = (img.width as usize, img.height as usize);
     let s = Img { w, h, d: img.data.par_iter().map(|p| if p[3] > 0.0 { [p[0] / p[3], p[1] / p[3], p[2] / p[3], p[3]] } else { [0.0; 4] }).collect() };
@@ -248,19 +265,12 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
     let c1 = col("color");
     let semilla = f.id as i32;
 
-    // Recorre la imagen: `g(x, y, original)`.
-    let pintar = |fun: &(dyn Fn(f32, f32, P4) -> P4 + Sync)| -> Image {
-        let mut o = Image::new(img.width, img.height);
-        o.data.par_chunks_mut(w.max(1)).enumerate().for_each(|(y, fila)| {
-            for (x, q) in fila.iter_mut().enumerate() {
-                let base = s.d[y * w + x];
-                let p = mez(base, fun(x as f32 + 0.5, y as f32 + 0.5, base), mezcla);
-                let a = p[3].clamp(0.0, 1.0);
-                *q = [p[0].clamp(0.0, 1.0) * a, p[1].clamp(0.0, 1.0) * a, p[2].clamp(0.0, 1.0) * a, a];
-            }
-        });
-        o
-    };
+    // Recorre la imagen: `g(x, y, original)`. Es macro para que cada efecto quede compilado en su propio recorrido.
+    macro_rules! pintar {
+        ($fun:expr) => {
+            recorrer(&s, img, mezcla, $fun)
+        };
+    }
     // Partículas que caen o suben: (x, y, tamaño, número).
     let particulas = |total: f32, abajo: f32, tam: f32| -> Vec<(f32, f32, f32, i32)> {
         (0..(total * por("cant").max(0.05)) as i32)
@@ -326,7 +336,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             let (te, ti) = (por("temp") * 0.22, por("tinte") * 0.16);
             let giro = (num("giro") as f32).to_radians();
             let (des, vin, gra) = (por("deslavar"), por("vin"), por("grano"));
-            pintar(&|x, y, p| {
+            pintar!(|x, y, p| {
                 let mut c = [p[0] * exp * (1.0 + te), p[1] * exp * (1.0 + ti), p[2] * exp * (1.0 - te)];
                 for k in 0..3 {
                     c[k] = (c[k] - 0.45) * con + 0.45;
@@ -367,15 +377,15 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:ritmo_zoom" => {
             let z = 1.0 + por("fuerza") * g.1;
-            pintar(&|x, y, _| s.en(cx + (x - cx) / z, cy + (y - cy) / z))
+            pintar!(|x, y, _| s.en(cx + (x - cx) / z, cy + (y - cy) / z))
         }
         "bc:ritmo_destello" => {
             let k = por("fuerza") * g.1;
-            pintar(&|_, _, b| if b[3] > 0.0 { let a = b[3]; let mut o = sobre(b, c1, k); o[3] = a; o } else { b })
+            pintar!(|_, _, b| if b[3] > 0.0 { let a = b[3]; let mut o = sobre(b, c1, k); o[3] = a; o } else { b })
         }
         "bc:ritmo_color" => {
             let a = ((g.0 + 1) as f32 * num("paso") as f32).to_radians();
-            pintar(&|_, _, b| girar_tono(b, a))
+            pintar!(|_, _, b| girar_tono(b, a))
         }
         "bc:ritmo_sacudida" => {
             let k = num("fuerza") as f32 * e * g.1;
@@ -383,20 +393,20 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             let (dx, dy) = (k * (tt * 71.0).sin(), k * (tt * 93.0 + 1.0).cos());
             // Un poco de acercamiento para que no asomen las orillas.
             let z = 1.0 + 2.0 * k / wf.max(1.0);
-            pintar(&|x, y, _| s.espejo(cx + (x - cx) / z + dx, cy + (y - cy) / z + dy))
+            pintar!(|x, y, _| s.espejo(cx + (x - cx) / z + dx, cy + (y - cy) / z + dy))
         }
         "bc:ritmo_rgb" => {
             let k = num("fuerza") as f32 * e * g.1;
-            pintar(&|x, y, b| [s.en(x - k, y)[0], b[1], s.en(x + k, y)[2], b[3]])
+            pintar!(|x, y, b| [s.en(x - k, y)[0], b[1], s.en(x + k, y)[2], b[3]])
         }
         "bc:ritmo_vueltas" => {
             let m = g.0.rem_euclid(4);
-            pintar(&|x, y, _| s.en(if m == 1 || m == 2 { wf - x } else { x }, if m >= 2 { hf - y } else { y }))
+            pintar!(|x, y, _| s.en(if m == 1 || m == 2 { wf - x } else { x }, if m >= 2 { hf - y } else { y }))
         }
         "bc:tv" => {
             let (cu, li, vi) = (por("curva") * 0.28, por("lineas"), por("vin"));
             let alto = (hf / 240.0).max(1.5);
-            pintar(&|x, y, _| {
+            pintar!(|x, y, _| {
                 let (u, v) = ((x - cx) / cx, (y - cy) / cy);
                 let r2 = u * u + v * v;
                 let (u2, v2) = (u * (1.0 + cu * v * v), v * (1.0 + cu * u * u));
@@ -419,7 +429,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:cinta" => {
             let k = por("cant");
             let banda = hf * (1.0 - (tv * 0.23).fract() * 1.2);
-            pintar(&|x, y, _| {
+            pintar!(|x, y, _| {
                 let fila = (y / (hf / 270.0).max(1.0)) as i32;
                 let tem = (azar(fila, cua) - 0.5) * 0.004 * wf * k;
                 let en_banda = (-((y - banda) / (0.05 * hf)).powi(2)).exp();
@@ -440,7 +450,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:nocturna" => {
             let (b, ru) = (por("brillo"), por("ruido"));
-            pintar(&|x, y, p| {
+            pintar!(|x, y, p| {
                 let d = ((x - cx).powi(2) + (y - cy).powi(2)).sqrt() / (0.62 * wf);
                 let l = (luz(p) * b).powf(0.8) + (azar(x as i32 + cua * 57, y as i32) - 0.5) * ru * 0.6;
                 let v = l * (1.0 - escalon(0.65, 1.0, d));
@@ -449,7 +459,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:termica" => {
             const PAL: [[f32; 3]; 6] = [[0.0, 0.0, 0.12], [0.22, 0.0, 0.55], [0.78, 0.08, 0.5], [0.98, 0.4, 0.1], [1.0, 0.82, 0.15], [1.0, 1.0, 0.92]];
-            pintar(&|_, _, p| {
+            pintar!(|_, _, p| {
                 let v = luz(p).clamp(0.0, 1.0) * 5.0;
                 let i = (v as usize).min(4);
                 let k = v - i as f32;
@@ -460,7 +470,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:consola" => {
             const PAL: [[f32; 3]; 4] = [[0.09, 0.17, 0.14], [0.22, 0.38, 0.27], [0.5, 0.62, 0.3], [0.8, 0.85, 0.55]];
             let t = (num("tam") as f32 * e).max(1.5);
-            pintar(&|x, y, b| {
+            pintar!(|x, y, b| {
                 let (i, j) = ((x / t).floor(), (y / t).floor());
                 let p = s.en((i + 0.5) * t, (j + 0.5) * t);
                 // Trama de 2×2 para que se noten más tonos.
@@ -473,13 +483,13 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:barras" => {
             let alto = (wf / num("razon").max(0.5) as f32).min(hf);
             let b = (hf - alto) / 2.0 * (1.0 - por("abrir"));
-            pintar(&|_, y, p| if y < b || y > hf - b { [0.0, 0.0, 0.0, 1.0] } else { p })
+            pintar!(|_, y, p| if y < b || y > hf - b { [0.0, 0.0, 0.0, 1.0] } else { p })
         }
         "bc:marco" => {
             let o = por("tam") * hf;
             let pie = o + por("pie") * hf;
             let (x0, y0, x1, y1) = (o, o, wf - o, hf - pie);
-            pintar(&|x, y, _| {
+            pintar!(|x, y, _| {
                 if x < x0 || x > x1 || y < y0 || y > y1 {
                     // Sombra suave hacia adentro de la foto.
                     return [c1[0], c1[1], c1[2], 1.0];
@@ -495,7 +505,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:puntos" => {
             let t = (num("tam") as f32 * e).max(2.0);
             let (si, co) = (num("ang") as f32).to_radians().sin_cos();
-            pintar(&|x, y, b| {
+            pintar!(|x, y, b| {
                 let (u, v) = ((x * co + y * si) / t, (-x * si + y * co) / t);
                 let (i, j) = (u.floor() + 0.5, v.floor() + 0.5);
                 let p = s.en((i * co - j * si) * t, (i * si + j * co) * t);
@@ -511,7 +521,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:manga" => {
             let (ti, tr) = (por("tinta"), (num("tam") as f32 * e).max(2.0));
             let o = (1.5 * e).max(1.0);
-            pintar(&|x, y, p| {
+            pintar!(|x, y, p| {
                 let l = |dx: f32, dy: f32| luz(s.en(x + dx, y + dy));
                 let gx = l(o, 0.0) - l(-o, 0.0);
                 let gy = l(0.0, o) - l(0.0, -o);
@@ -531,7 +541,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:duotono" => {
             let (a, b) = (col("osc"), col("cla"));
-            pintar(&|_, _, p| {
+            pintar!(|_, _, p| {
                 let l = escalon(0.02, 0.95, luz(p));
                 let o = mez(a, b, l);
                 [o[0], o[1], o[2], p[3]]
@@ -539,7 +549,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:neblina" => {
             let k = por("cant");
-            pintar(&|x, y, p| {
+            pintar!(|x, y, p| {
                 let v = nubes(x / hf * 2.6 + tv * 0.12, y / hf * 3.2 + tv * 0.03);
                 let m = escalon(0.25, 0.8, v) * (0.45 + 0.55 * y / hf) * k * 1.3;
                 let mut o = sobre(p, c1, m);
@@ -550,7 +560,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         "bc:velocidad" => {
             let (k, hu) = (por("cant"), por("hueco"));
             let paso = (tv * 16.0).floor() as i32;
-            pintar(&|x, y, p| {
+            pintar!(|x, y, p| {
                 let (u, v) = ((x - cx) / cx, (y - cy) / cy);
                 let r = (u * u + v * v).sqrt();
                 let sec = ((v.atan2(u) / std::f32::consts::TAU + 0.5) * 180.0) as i32;
@@ -601,7 +611,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             let n = num("caras").round().max(2.0) as usize;
             let k = por("cant") * 0.5 * hf;
             let giro = tv * 0.4;
-            pintar(&|x, y, b| {
+            pintar!(|x, y, b| {
                 let mut o = b.map(|c| c * 0.5);
                 for i in 0..n {
                     let a = std::f32::consts::TAU * i as f32 / n as f32 + giro;
@@ -617,7 +627,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             let paso = por("paso").clamp(0.2, 0.95);
             let giro = (num("giro") as f32).to_radians();
             let f0 = (tv * 0.5).rem_euclid(1.0);
-            pintar(&|x, y, _| {
+            pintar!(|x, y, _| {
                 // Se busca en qué vuelta cae el punto: el cuadro más chico que lo contiene.
                 let (u, v) = (x - cx, y - cy);
                 let z0 = paso.powf(-f0);
@@ -639,7 +649,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:agua" => {
             let (k, ta) = (por("cant") * 0.035 * hf, por("tam") * hf);
-            pintar(&|x, y, _| {
+            pintar!(|x, y, _| {
                 let dx = k * ((y / ta * 6.28 + tv * 2.1).sin() + 0.5 * (y / ta * 11.0 + x / ta * 2.0 - tv * 1.3).sin());
                 let dy = k * ((x / ta * 5.1 + tv * 1.7).cos() + 0.5 * (x / ta * 9.3 + tv * 2.6).sin());
                 let p = s.espejo(x + dx, y + dy);

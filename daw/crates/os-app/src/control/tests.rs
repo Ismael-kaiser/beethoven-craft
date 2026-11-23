@@ -1365,7 +1365,7 @@ fn a_hosted_slots_scaling_and_help() {
     assert_eq!((a.state.session.plugins.scale_for(fx, 1.0), scaling(&a).children[2].mark.clone()), (1.25, Mark::Radio(true)));
     run(&mut a, MCmd::SlotScale(0, None));
     assert_eq!(a.state.session.plugins.scale_for(fx, 1.5), 1.5, "Main");
-    assert_eq!(run(&mut a, MCmd::SlotHelp(0)), Some(format!("Opening {}", crate::help_links::plugin_page("Beethoven Sampler"))));
+    assert_eq!(run(&mut a, MCmd::SlotHelp(0)), Some("Beethoven Sampler has no help page".into()));
     // No instance (an effect the engine plays itself has no editor): greyed.
     a.state.session.plugins.hosted.clear();
     assert!(!scaling(&a).enabled);

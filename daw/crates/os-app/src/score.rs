@@ -160,6 +160,16 @@ pub fn spell(key: u8, fifths: i32) -> (u8, i32, i32) {
     (s, a, octave)
 }
 
+/// The key a staff place (0 = the bottom line) sounds, with the signature's alteration or `alter`.
+pub fn key_at(pos: i32, clef: Clef, fifths: i32, alter: Option<i32>) -> Option<u8> {
+    // Bottom lines: E4 in treble, G2 in bass.
+    let d = pos + if clef == Clef::Treble { 30 } else { 18 };
+    let step = d.rem_euclid(7) as u8;
+    let alt = alter.unwrap_or_else(|| signature_alt(step, fifths));
+    let key = [0, 2, 4, 5, 7, 9, 11][usize::from(step)] + alt + (d.div_euclid(7) + 1) * 12;
+    u8::try_from(key).ok().filter(|k| *k < 128)
+}
+
 /// What the key signature does to a step.
 pub fn signature_alt(step: u8, fifths: i32) -> i32 {
     const SHARPS: [u8; 7] = [3, 0, 4, 1, 5, 2, 6];
@@ -259,16 +269,26 @@ fn staff(notes: &[&Note], clef: Clef, measure: u32, count: usize) -> Staff {
 
 /// The score of some parts. `key`: (tonic, minor), found when `None`.
 pub fn build(title: &str, tempo: f64, beats: u32, beat_type: u32, parts: &[Part], key: Option<(u8, bool)>) -> Score {
+    assemble(title, tempo, beats, beat_type, parts, key, false)
+}
+
+/// `build` to write on: both staves, and a blank measure after the last one.
+pub fn sheet(title: &str, tempo: f64, beats: u32, beat_type: u32, part: Part, key: (u8, bool)) -> Score {
+    assemble(title, tempo, beats, beat_type, &[part], Some(key), true)
+}
+
+fn assemble(title: &str, tempo: f64, beats: u32, beat_type: u32, parts: &[Part], key: Option<(u8, bool)>, blank: bool) -> Score {
     let found = key.or_else(|| find_key(parts.iter().flat_map(|p| &p.notes)).map(|k| (k.0, k.1))).unwrap_or((0, false));
     let mut s = Score { title: title.into(), tempo, beats: beats.max(1), beat_type: beat_type.max(1), fifths: fifths(found.0, found.1), minor: found.1, parts: vec![] };
     let m = s.measure();
     let end = parts.iter().flat_map(|p| &p.notes).map(|n| n.start + n.dur).max().unwrap_or(0);
-    let count = (end.div_ceil(m) as usize).clamp(1, 2000);
+    let count = end.div_ceil(m) as usize;
+    let count = if blank { (count + 1).max(4) } else { count }.clamp(1, 2000);
     for p in parts {
         let (lo, hi) = p.notes.iter().fold((127, 0), |(a, b), n| (n.key.min(a), n.key.max(b)));
         let mean = p.notes.iter().map(|n| u32::from(n.key)).sum::<u32>() / p.notes.len().max(1) as u32;
         let all: Vec<&Note> = p.notes.iter().collect();
-        let staves = if lo < 53 && hi > 67 {
+        let staves = if blank || (lo < 53 && hi > 67) {
             let up: Vec<&Note> = all.iter().copied().filter(|n| n.key >= 60).collect();
             let down: Vec<&Note> = all.iter().copied().filter(|n| n.key < 60).collect();
             vec![staff(&up, Clef::Treble, m, count), staff(&down, Clef::Bass, m, count)]
@@ -440,6 +460,33 @@ mod tests {
                 assert_eq!(i32::from([0u8, 2, 4, 5, 7, 9, 11][usize::from(s)]) + a + (o + 1) * 12, i32::from(k), "{k} in {f}");
             }
         }
+    }
+
+    /// A place on the staff and the key written there are each other's.
+    #[test]
+    fn staff_places_and_keys() {
+        use crate::views::page::staff_pos;
+        for f in -7..=7 {
+            for clef in [Clef::Treble, Clef::Bass] {
+                for pos in -6..=14 {
+                    let k = key_at(pos, clef, f, None).unwrap();
+                    let (step, alt, oct) = spell(k, f);
+                    assert_eq!((staff_pos(step, oct, clef), alt), (pos, signature_alt(step, f)), "{f} {clef:?} {pos}");
+                }
+            }
+        }
+        // E4 and F4 sharp in C; F is sharp in G, and a natural takes it off.
+        assert_eq!((key_at(0, Clef::Treble, 0, None), key_at(1, Clef::Treble, 0, Some(1))), (Some(64), Some(66)));
+        assert_eq!((key_at(1, Clef::Treble, 1, None), key_at(1, Clef::Treble, 1, Some(0))), (Some(66), Some(65)));
+        assert_eq!(key_at(0, Clef::Bass, 0, None), Some(43));
+    }
+
+    #[test]
+    fn a_blank_sheet_has_both_staves() {
+        let s = sheet("x", 120.0, 4, 4, Part { name: String::new(), notes: vec![] }, (0, false));
+        assert_eq!((s.parts[0].staves.len(), s.measures()), (2, 4));
+        let s = sheet("x", 120.0, 4, 4, Part { name: String::new(), notes: vec![n(64, 16, 60)] }, (0, false));
+        assert_eq!(s.measures(), 6);
     }
 
     #[test]

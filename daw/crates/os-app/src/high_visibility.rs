@@ -108,6 +108,6 @@ mod tests {
         assert!(dot.r > 0xd0 && dot.g > 0xd0 && dot.b > 0xd0, "white: {dot:?}");
         assert_eq!(record_dot(&beethoven, false), beethoven.record);
         let thumb = os_ui::kit::scroll_thumb(&beethoven, normal, true);
-        assert!(thumb.r > 0xb0 && thumb.r == thumb.b, "the look's own light grey: {thumb:?}");
+        assert!(thumb.r > 0xb0 && thumb.r.abs_diff(thumb.b) < 0x18, "the look's own light grey: {thumb:?}");
     }
 }

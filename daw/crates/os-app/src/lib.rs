@@ -82,6 +82,7 @@ pub use os_session::keep_on_disk;
 pub mod keep_on_disk_ui;
 pub use os_session::icon;
 pub mod icons;
+pub mod grooves;
 pub mod ideas;
 pub mod page;
 pub mod score;

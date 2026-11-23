@@ -1500,6 +1500,26 @@ fn screenshot(args: &[String]) {
         "none" => vec![],
         _ => vec![app::Win::Playlist],
     };
+    // The tabs (`os_app::tabs`): a page by name, with a small song to show with `--demo`.
+    if args.iter().any(|a| a == "--demo") {
+        use os_app::page::Hit;
+        app.page_act(Hit::Progression(0));
+        app.page_act(Hit::Make(os_app::ideas::Make::Melody));
+        app.page_act(Hit::Make(os_app::ideas::Make::Bass));
+    }
+    let tab = match view.as_str() {
+        "piano" => Some(os_app::tabs::Tab::Piano),
+        "mixer" => Some(os_app::tabs::Tab::Mixer),
+        "rhythm" => Some(os_app::tabs::Tab::Rhythm),
+        "score" => Some(os_app::tabs::Tab::Score),
+        "ideas" => Some(os_app::tabs::Tab::Ideas),
+        "export" => Some(os_app::tabs::Tab::Export),
+        _ => None,
+    };
+    if let Some(t) = tab {
+        rack = false;
+        os_app::tabs::show(&mut app.state, t);
+    }
     for (w, _) in &floats {
         if !app.state.z.contains(w) {
             app.state.z.push(*w);
@@ -1704,6 +1724,11 @@ fn screenshot(args: &[String]) {
             app.state.playlist_scroll = (0.0, 0.0);
             app.paint(&mut canvas, None);
         }
+    }
+    // A menu opens in time: once it has.
+    if app.state.menu_open.is_some() {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        app.paint(&mut canvas, None);
     }
     canvas.pixmap.save_png(out.expect("--screenshot needs a path")).expect("write png");
 }

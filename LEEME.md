@@ -4,7 +4,7 @@ Creado por mixter-ha99.
 
 Compositor de video y audio. App con sus propias ventanas, en español.
 
-Al abrirla sale el menú: proyectos recientes, **Nuevo video** (abre **Beethoven Movie**, el editor de video) y **Nueva canción** (abre **Beethoven DAW**, el estudio de música: rack, piano roll, mezcla y plugins VST3/CLAP, en `daw/`). Lo de abajo es Beethoven Movie.
+Al abrirla sale el menú: proyectos recientes, **Nuevo video** (abre **Beethoven Movie**, el editor de video) y **Nueva canción** (abre **Beethoven DAW**, el estudio de música, en `daw/`; su guía está en `daw/README.md`). Lo de abajo es Beethoven Movie.
 
 Pestañas como de navegador: se cierran, se ordenan arrastrando, `+` abre otra y con clic derecho se sacan a su propia ventana.
 
@@ -12,6 +12,10 @@ Pestañas como de navegador: se cierran, se ordenan arrastrando, `+` abre otra y
 - **VIDEO**: origen, controles y color a la izquierda; programa al centro; biblioteca a la derecha; herramientas, pistas y medidor abajo.
 - **AUDIO**: consola, rack, piano roll y editor, con las pistas de sonido abajo.
 - **PLAYLIST**: el resultado final con todas las pistas.
+- **ANIMACIÓN**: imágenes, figuras, efectos y texto letra por letra. Animaciones listas de entrada, salida y bucle, pistas de claves, gráfica de curvas, grabar claves moviendo el cuadro, copiar y pegar.
+- **NODOS**: efectos y mezcla de color del clip como un grafo: se conectan, se ramifican y se combinan. Trae plantillas.
+
+**Clip vacío** (Biblioteca): un clip que no tiene imagen y le aplica sus efectos a todo lo que hay debajo, textos incluidos. **Filtros**: 66 filtros de color propios, se ajustan con las ruedas de color del inspector. **Atajos de teclado**: en el menú se ven y se cambian todos.
 
 Herramientas: V selección, A hacia adelante, B ondulado, N rodar, X estirar velocidad, C cuchilla (Shift: todas), Y deslizar, U correr, H mano, Z lupa, T texto.
 

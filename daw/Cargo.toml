@@ -22,6 +22,10 @@ os-smf = { path = "crates/os-smf" }
 os-session = { path = "crates/os-session" }
 thiserror = "2"
 
+# Código entre crates junto: el motor de sonido y el dibujo corren más rápido.
+[profile.release]
+lto = "thin"
+
 [profile.dev]
 opt-level = 3
 debug = "line-tables-only"

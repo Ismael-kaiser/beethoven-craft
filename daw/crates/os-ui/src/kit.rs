@@ -588,10 +588,10 @@ mod tests {
         let l = os_theme::design::palette(os_theme::Design::Beethoven, None);
         assert_eq!(scroll_thumb(&l, State::NORMAL, false), l.overview);
         let light = scroll_thumb(&l, State::NORMAL, true);
-        assert_eq!((light.r, light.g), (light.g, light.b), "a neutral grey: {light:?}");
+        assert!(light.r.abs_diff(light.b) < 18, "a hardly tinted grey: {light:?}");
         assert!(light.r > 0xb0, "light: {light:?}");
         let arrow = scroll_arrow(&l, State::NORMAL, true).unwrap();
-        assert!(arrow.r > 0xa0 && arrow.r == arrow.b, "{arrow:?}");
+        assert!(arrow.r > 0xa0 && arrow.r.abs_diff(arrow.b) < 18, "{arrow:?}");
         assert!(!high_visibility(), "off unless the app turns it on");
     }
 

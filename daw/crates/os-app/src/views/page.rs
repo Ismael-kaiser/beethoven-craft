@@ -26,9 +26,9 @@ fn icon_of(t: Tab) -> &'static tabler::TablerIcon {
 }
 
 /// The strip, at the workspace's top.
-pub fn strip(ui: &mut Ui, s: &State, r: Rect) {
+pub fn strip(ui: &mut Ui, s: &State, f: &FrameInfo, r: Rect) {
     let t = ui.t;
-    ui.c.fill_rect(r, t.overview.mix(t.workspace, 0.92));
+    ui.c.fill_rect(r, t.toolbar.mix(t.window_border, 0.45));
     ui.c.fill_rect(Rect::new(r.x, r.bottom() - 1.0, r.w, 1.0), t.window_border);
     // The library's switch, where a browser has its side panel's.
     let lib = Rect::new(r.x + 8.0, r.y + 6.0, 30.0, 26.0);
@@ -39,14 +39,15 @@ pub fn strip(ui: &mut Ui, s: &State, r: Rect) {
     }
     ui.c.icon(&tabler::FOLDERS, Rect::new(lib.x + 7.0, lib.y + 5.0, 16.0, 16.0), if s.show_browser { t.accent } else { t.glyph });
     let n = s.tabs.open.len().max(1) as f32;
-    let w = ((r.w - 110.0) / n).clamp(74.0, 168.0);
+    let w = ((r.w - 420.0) / n).clamp(58.0, 124.0);
     let mut x = r.x + 46.0;
     for &tab in &s.tabs.open {
         let on = s.tabs.cur == tab;
         let b = Rect::new(x, r.y + 5.0, w - 4.0, r.h - if on { 5.0 } else { 9.0 });
         let hov = ui.hit(b, Action::Tab(tab), hint_of(tab));
         if on {
-            ui.c.fill_rrect(Rect::new(b.x, b.y, b.w, b.h + 8.0), 10.0, t.window_title);
+            ui.c.fill_rrect(b, 10.0, t.window_title);
+            ui.c.fill_rect(Rect::new(b.x, b.bottom() - 10.0, b.w, 10.0), t.window_title);
             ui.c.fill_rrect(Rect::new(b.x + 12.0, b.y + 1.0, b.w - 24.0, 2.5), 1.0, t.accent);
         } else {
             ui.c.fill_rrect(b, 9.0, if hov { t.button } else { t.toolbar.mix(t.workspace, 0.4) });
@@ -65,6 +66,13 @@ pub fn strip(ui: &mut Ui, s: &State, r: Rect) {
             ui.c.icon(&tabler::X, c.inset(2.5), if hc { t.text } else { t.text_dim });
         }
         x += w;
+    }
+    // What the mouse is over, between the tabs and the pattern.
+    let (hx, hr) = (x + 44.0, super::topbar::pattern_rect(r.w).x - 14.0);
+    if hr - hx > 90.0 {
+        let m = s.message.as_deref().filter(|_| f.hint.is_empty()).unwrap_or(&f.hint);
+        let hf = ui.c.fit_font(Font::new(14), m, hr - hx);
+        ui.c.text_clip(hf, hx, r.cy() - 9.0, hr - hx, t.text_dim, m);
     }
     if s.tabs.open.len() < Tab::ALL.len() {
         let b = Rect::new(x + 4.0, r.y + 7.0, 28.0, 24.0);
@@ -125,15 +133,20 @@ const INK: Color = Color::rgb(0x241a1c);
 fn score_page(ui: &mut Ui, s: &State, r: Rect, f: &FrameInfo) {
     let t = ui.t;
     ui.c.fill_rect(r, t.workspace);
-    let sc = crate::page::score(s);
+    let sc = crate::page::shown(s);
+    let edit = s.page.scope == Scope::Channel;
+    let top = if edit { 108.0 } else { 58.0 };
     let k = s.page.zoom;
     // Paper
     let w = (r.w - 60.0).min(1180.0 * k.max(0.8)).max(300.0);
-    let paper = Rect::new(r.x + ((r.w - w) / 2.0).round(), r.y + 74.0 - s.page.scroll, w, 4000.0);
-    let body = Rect::new(r.x, r.y + 58.0, r.w, r.h - 58.0);
+    let paper = Rect::new(r.x + ((r.w - w) / 2.0).round(), r.y + top + 16.0 - s.page.scroll, w, 4000.0);
+    let body = Rect::new(r.x, r.y + top, r.w, r.h - top);
     ui.c.push_clip(body);
     ui.c.fill_rect(Rect::new(paper.x, body.y, paper.w, body.h), PAPER);
-    let d = Draw { x0: paper.x + 46.0 * k, x1: paper.right() - 40.0 * k, sp: 9.0 * k, k };
+    let hint = if edit { "Click to write, drag a note to move it, right-click to erase" } else { "Choose Instrument to write on the sheet" };
+    ui.hit(Rect::new(paper.x, body.y, paper.w, body.h), Action::Page(Hit::Paper), hint);
+    s.page.bars.borrow_mut().clear();
+    let d = Draw { x0: paper.x + 46.0 * k, x1: paper.right() - 40.0 * k, sp: 9.0 * k, k, edit, bars: &s.page.bars };
     let mut y = paper.y + 26.0 * k;
     let tf = Font::new((30.0 * k) as u16);
     ui.c.text_center(tf, Rect::new(paper.x, y, paper.w, 38.0 * k), INK, &sc.title);
@@ -146,9 +159,15 @@ fn score_page(ui: &mut Ui, s: &State, r: Rect, f: &FrameInfo) {
         ui.c.text_center(Font::new(20), Rect::new(paper.x, body.y + 170.0, paper.w, 30.0), INK.with_alpha(150), "Write some notes and they will appear here as sheet music");
     }
     let bottom = if sc.parts.is_empty() { y } else { d.systems(ui, &sc, y, body, playhead(s, &sc, f)) };
+    if let Some(h) = s.page.hover.filter(|_| edit) {
+        d.pale(ui, t.accent, h, s.page.pen.units(), sc.measure());
+    }
     s.page.height.set(bottom - paper.y + 120.0);
     ui.c.pop_clip();
-    head(ui, r, "Score", "What you compose, written down as you go");
+    head(ui, r, "Score", if edit { "Write on the sheet: it is the same music as the piano roll" } else { "What you compose, written down as you go" });
+    if edit {
+        palette(ui, s, Rect::new(r.x, r.y + 58.0, r.w, 50.0));
+    }
     let mut x = r.right() - 20.0;
     let mut right = |ui: &mut Ui, w: f32, label: &str, h: Hit, hint: &'static str, on: bool| {
         x -= w + 8.0;
@@ -160,6 +179,54 @@ fn score_page(ui: &mut Ui, s: &State, r: Rect, f: &FrameInfo) {
     right(ui, 84.0, "Song", Hit::Scope(Scope::Song), "The whole song, as arranged", s.page.scope == Scope::Song);
     right(ui, 92.0, "Pattern", Hit::Scope(Scope::Pattern), "Every instrument of the pattern", s.page.scope == Scope::Pattern);
     right(ui, 110.0, "Instrument", Hit::Scope(Scope::Channel), "Only the selected instrument", s.page.scope == Scope::Channel);
+}
+
+/// What the pencil writes: lengths, dot, accidentals, eraser; and the key.
+fn palette(ui: &mut Ui, s: &State, r: Rect) {
+    let t = ui.t;
+    ui.c.fill_rect(r, t.window_body);
+    ui.c.fill_rect(Rect::new(r.x, r.bottom() - 1.0, r.w, 1.0), t.window_border);
+    let pen = s.page.pen;
+    let none = Default::default();
+    let d = Draw { x0: 0.0, x1: 0.0, sp: 7.0, k: 1.0, edit: false, bars: &none };
+    let mut x = r.x + 22.0;
+    let (y, h) = (r.y + 7.0, 36.0);
+    let mut key = |ui: &mut Ui, w: f32, hit: Hit, on: bool, hint: &'static str| {
+        let b = Rect::new(x, y, w, h);
+        let hov = ui.hit(b, Action::Page(hit), hint);
+        if on {
+            ui.c.fill_rrect(b.outset(2.0), 9.0, t.accent);
+        }
+        ui.c.fill_rrect(b, 7.0, if on || hov { PAPER } else { PAPER.mix(t.window_body, 0.28) });
+        x += w + 6.0;
+        b
+    };
+    for (dur, hint) in [(16, "Whole note"), (8, "Half note"), (4, "Quarter note"), (2, "Eighth note"), (1, "Sixteenth note")] {
+        let b = key(ui, 38.0, Hit::Dur(dur), pen.dur == dur && !pen.erase, hint);
+        let e = Elem { at: 0, dur, keys: vec![64], tie_in: false, tie_out: false };
+        let at = if dur == 16 { b.cy() } else { b.bottom() - 8.0 };
+        d.notes(ui, &e, &[0], b.cx() - 5.0, at - 4.0 * d.sp, 30.0);
+    }
+    let b = key(ui, 38.0, Hit::Dot, pen.dot, "Dotted: half as long again");
+    d.notes(ui, &Elem { at: 0, dur: 6, keys: vec![64], tie_in: false, tie_out: false }, &[0], b.cx() - 9.0, b.bottom() - 8.0 - 4.0 * d.sp, 30.0);
+    for (a, hint) in [(1, "Sharp"), (-1, "Flat"), (0, "Natural")] {
+        let b = key(ui, 38.0, Hit::Alter(a), pen.alter == Some(a), hint);
+        d.accidental(ui, a, b.cx() - 3.5, b.cy() + if a < 0 { 4.0 } else { 0.0 });
+    }
+    let b = key(ui, 38.0, Hit::Eraser, pen.erase, "Eraser (the right button erases too)");
+    ui.c.icon(&tabler::ERASER, Rect::new(b.cx() - 9.0, b.cy() - 9.0, 18.0, 18.0), INK);
+    // Key signature
+    let kx = x + 18.0;
+    button(ui, Rect::new(kx, y + 3.0, 28.0, 30.0), "<", Hit::Tonic(-1), "The key below", false);
+    let kb = Rect::new(kx + 34.0, y + 3.0, 130.0, 30.0);
+    ui.c.fill_rrect(kb, 8.0, t.sunken);
+    let key = s.page.key;
+    ui.c.text_center(Font::new(16), kb, t.accent, &format!("{} {}", ideas::NAMES[usize::from(key.tonic)], if key.minor { "minor" } else { "major" }));
+    button(ui, Rect::new(kx + 170.0, y + 3.0, 28.0, 30.0), ">", Hit::Tonic(1), "The key above", false);
+    button(ui, Rect::new(kx + 206.0, y + 3.0, 118.0, 30.0), "Major / minor", Hit::Minor, "Change between major and minor", false);
+    if kx + 520.0 < r.right() {
+        button(ui, Rect::new(kx + 332.0, y + 3.0, 160.0, 30.0), "Find it in the pattern", Hit::Detect, "Listens to the pattern's notes and finds their key", false);
+    }
 }
 
 fn tonic_of(sc: &score::Score) -> u8 {
@@ -175,15 +242,33 @@ fn playhead(s: &State, sc: &score::Score, f: &FrameInfo) -> Option<f32> {
     (f.playing && same && at < (sc.measures() as u32 * sc.measure()) as f32).then_some(at)
 }
 
-struct Draw {
+struct Draw<'a> {
     x0: f32,
     x1: f32,
     /// Between staff lines.
     sp: f32,
     k: f32,
+    /// A sheet to write on: roomy measures, kept in `bars`.
+    edit: bool,
+    bars: &'a std::cell::RefCell<Vec<crate::page::Bar>>,
 }
 
-impl Draw {
+impl Draw<'_> {
+    /// The note a press would write.
+    fn pale(&self, ui: &mut Ui, c: Color, h: crate::page::Spot, units: u32, total: u32) {
+        let Some(b) = self.bars.borrow().get(h.bar).copied() else { return };
+        let sp = b.sp;
+        let x = b.x + b.w * (h.start % total) as f32 / total as f32;
+        let (cx, yof) = (x + sp * crate::page::HEAD, |l: i32| b.sy + (8 - l) as f32 * sp / 2.0);
+        for l in (h.pos..=-2).chain(10..=h.pos).filter(|l| l % 2 == 0) {
+            ui.c.fill_rect(Rect::new(cx - sp * 1.1, yof(l), sp * 2.2, (sp * 0.12).max(1.0)), INK.with_alpha(110));
+        }
+        let w = b.w * units as f32 / total as f32;
+        let right = (x + w).min(b.x + b.w);
+        ui.c.fill_rrect(Rect::new(x, yof(h.pos) - sp * 0.5, (right - x).max(sp * 1.4), sp), sp * 0.5, c.with_alpha(60));
+        ui.c.fill_circle(cx, yof(h.pos), sp * 0.58, c.with_alpha(220));
+    }
+
     /// All the systems; returns where they end.
     fn systems(&self, ui: &mut Ui, sc: &score::Score, mut y: f32, view: Rect, play: Option<f32>) -> f32 {
         let sp = self.sp;
@@ -194,7 +279,7 @@ impl Draw {
         let need: Vec<f32> = (0..n)
             .map(|m| {
                 let c = sc.parts.iter().flat_map(|p| &p.staves).map(|s| s.measures.get(m).map_or(1, Vec::len)).max().unwrap_or(1);
-                (c as f32 * 3.4 + 2.6).max(9.0) * sp
+                (c as f32 * 3.4 + 2.6).max(if self.edit { 24.0 } else { 9.0 }) * sp
             })
             .collect();
         let lead = (6.6 + sc.fifths.unsigned_abs() as f32 * 1.1) * sp;
@@ -258,6 +343,7 @@ impl Draw {
                     let mw = need[m] * grow;
                     if let Some(es) = st.measures.get(m) {
                         self.measure(ui, es, sc, st.clef, mx + sp * 1.0, mw - sp * 1.6, sy);
+                        self.bars.borrow_mut().push(crate::page::Bar { clef: st.clef, measure: m as u32, x: mx + sp, w: mw - sp * 1.6, sy, sp });
                     }
                     mx += mw;
                 }
@@ -323,7 +409,7 @@ impl Draw {
         let up = (lo + hi) / 2 < 4;
         let (_, dots) = score::value(e.dur);
         let open = e.dur >= 8;
-        let rx = sp * 0.66;
+        let rx = sp * crate::page::HEAD;
         let cx = x + rx;
         // Ledger lines
         let mut l = -2;
@@ -505,6 +591,80 @@ pub fn staff_pos(step: u8, octave: i32, clef: Clef) -> i32 {
 fn key_pos(i: usize, sharp: bool, clef: Clef) -> i32 {
     let v: [i32; 7] = if sharp { [8, 5, 9, 6, 3, 7, 4] } else { [4, 7, 3, 6, 2, 5, 1] };
     v[i % 7] - if clef == Clef::Bass { 2 } else { 0 }
+}
+
+// ------------------------------------------------------------------------------------------------ Grooves
+
+/// Height of the grooves panel under the instruments.
+pub const GROOVES_H: f32 = 276.0;
+/// Its foot: the pattern's way to Arrange.
+const FOOT: f32 = 50.0;
+
+pub fn grooves(ui: &mut Ui, s: &State) {
+    use crate::grooves as g;
+    let t = ui.t;
+    let w = s.work_rect();
+    let r = Rect::new(w.x, w.bottom() - GROOVES_H, w.w, GROOVES_H);
+    ui.c.fill_rect(r, t.window_body);
+    ui.c.fill_rect(Rect::new(r.x, r.y, r.w, 1.0), t.grid_bar);
+    ui.hit(r, Action::Swallow, "");
+    let name = s.session.project.channels.get(s.selected_channel).map_or(String::new(), |_| crate::edit::rack::channel_name(&s.session, s.selected_channel));
+    ui.c.text(Font::new(18), r.x + 20.0, r.y + 12.0, t.text, "Grooves");
+    let tw = ui.c.text_width(Font::new(18), "Grooves");
+    ui.c.text_clip(Font::new(14), r.x + 32.0 + tw, r.y + 16.0, 230.0, t.text_dim, &name);
+    // Which piece the selected instrument plays.
+    let mut x = r.x + 300.0;
+    for (p, n) in g::Piece::ALL {
+        let pw = ui.c.text_width(Font::new(15), n) + 26.0;
+        button(ui, Rect::new(x, r.y + 10.0, pw, 27.0), n, Hit::Piece(p), "Which part of the groove this instrument plays", s.page.piece == p);
+        x += pw + 8.0;
+    }
+    // Euclid
+    let (h, rot) = (s.page.euclid, s.page.rotate);
+    let ex = (r.right() - 372.0).max(x + 10.0);
+    if ex + 350.0 < r.right() + 10.0 {
+        ui.c.text_mid(Font::new(14), ex, r.y + 23.0, t.text_dim, "Spread");
+        button(ui, Rect::new(ex + 46.0, r.y + 10.0, 26.0, 27.0), "-", Hit::Euclid(-1), "Fewer hits", false);
+        ui.c.text_center(Font::new(16), Rect::new(ex + 72.0, r.y + 10.0, 30.0, 27.0), t.accent, &h.to_string());
+        button(ui, Rect::new(ex + 102.0, r.y + 10.0, 26.0, 27.0), "+", Hit::Euclid(1), "More hits, spread as evenly as they fit", false);
+        button(ui, Rect::new(ex + 136.0, r.y + 10.0, 26.0, 27.0), "<", Hit::Rotate(-1), "Turn it left", false);
+        ui.c.text_center(Font::new(16), Rect::new(ex + 162.0, r.y + 10.0, 30.0, 27.0), t.text_dim, &rot.to_string());
+        button(ui, Rect::new(ex + 192.0, r.y + 10.0, 26.0, 27.0), ">", Hit::Rotate(1), "Turn it right", false);
+        button(ui, Rect::new(ex + 228.0, r.y + 10.0, 118.0, 27.0), "Clear steps", Hit::ClearSteps, "Takes every step off the selected instrument", false);
+    }
+    // The pattern's way to Arrange.
+    let foot = Rect::new(r.x, r.bottom() - FOOT, r.w, FOOT);
+    ui.c.fill_rect(foot, t.window_title);
+    let a = Action::Page(Hit::Carry);
+    let b = Rect::new(r.x + 16.0, foot.y + 8.0, 270.0, 34.0);
+    let hov = ui.hit(b, a, "Drag it onto the Arrange tab and drop it on a track");
+    ui.c.fill_rrect(b, 10.0, t.accent.with_alpha(if hov { 90 } else { 55 }));
+    for i in 0..6 {
+        ui.c.fill_circle(b.x + 16.0 + (i % 2) as f32 * 7.0, b.cy() - 7.0 + (i / 2) as f32 * 7.0, 1.8, t.text);
+    }
+    let name = crate::patterns::name_of(&s.session, s.pattern().max(1));
+    let f = ui.c.fit_font(Font::new(16), &name, b.w - 60.0);
+    ui.c.text_mid(f, b.x + 38.0, b.cy(), t.text, &name);
+    button(ui, Rect::new(b.right() + 10.0, b.y, 190.0, 34.0), "Put in the arrangement", Hit::ToArrange, "Adds this pattern to the arrangement, after its last clip", false);
+    ui.c.text_mid(Font::new(14), b.right() + 218.0, b.cy(), t.text_dim, "Drag the pattern to the Arrange tab and drop it where it should sound");
+    let r = Rect::new(r.x, r.y, r.w, r.h - FOOT);
+    let n = ((r.w - 32.0) / 180.0).floor().clamp(2.0, 8.0);
+    let rows = (g::GROOVES.len() as f32 / n).ceil();
+    let (cw, ch) = ((r.w - 32.0 - (n - 1.0) * 10.0) / n, ((r.h - 62.0 - (rows - 1.0) * 8.0) / rows).min(72.0));
+    for (i, (name, _)) in g::GROOVES.iter().enumerate() {
+        let b = Rect::new(r.x + 16.0 + (i as f32 % n) * (cw + 10.0), r.y + 50.0 + (i as f32 / n).floor() * (ch + 8.0), cw, ch);
+        let hov = ui.hit(b, Action::Page(Hit::Groove(i)), "Writes this groove on the selected instrument");
+        ui.c.fill_rrect(b, 10.0, if hov { t.button_hi } else { t.button });
+        ui.c.push_clip(b);
+        ui.c.text(Font::new(15), b.x + 12.0, b.y + if ch > 50.0 { 9.0 } else { 3.0 }, t.text, name);
+        ui.c.pop_clip();
+        let on = g::steps(i, s.page.piece);
+        let sp = (b.w - 24.0) / 16.0;
+        for (k, v) in on.iter().enumerate() {
+            let c = if *v { t.accent } else if k % 4 == 0 { t.button_hi.shade(0.12) } else { t.sunken };
+            ui.c.fill_rrect(Rect::new(b.x + 12.0 + sp * k as f32, b.bottom() - if ch > 50.0 { 20.0 } else { 13.0 }, sp - 2.0, 8.0), 2.0, c);
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------------------ Ideas

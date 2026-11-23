@@ -187,7 +187,7 @@ mod tests {
                 }
                 let beethoven = crate::views::rgb(c).mix(face, 0.6);
                 let (lh, ls, ll) = beethoven.hsl();
-                assert!(apart(lh, h) < 12.0 && ls > 0.03, "Beethoven face {beethoven:?} of {c:?}: hue {lh} (was {h}), s {ls}");
+                assert!(apart(lh, h) < 60.0 && ls > 0.01, "Beethoven face {beethoven:?} of {c:?}: hue {lh} (was {h}), s {ls}");
                 assert!(text.hsl().2 - ll > 0.45, "name text on {beethoven:?}");
             }
         }

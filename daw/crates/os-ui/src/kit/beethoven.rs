@@ -216,7 +216,7 @@ pub fn knob(c: &mut Canvas, t: &Palette, cx: f32, cy: f32, r: f32, value: f32, b
     if show_arc && span > 0.01 {
         c.arc(cx, cy, ring, a0.min(a1), span, w, value_col);
     }
-    let base = if st.hover && !off { Color::rgb(0x505050) } else { Color::rgb(0x454545) };
+    let base = if st.hover && !off { Color::rgb(0x2b2e39) } else { Color::rgb(0x252831) };
     c.fill_rect_gradient(Rect::new(cx - disc, cy - disc, 2.0 * disc, 2.0 * disc), base.shade(0.06), base.shade(-0.18), disc);
     let pc = if off { t.text_faint } else if st.hover { Color::rgb(0xffffff) } else { t.glyph };
     let (p0, p1) = (disc * 0.25, (disc - 1.5).max(1.0));
@@ -226,12 +226,11 @@ pub fn knob(c: &mut Canvas, t: &Palette, cx: f32, cy: f32, r: f32, value: f32, b
 /// Fader cap centred at (cx, cy) (same 14 x 23 footprint as Classic): rounded, with a centre line that turns
 /// beethoven when the track is selected.
 pub fn fader_handle(c: &mut Canvas, t: &Palette, cx: f32, cy: f32, selected: bool, st: State) {
-    let h = Rect::new(cx - 7.0, cy - 11.0, 14.0, 23.0);
-    c.fill_rrect(h.outset(1.0), 5.0, Color::rgb(0x161616));
-    let base = if st.hover || st.pressed { Color::rgb(0x6a6a6a) } else { Color::rgb(0x5c5c5c) };
-    c.fill_rect_gradient(h, base.shade(0.08), base.shade(-0.25), 4.0);
-    let line = if selected { t.brand_sel(brand::MAIN) } else { Color::rgb(0xdedede) };
-    c.fill_rrect(Rect::new(h.x + 2.0, cy - 1.0, h.w - 4.0, 2.0), 1.0, line);
+    // A round key, ivory when its track is the selected one.
+    let face = if selected { t.brand_sel(brand::MAIN) } else if st.hover || st.pressed { t.button_hi.shade(0.25) } else { t.button_hi.shade(0.1) };
+    c.fill_circle(cx, cy + 1.0, 9.0, t.window_border.with_alpha(150));
+    c.fill_circle(cx, cy, 8.5, face);
+    c.fill_circle(cx, cy, 3.0, if selected { t.on_glyph } else { t.sunken });
 }
 
 // ---------------------------------------------------------------- scrolling
@@ -355,34 +354,34 @@ pub mod plug {
     use os_theme::Color;
 
     /// Editor background.
-    pub const BG: Color = Color::rgb(0x2b2b2b);
+    pub const BG: Color = Color::rgb(0x17191e);
     /// Panels and cards: outline and fill.
-    pub const PANEL_LINE: Color = Color::rgb(0x232323);
-    pub const PANEL: Color = Color::rgb(0x333333);
+    pub const PANEL_LINE: Color = Color::rgb(0x131419);
+    pub const PANEL: Color = Color::rgb(0x1b1d24);
     /// Display wells (graphs, the waveform, fader slots): outline and fill.
-    pub const WELL_LINE: Color = Color::rgb(0x181818);
-    pub const WELL: Color = Color::rgb(0x1f1f1f);
+    pub const WELL_LINE: Color = Color::rgb(0x0d0e11);
+    pub const WELL: Color = Color::rgb(0x111216);
     /// Fields (lists, button groups): outline and fill.
-    pub const FIELD_LINE: Color = Color::rgb(0x1c1c1c);
-    pub const FIELD: Color = Color::rgb(0x262626);
+    pub const FIELD_LINE: Color = Color::rgb(0x0f1014);
+    pub const FIELD: Color = Color::rgb(0x14161b);
     /// Raised button face and its outline.
-    pub const FACE: Color = Color::rgb(0x464646);
-    pub const FACE_LINE: Color = Color::rgb(0x232323);
+    pub const FACE: Color = Color::rgb(0x252831);
+    pub const FACE_LINE: Color = Color::rgb(0x131419);
     /// Knob track ring.
-    pub const TRACK: Color = Color::rgb(0x1d1d1d);
+    pub const TRACK: Color = Color::rgb(0x0f1114);
     /// Grid lines in wells, marks and ticks.
-    pub const GRID: Color = Color::rgb(0x262626);
-    pub const TICK: Color = Color::rgb(0x4a4a4a);
+    pub const GRID: Color = Color::rgb(0x14161b);
+    pub const TICK: Color = Color::rgb(0x272b34);
     /// Secondary text (captions, glyphs) and disabled text.
     pub const DIM: Color = Color::rgb(0xa3a3a3);
     pub const FAINT: Color = Color::rgb(0x7f7f7f);
     /// Captions and glyphs of controls that are greyed out (not available yet).
-    pub const OFF: Color = Color::rgb(0x5f5f5f);
+    pub const OFF: Color = Color::rgb(0x333743);
     /// The large plugin name in wordmarks.
-    pub const WORDMARK: Color = Color::rgb(0x6b6b6b);
+    pub const WORDMARK: Color = Color::rgb(0x393e4c);
     /// Page strip (standalone editors): background and its bottom line.
-    pub const STRIP: Color = Color::rgb(0x252525);
-    pub const STRIP_LINE: Color = Color::rgb(0x1c1c1c);
+    pub const STRIP: Color = Color::rgb(0x14151a);
+    pub const STRIP_LINE: Color = Color::rgb(0x0f1014);
 }
 
 /// Plugin knob: a full track ring, the value as an arc in `arc` over 270° (from the centre when `bipolar`), a dark disc
@@ -417,9 +416,9 @@ pub fn dial_disc(c: &mut Canvas, cx: f32, cy: f32, disc: f32, st: State) {
 pub fn toggle(c: &mut Canvas, cx: f32, cy: f32, on: bool, st: State) {
     let r = Rect::new(cx - 6.0, cy - 6.0, 12.0, 12.0);
     if st.disabled {
-        c.stroke_rrect(r.inset(0.5), 3.5, 1.0, if st.hover { Color::rgb(0x5f5f5f) } else { Color::rgb(0x4f4f4f) });
+        c.stroke_rrect(r.inset(0.5), 3.5, 1.0, if st.hover { Color::rgb(0x333743) } else { Color::rgb(0x2a2e38) });
         if on {
-            c.fill_rrect(r.inset(3.0), 2.0, Color::rgb(0x6e6436));
+            c.fill_rrect(r.inset(3.0), 2.0, Color::rgb(0x4a44a8));
         }
         return;
     }
@@ -428,8 +427,8 @@ pub fn toggle(c: &mut Canvas, cx: f32, cy: f32, on: bool, st: State) {
         let (top, bottom) = if st.hover { (Color::rgb(0xffffff).mix(brand::HIGHLIGHT, 0.5), brand::HIGHLIGHT.mix(brand::MAIN, 0.5)) } else { (brand::HIGHLIGHT, brand::MAIN) };
         c.fill_rect_gradient(r.inset(1.0), top, bottom, 3.0);
     } else {
-        c.fill_rrect(r, 4.0, if st.hover { Color::rgb(0x111111) } else { plug::FIELD_LINE });
-        c.fill_rrect(r.inset(1.0), 3.0, if st.hover { Color::rgb(0x363636) } else { Color::rgb(0x2a2a2a) });
+        c.fill_rrect(r, 4.0, if st.hover { Color::rgb(0x090a0c) } else { plug::FIELD_LINE });
+        c.fill_rrect(r.inset(1.0), 3.0, if st.hover { Color::rgb(0x1d1f26) } else { Color::rgb(0x16181e) });
     }
 }
 
@@ -451,7 +450,7 @@ pub fn plug_well(c: &mut Canvas, r: Rect, radius: f32) {
 
 /// Field (list box, button group): outlined dark rounded box; hover lifts it, pressed darkens it.
 pub fn field(c: &mut Canvas, r: Rect, st: State) {
-    let fill = if st.pressed { Color::rgb(0x1f1f1f) } else if st.hover { Color::rgb(0x2f2f2f) } else { plug::FIELD };
+    let fill = if st.pressed { Color::rgb(0x111216) } else if st.hover { Color::rgb(0x191b21) } else { plug::FIELD };
     outlined(c, r, 6.0_f32.min(r.h / 2.0), plug::FIELD_LINE, fill);
 }
 
@@ -459,7 +458,7 @@ pub fn field(c: &mut Canvas, r: Rect, st: State) {
 /// only an outline (olive when on, as a disabled `toggle`). Returns the colour for its label or glyph.
 pub fn plug_button(c: &mut Canvas, r: Rect, radius: f32, st: State) -> Color {
     if st.disabled {
-        c.stroke_rrect(r.inset(0.5), (radius - 0.5).max(0.0), 1.0, if st.on { Color::rgb(0x6e6436) } else { plug::FACE });
+        c.stroke_rrect(r.inset(0.5), (radius - 0.5).max(0.0), 1.0, if st.on { Color::rgb(0x4a44a8) } else { plug::FACE });
         return plug::OFF;
     }
     if st.on {
@@ -467,7 +466,7 @@ pub fn plug_button(c: &mut Canvas, r: Rect, radius: f32, st: State) -> Color {
         lit(c, r.inset(1.0), (radius - 1.0).max(0.0), st.hover);
         return brand::COLORED_DARK;
     }
-    let fill = if st.pressed { Color::rgb(0x3a3a3a) } else if st.hover { Color::rgb(0x525252) } else { plug::FACE };
+    let fill = if st.pressed { Color::rgb(0x1f2129) } else if st.hover { Color::rgb(0x2c2f3a) } else { plug::FACE };
     outlined(c, r, radius, plug::FACE_LINE, fill);
     if st.hover { Color::rgb(0xffffff) } else { brand::TEXT }
 }
@@ -527,7 +526,7 @@ pub fn text_tab(c: &mut Canvas, cell: Rect, x: f32, name: &str, font: Font, col:
     if active {
         outlined(c, pill, 7.0, plug::FIELD_LINE, plug::FIELD);
     } else if st.hover {
-        c.fill_rrect(pill, 7.0, Color::rgb(0x333333));
+        c.fill_rrect(pill, 7.0, Color::rgb(0x1b1d24));
     }
     let ink = if active { col } else if st.hover { brand::TEXT } else { plug::DIM };
     let lh = c.line_height(font);
@@ -546,7 +545,7 @@ pub fn choice_button(c: &mut Canvas, r: Rect, on: bool, col: Color, st: State) -
     if on {
         outlined(c, r, 5.0, plug::FIELD_LINE, plug::FIELD);
     } else if st.hover {
-        c.fill_rrect(r, 5.0, Color::rgb(0x3d3d3d));
+        c.fill_rrect(r, 5.0, Color::rgb(0x21232b));
     }
     if on { col } else if st.hover { brand::TEXT } else { plug::DIM }
 }
@@ -564,7 +563,7 @@ pub fn page_strip(c: &mut Canvas, r: Rect, pages: u8, active: u8, hover: Option<
         if on {
             lit(c, cell, 8.0, false);
         } else if hover == Some(i) {
-            c.fill_rrect(cell, 8.0, Color::rgb(0x333333));
+            c.fill_rrect(cell, 8.0, Color::rgb(0x1b1d24));
         }
         let col = if on { brand::COLORED_DARK } else if hover == Some(i) { brand::TEXT } else { plug::DIM };
         icon(c, i, cell.cx(), cell.cy(), col);
