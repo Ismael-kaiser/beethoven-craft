@@ -970,3 +970,33 @@ fn ajustes_del_proyecto() {
     foto(&mut h, "vertical");
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// Los puntos del ecualizador del DAW se arrastran sobre la curva.
+#[test]
+fn ecualizador_parametrico() {
+    use eframe::egui::vec2;
+    use toma_uno::efectos::TipoFx;
+    let mut h = arnes_corto();
+    let id = h.state_mut().p.nueva_pista("Voz");
+    let f = h.state_mut().p.nuevo_fx(TipoFx::Parametrico);
+    h.state_mut().p.pista(id).unwrap().fx.push(f);
+    h.state_mut().canal = toma_uno::ui::Canal::Pista(id);
+    pestana(&mut h, "Audio");
+    h.run_steps(5);
+    let antes = h.state_mut().p.pista(id).unwrap().fx[0].p.clone();
+    let o = h.get_by_role_and_label(Role::Button, "Banda 4").rect().center();
+    h.hover_at(o);
+    h.run_steps(2);
+    h.drag_at(o);
+    h.run_steps(2);
+    for k in 1..=6 {
+        h.hover_at(o + vec2(5.0 * k as f32, -6.0 * k as f32));
+        h.run_steps(1);
+    }
+    h.drop_at(o + vec2(30.0, -36.0));
+    h.run_steps(4);
+    foto(&mut h, "parametrico");
+    let p = h.state_mut().p.pista(id).unwrap().fx[0].p.clone();
+    assert!(p[13] > antes[13] * 1.2 && p[14] > antes[14] + 4.0, "{:?} -> {:?}", &antes[12..16], &p[12..16]);
+    assert_eq!(p[0..12], antes[0..12], "las demás quietas");
+}

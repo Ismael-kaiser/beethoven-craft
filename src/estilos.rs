@@ -19,7 +19,7 @@ const fn e(nombre: &'static str, ayuda: &'static str, fx: &'static [(&'static st
 
 const LUM: &str = "ec.color.lumetri";
 
-pub const ESTILOS: [Estilo; 32] = [
+pub const ESTILOS: [Estilo; 43] = [
     e("Cinta VHS", "Colores corridos, ruido y rayas", &[("fc:rgb_split", &[("amount", 9.0, 9.0)]), ("ec.noise.noise", &[("amount", 14.0, 14.0)]), (LUM, &[("basicCorrection/saturation", 125.0, 125.0), ("creative/adjustments/fadedFilm", 35.0, 35.0)]), ("ec.blur.channel", &[("redBlurriness", 10.0, 10.0), ("blueBlurriness", 14.0, 14.0)])], None),
     e("Película vieja", "Sepia, grano y viñeta", &[("ec.color.tint", &[("amount", 70.0, 70.0)]), ("ec.noise.noise", &[("amount", 18.0, 18.0)]), (LUM, &[("creative/adjustments/fadedFilm", 60.0, 60.0), ("basicCorrection/whiteBalance/temperature", 40.0, 40.0), ("vignette/vignetteAmount", -2.5, -2.5)])], None),
     e("Cine", "Contraste, sombras suaves y viñeta", &[(LUM, &[("basicCorrection/tone/contrast", 30.0, 30.0), ("basicCorrection/tone/highlights", -25.0, -25.0), ("basicCorrection/tone/shadows", 15.0, 15.0), ("basicCorrection/saturation", 85.0, 85.0), ("vignette/vignetteAmount", -1.5, -1.5)])], None),
@@ -52,6 +52,17 @@ pub const ESTILOS: [Estilo; 32] = [
     e("Recuerdo", "Foto instantánea con colores lavados", &[(LUM, &[("creative/adjustments/fadedFilm", 45.0, 45.0), ("basicCorrection/whiteBalance/temperature", 20.0, 20.0)]), ("bc:marco", &[])], None),
     e("Viaje", "Prisma que gira y colores vivos", &[("bc:prisma", &[]), ("bc:agua", &[("cant", 20.0, 20.0)]), (LUM, &[("basicCorrection/saturation", 135.0, 135.0)])], None),
     e("Cine ancho", "Barras que se cierran y tono de película", &[(LUM, &[("basicCorrection/tone/contrast", 20.0, 20.0), ("basicCorrection/saturation", 88.0, 88.0), ("vignette/vignetteAmount", -1.2, -1.2)]), ("bc:barras", &[("abrir", 100.0, 0.0)])], None),
+    e("Lujo", "Halo dorado, barrido de luz y tono cálido", &[("bc:halo", &[("cant", 60.0, 60.0)]), ("bc:barrido", &[("cada", 4.0, 4.0)]), (LUM, &[("basicCorrection/tone/contrast", 18.0, 18.0), ("basicCorrection/whiteBalance/temperature", 18.0, 18.0), ("vignette/vignetteAmount", -1.4, -1.4)])], None),
+    e("Editorial", "Limpio, contraste fino y foco al centro", &[("bc:foco", &[("cant", 25.0, 25.0), ("radio", 65.0, 65.0)]), (LUM, &[("basicCorrection/saturation", 82.0, 82.0), ("basicCorrection/tone/contrast", 22.0, 22.0), ("creative/adjustments/fadedFilm", 12.0, 12.0)])], None),
+    e("Noche de ciudad", "Destellos azules sobre sombras frías", &[("bc:anamorfico", &[]), ("bc:halo", &[("cant", 35.0, 35.0)]), (LUM, &[("basicCorrection/whiteBalance/temperature", -25.0, -25.0), ("basicCorrection/tone/contrast", 24.0, 24.0)])], None),
+    e("Hora dorada", "Luces desenfocadas y sol de la tarde", &[("bc:bokeh", &[("cant", 80.0, 80.0)]), ("bc:halo", &[("cant", 80.0, 80.0)]), (LUM, &[("basicCorrection/whiteBalance/temperature", 38.0, 38.0), ("basicCorrection/tone/highlights", -12.0, -12.0)])], None),
+    e("Moda", "Degradado de color y brillo de portada", &[("bc:degradado", &[]), ("bc:halo", &[("cant", 45.0, 45.0)]), (LUM, &[("basicCorrection/tone/contrast", 20.0, 20.0)])], None),
+    e("Tras el vidrio", "Vidrio acanalado con color suave", &[("bc:vidrio", &[]), ("bc:degradado", &[("cant", 25.0, 25.0)])], None),
+    e("Invierno", "Nieve, azul y luz difusa", &[("bc:nieve", &[]), ("bc:halo", &[("cant", 40.0, 40.0)]), (LUM, &[("basicCorrection/whiteBalance/temperature", -30.0, -30.0), ("basicCorrection/saturation", 85.0, 85.0)])], None),
+    e("Tormenta", "Lluvia y cielo oscuro", &[("bc:lluvia", &[]), (LUM, &[("basicCorrection/tone/exposure", -0.6, -0.6), ("basicCorrection/saturation", 70.0, 70.0), ("basicCorrection/whiteBalance/temperature", -20.0, -20.0), ("vignette/vignetteAmount", -1.6, -1.6)])], None),
+    e("Rollo de 8 mm", "Polvo, rayones y color de película", &[("bc:polvo", &[]), (LUM, &[("creative/adjustments/fadedFilm", 40.0, 40.0), ("basicCorrection/whiteBalance/temperature", 28.0, 28.0), ("vignette/vignetteAmount", -2.0, -2.0)])], Some((103.0, 103.0))),
+    e("Gala", "Brillos y halo sobre negro profundo", &[("bc:brillos", &[]), ("bc:halo", &[("cant", 65.0, 65.0)]), (LUM, &[("basicCorrection/tone/contrast", 30.0, 30.0), ("vignette/vignetteAmount", -1.8, -1.8)])], None),
+    e("Entrada veloz", "Llega con fuga de zoom y se asienta", &[("bc:radial", &[("cant", 80.0, 0.0)])], None),
 ];
 
 /// Pone un estilo en un clip. Devuelve cuántos efectos agregó.

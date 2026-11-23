@@ -347,7 +347,7 @@ fn exportar_con_opciones() {
     let (p, a) = proyecto();
     for (n, op, pide) in [
         ("bc-vertical.mp4", Opciones { tam: Some((1080, 1920)), tramo: Some((60.0, 63.0)), ..Default::default() }, vec!["codec_name=h264", "width=1080", "height=1920"]),
-        ("bc-265.mp4", Opciones { codec: Codec::H265, tam: Some((1280, 720)), tramo: Some((60.0, 63.0)), calidad: 1 }, vec!["codec_name=hevc", "width=1280"]),
+        ("bc-265.mp4", Opciones { codec: Codec::H265, tam: Some((1280, 720)), tramo: Some((60.0, 63.0)), calidad: 1, ..Default::default() }, vec!["codec_name=hevc", "width=1280"]),
         ("bc-prores.mov", Opciones { codec: Codec::ProRes, tramo: Some((60.0, 62.0)), ..Default::default() }, vec!["codec_name=prores", "pcm_s24le"]),
     ] {
         let r = std::env::temp_dir().join(n);

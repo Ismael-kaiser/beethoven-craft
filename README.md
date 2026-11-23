@@ -18,11 +18,14 @@ Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
 | ![Animación](docs/img/movie-animacion.jpg) | ![Nodos](docs/img/movie-nodos.jpg) |
 
 - Edición por pistas con cuchilla, recorte ondulado, rodar, estirar, deslizar y transiciones.
+- **Animación libre**: llaves con clic derecho (posición, giro, escala, opacidad…), puntos con clic y caminos dibujados a mano.
+- **Resolución y fotogramas** a elegir: horizontal, vertical, cuadrado o a la medida, de 1 a 120 cps.
 - **Animación**: unas 40 animaciones listas, claves, gráfica de curvas y texto letra por letra.
 - **Nodos**: efectos y color conectados como un grafo, con máscaras, calificadores y fusiones.
 - **66 filtros** propios, ruedas de color, onda RGB, histograma y vectorscopio.
 - **Panel de archivos**: carpetas, subcarpetas, búsqueda, miniaturas y vista previa; todo se arrastra a las pistas.
 - **Clip vacío**: aplica efectos a todo lo que hay debajo, textos incluidos.
+- **Audio** con los plugins de Beethoven DAW: ecualizador de siete bandas, vocoder, moldeador estéreo y más.
 - Consola de audio, instrumentos, grabación y separador de voz en tu propia máquina.
 - **Atajos de teclado** que se pueden cambiar todos.
 

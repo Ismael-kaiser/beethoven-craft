@@ -41,7 +41,9 @@ const AD: &str = "Adornos";
 const CO: &str = "Cómic y color";
 const ES: &str = "Espejos y ondas";
 
-pub const DEFS: [Def; 25] = [
+const EL: &str = "Elegantes";
+
+pub const DEFS: [Def; 38] = [
     Def {
         id: "bc:color",
         nombre: "Mezcla de color",
@@ -90,6 +92,19 @@ pub const DEFS: [Def; 25] = [
     Def { id: "bc:prisma", nombre: "Prisma", grupo: ES, ctl: &[n("cant", "Separación", 0.0, 100.0, 25.0, "%"), n("caras", "Caras", 2.0, 8.0, 5.0, ""), VEL, MEZ] },
     Def { id: "bc:tunel", nombre: "Túnel infinito", grupo: ES, ctl: &[n("paso", "Escala por vuelta", 30.0, 90.0, 62.0, "%"), n("giro", "Giro por vuelta", -90.0, 90.0, 0.0, "°"), VEL] },
     Def { id: "bc:agua", nombre: "Bajo el agua", grupo: ES, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 35.0, "%"), n("tam", "Tamaño de ola", 2.0, 40.0, 12.0, "%"), VEL] },
+    Def { id: "bc:halo", nombre: "Halo suave", grupo: EL, ctl: &[n("cant", "Cantidad", 0.0, 200.0, 70.0, "%"), n("desde", "Desde", 0.0, 100.0, 55.0, "%"), n("tam", "Tamaño", 1.0, 20.0, 6.0, "%"), C("color", "Color", [1.0, 0.93, 0.85, 1.0])] },
+    Def { id: "bc:anamorfico", nombre: "Destello anamórfico", grupo: EL, ctl: &[n("cant", "Cantidad", 0.0, 200.0, 90.0, "%"), n("desde", "Desde", 0.0, 100.0, 70.0, "%"), n("tam", "Largo", 5.0, 80.0, 35.0, "%"), C("color", "Color", [0.45, 0.68, 1.0, 1.0])] },
+    Def { id: "bc:foco", nombre: "Foco suave", grupo: EL, ctl: &[n("cant", "Desenfoque", 0.0, 100.0, 45.0, "%"), n("radio", "Zona nítida", 5.0, 100.0, 45.0, "%"), n("x", "Posición X", -50.0, 50.0, 0.0, "%"), n("y", "Posición Y", -50.0, 50.0, 0.0, "%")] },
+    Def { id: "bc:vidrio", nombre: "Vidrio acanalado", grupo: EL, ctl: &[n("tam", "Ancho", 1.0, 20.0, 4.0, "%"), n("cant", "Fuerza", 0.0, 100.0, 50.0, "%"), n("ang", "Ángulo", -90.0, 90.0, 0.0, "°")] },
+    Def { id: "bc:barrido", nombre: "Barrido de luz", grupo: EL, ctl: &[n("cant", "Brillo", 0.0, 200.0, 70.0, "%"), n("ancho", "Ancho", 2.0, 60.0, 16.0, "%"), n("ang", "Ángulo", -80.0, 80.0, 25.0, "°"), n("cada", "Cada", 0.5, 10.0, 3.0, "s"), C("color", "Color", [1.0, 0.97, 0.9, 1.0])] },
+    Def { id: "bc:degradado", nombre: "Degradado de color", grupo: EL, ctl: &[C("osc", "Color 1", [0.36, 0.16, 0.62, 1.0]), C("cla", "Color 2", [1.0, 0.62, 0.38, 1.0]), n("ang", "Ángulo", -180.0, 180.0, 45.0, "°"), n("cant", "Fuerza", 0.0, 100.0, 45.0, "%")] },
+    Def { id: "bc:bokeh", nombre: "Luces desenfocadas", grupo: EL, ctl: &[CANT, TAM, VEL, C("color", "Color", [1.0, 0.82, 0.55, 1.0])] },
+    Def { id: "bc:brillos", nombre: "Brillos", grupo: EL, ctl: &[CANT, TAM, VEL, C("color", "Color", [1.0, 0.97, 0.88, 1.0])] },
+    Def { id: "bc:nieve", nombre: "Nieve", grupo: EL, ctl: &[CANT, TAM, VEL] },
+    Def { id: "bc:lluvia", nombre: "Lluvia", grupo: EL, ctl: &[n("cant", "Cantidad", 5.0, 300.0, 100.0, "%"), n("ang", "Inclinación", -45.0, 45.0, 10.0, "°"), VEL] },
+    Def { id: "bc:polvo", nombre: "Polvo y rayones", grupo: EL, ctl: &[n("cant", "Cantidad", 0.0, 200.0, 80.0, "%")] },
+    Def { id: "bc:radial", nombre: "Fuga de zoom", grupo: EL, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 30.0, "%"), n("x", "Posición X", -50.0, 50.0, 0.0, "%"), n("y", "Posición Y", -50.0, 50.0, 0.0, "%")] },
+    Def { id: "bc:caleidoscopio", nombre: "Caleidoscopio", grupo: EL, ctl: &[n("caras", "Caras", 2.0, 16.0, 6.0, ""), n("giro", "Giro", -180.0, 180.0, 0.0, "°"), VEL] },
 ];
 
 /// Los que no están en el catálogo de efectos: la mezcla de color y los nodos.
@@ -174,6 +189,69 @@ fn nubes(x: f32, y: f32) -> f32 {
 fn escalon(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+/// Cuánto brilla por encima de `desde`, en una imagen reducida y borrosa. `rx` y `ry`: radio en pixeles de la original.
+fn luces(s: &Img, desde: f32, rx: f32, ry: f32) -> (Img, f32) {
+    let k = 4usize;
+    let (w, h) = ((s.w / k).max(1), (s.h / k).max(1));
+    let mut d: Vec<P4> = (0..w * h)
+        .into_par_iter()
+        .map(|i| {
+            let (x, y) = (i % w, i / w);
+            let mut m = [0.0f32; 4];
+            for yy in 0..k {
+                for xx in 0..k {
+                    let q = s.px((x * k + xx) as i32, (y * k + yy) as i32);
+                    (0..3).for_each(|j| m[j] += q[j] * q[3] / (k * k) as f32);
+                }
+            }
+            let l = luz(m).max(m[0].max(m[1]).max(m[2]) * 0.8);
+            let g = if desde < 0.0 { 1.0 } else { escalon(desde, (desde + 0.25).min(1.2), l) };
+            [m[0] * g, m[1] * g, m[2] * g, 1.0]
+        })
+        .collect();
+    for _ in 0..2 {
+        d = emborronar(&d, w, h, (rx / k as f32) as usize, (ry / k as f32) as usize);
+    }
+    (Img { w, h, d }, 1.0 / k as f32)
+}
+
+/// Promedio en caja, a lo ancho y a lo alto.
+fn emborronar(d: &[P4], w: usize, h: usize, rx: usize, ry: usize) -> Vec<P4> {
+    fn linea(v: &[P4], r: usize, o: &mut [P4]) {
+        let n = v.len();
+        let en = |i: isize| v[i.clamp(0, n as isize - 1) as usize];
+        let mut s = [0.0f32; 4];
+        for i in -(r as isize)..=r as isize {
+            (0..4).for_each(|j| s[j] += en(i)[j]);
+        }
+        let k = 1.0 / (2 * r + 1) as f32;
+        for (i, q) in o.iter_mut().enumerate() {
+            *q = s.map(|v| v * k);
+            let (a, b) = (en(i as isize - r as isize), en(i as isize + r as isize + 1));
+            (0..4).for_each(|j| s[j] += b[j] - a[j]);
+        }
+    }
+    let mut m = vec![[0.0f32; 4]; w * h];
+    m.par_chunks_mut(w).zip(d.par_chunks(w)).for_each(|(o, v)| if rx > 0 { linea(v, rx, o) } else { o.copy_from_slice(v) });
+    if ry == 0 {
+        return m;
+    }
+    // A lo alto, por columnas volteadas.
+    let mut t = vec![[0.0f32; 4]; w * h];
+    t.par_chunks_mut(h).enumerate().for_each(|(x, o)| {
+        let col: Vec<P4> = (0..h).map(|y| m[y * w + x]).collect();
+        linea(&col, ry, o);
+    });
+    m.par_chunks_mut(w).enumerate().for_each(|(y, o)| o.iter_mut().enumerate().for_each(|(x, q)| *q = t[x * h + y]));
+    m
+}
+
+/// Suma de luz que no se quema: 1 - (1-a)(1-b).
+fn pantalla(p: P4, l: [f32; 3]) -> P4 {
+    let f = |a: f32, b: f32| 1.0 - (1.0 - a.clamp(0.0, 1.0)) * (1.0 - b.clamp(0.0, 1.0));
+    [f(p[0], l[0]), f(p[1], l[1]), f(p[2], l[2]), p[3]]
 }
 
 fn arcoiris(h: f32) -> [f32; 4] {
@@ -656,6 +734,165 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
                 // Luz que baila.
                 let l = 1.0 + 0.35 * (nubes(x / ta * 1.2 + tv * 0.5, y / ta * 1.2 - tv * 0.3) - 0.5);
                 [p[0] * l * 0.88, p[1] * l * 0.98, p[2] * l * 1.05, p[3]]
+            })
+        }
+        "bc:halo" | "bc:anamorfico" => {
+            let ancho = f.tipo == "bc:anamorfico";
+            let r = por("tam") * if ancho { wf } else { hf };
+            let (m, k) = luces(&s, por("desde"), r, if ancho { 2.0 * e } else { r });
+            let g = por("cant") * if ancho { 1.9 } else { 1.0 };
+            pintar!(|x, y, p| {
+                let q = m.en(x * k, y * k);
+                pantalla(p, [q[0] * g * c1[0], q[1] * g * c1[1], q[2] * g * c1[2]])
+            })
+        }
+        "bc:foco" => {
+            let r = por("cant") * hf * 0.06;
+            let (m, k) = luces(&s, -1.0, r, r);
+            let (ox, oy, z) = (cx + por("x") * wf, cy + por("y") * hf, por("radio"));
+            pintar!(|x, y, p| {
+                let d = (((x - ox) / wf).powi(2) + ((y - oy) / hf).powi(2)).sqrt() * 1.6;
+                let a = escalon(z * 0.6, z * 0.6 + 0.45, d) * (por("cant") * 4.0).min(1.0);
+                let q = m.en(x * k, y * k);
+                mez(p, [q[0], q[1], q[2], p[3]], a)
+            })
+        }
+        "bc:vidrio" => {
+            let (ta, k) = ((por("tam") * wf).max(2.0), por("cant"));
+            let (se, co) = (num("ang") as f32).to_radians().sin_cos();
+            pintar!(|x, y, _| {
+                let u = (x - cx) * co + (y - cy) * se;
+                // Cada canal es una lente: estira lo que tiene detrás.
+                let c = (u / ta).rem_euclid(1.0) - 0.5;
+                let des = -c * ta * 2.6 * k + (c * 9.0).sin() * ta * 0.18 * k;
+                let q = s.espejo(x + des * co, y + des * se);
+                let brillo = 1.0 + k * (0.16 * (0.5 - (c - 0.18).abs() * 2.0).max(0.0) - 0.12 * escalon(0.36, 0.5, c.abs()));
+                [q[0] * brillo, q[1] * brillo, q[2] * brillo, q[3]]
+            })
+        }
+        "bc:barrido" => {
+            let (se, co) = (num("ang") as f32).to_radians().sin_cos();
+            let cada = num("cada").max(0.1);
+            let u0 = ((t / cada).rem_euclid(1.0) as f32 * 2.6 - 1.3) * (wf * co.abs() + hf * se.abs()) * 0.5;
+            let (an, g) = (por("ancho") * wf * 0.5, por("cant"));
+            pintar!(|x, y, p| {
+                let u = (x - cx) * co + (y - cy) * se - u0;
+                let l = (-(u / an.max(1.0)).powi(2) * 2.5).exp() * g * (0.25 + 0.75 * luz(p));
+                pantalla(p, [c1[0] * l, c1[1] * l, c1[2] * l])
+            })
+        }
+        "bc:degradado" => {
+            let (a, b, g) = (col("osc"), col("cla"), por("cant"));
+            let (se, co) = (num("ang") as f32).to_radians().sin_cos();
+            let largo = (wf * co.abs() + hf * se.abs()).max(1.0);
+            pintar!(|x, y, p| {
+                let k = (((x - cx) * co + (y - cy) * se) / largo + 0.5).clamp(0.0, 1.0);
+                let c = mez(a, b, k);
+                // Luz suave: tiñe sin aplastar negros ni blancos.
+                let f = |v: f32, c: f32| if c < 0.5 { v - (1.0 - 2.0 * c) * v * (1.0 - v) } else { v + (2.0 * c - 1.0) * (v.max(0.0).sqrt() - v) };
+                let q = [f(p[0], c[0]), f(p[1], c[1]), f(p[2], c[2]), p[3]];
+                mez(p, q, (g * 2.0).min(1.0)).map(|v| v.clamp(0.0, 1.0))
+            })
+        }
+        "bc:bokeh" => {
+            let ps = particulas(26.0, -0.35, 0.07);
+            estampar(
+                &ps,
+                &|i| {
+                    let v = 0.35 + 0.65 * (0.5 + 0.5 * (tv * (0.8 + azar(i, 4)) + azar(i, 6) * 40.0).sin());
+                    [c1[0], c1[1] * (0.85 + 0.15 * azar(i, 8)), c1[2] * (0.8 + 0.2 * azar(i, 7)), v]
+                },
+                &|u, v, i| {
+                    let d = (u * u + v * v).sqrt();
+                    let disco = 1.0 - escalon(0.9, 1.0, d);
+                    disco * (0.16 + 0.12 * escalon(0.7, 0.95, d)) * (0.4 + 0.6 * azar(i, 12))
+                },
+                true,
+            )
+        }
+        "bc:brillos" => {
+            let ps = particulas(54.0, 0.12, 0.035);
+            estampar(
+                &ps,
+                &|_| c1,
+                &|u, v, i| {
+                    let pulso = (tv * (1.5 + 2.0 * azar(i, 4)) + azar(i, 6) * 40.0).sin().max(0.0).powi(3);
+                    let cruz = (1.0 - u.abs()).max(0.0).powi(2) * (1.0 - (v.abs() * 14.0)).max(0.0) + (1.0 - v.abs()).max(0.0).powi(2) * (1.0 - (u.abs() * 14.0)).max(0.0);
+                    let centro = (1.0 - (u * u + v * v).sqrt() * 5.0).max(0.0);
+                    ((cruz + centro) * pulso * 1.4).min(1.0)
+                },
+                true,
+            )
+        }
+        "bc:nieve" => {
+            let ps = particulas(160.0, 1.0, 0.008);
+            estampar(&ps, &|i| [1.0, 1.0, 1.0, 0.5 + 0.5 * azar(i, 4)], &|u, v, i| (1.0 - escalon(0.2, 1.0, (u * u + v * v).sqrt())) * (0.35 + 0.6 * azar(i, 12)), false)
+        }
+        "bc:lluvia" => {
+            let (cant, incl) = (por("cant"), (num("ang") as f32).to_radians().tan());
+            pintar!(|x, y, p| {
+                let mut l = 0.0f32;
+                // Tres distancias: las cercanas son más largas y rápidas.
+                for (c, tam, v, a) in [(0, 0.010, 1.7, 0.28), (1, 0.016, 2.4, 0.38), (2, 0.026, 3.2, 0.50)] {
+                    let an = tam * hf;
+                    let u = (x + y * incl) / an;
+                    let i = u.floor() as i32;
+                    if azar(i, 31 + c) > 0.7 * cant {
+                        continue;
+                    }
+                    let largo = an * (7.0 + 5.0 * azar(i, 5 + c));
+                    let ciclo = hf + largo * 3.0;
+                    let yy = (y - tv * v * hf * (0.8 + 0.4 * azar(i, 9 + c)) - azar(i, 17 + c) * ciclo).rem_euclid(ciclo);
+                    if yy < largo {
+                        let d = (u.fract() - 0.5).abs() * an;
+                        l += a * (yy / largo) * (1.0 - escalon(0.8 * e, 2.4 * e, d));
+                    }
+                }
+                pantalla(p, [l * 0.9, l * 0.95, l])
+            })
+        }
+        "bc:polvo" => {
+            let g = por("cant");
+            // Cambia 12 veces por segundo, como película rayada.
+            let c12 = (t * 12.0).floor() as i32;
+            let motas: Vec<(f32, f32, f32, i32)> = (0..(60.0 * g) as i32).map(|i| (azar(i, c12) * wf, azar(i + 99, c12) * hf, hf * (0.003 + 0.011 * azar(i, c12 + 7).powi(3)), i)).collect();
+            let rayas: Vec<(f32, f32, f32)> = (0..(8.0 * g) as i32).filter(|i| azar(*i, c12 / 4 + 50) > 0.45).map(|i| (azar(i, c12 / 4 + 3) * wf + (azar(i, c12) - 0.5) * 3.0 * e, 0.12 + 0.3 * azar(i, 8), azar(i, 77))).collect();
+            let m = estampar(&motas, &|i| if azar(i, 41) > 0.5 { [0.96, 0.94, 0.88, 1.0] } else { [0.05, 0.04, 0.03, 1.0] }, &|u, v, i| (1.0 - escalon(0.5, 1.0, (u * u + (v * (1.0 + 2.0 * azar(i, 3))).powi(2)).sqrt())) * 0.75, false);
+            let s2 = Img { w, h, d: m.data.iter().map(|p| if p[3] > 0.0 { [p[0] / p[3], p[1] / p[3], p[2] / p[3], p[3]] } else { [0.0; 4] }).collect() };
+            recorrer(&s2, img, mezcla, |x, y, p| {
+                let mut l = 0.0;
+                for (rx, a, q) in &rayas {
+                    let d = (x - rx - (y / hf * 6.0 + q * 9.0).sin() * 2.0 * e).abs();
+                    l += a * (1.0 - escalon(0.3 * e, 1.3 * e, d));
+                }
+                pantalla(p, [l, l, l * 0.95])
+            })
+        }
+        "bc:radial" => {
+            let g = por("cant") * 0.35;
+            let (ox, oy) = (cx + por("x") * wf, cy + por("y") * hf);
+            const N: usize = 18;
+            pintar!(|x, y, p| {
+                let mut q = [0.0f32; 4];
+                let ruido = azar(x as i32, y as i32);
+                for i in 0..N {
+                    let z = 1.0 - g * (i as f32 + ruido) / N as f32;
+                    let v = s.en(ox + (x - ox) * z, oy + (y - oy) * z);
+                    (0..4).for_each(|j| q[j] += v[j] / N as f32);
+                }
+                [q[0], q[1], q[2], p[3].max(q[3])]
+            })
+        }
+        "bc:caleidoscopio" => {
+            let n = por("caras") * 100.0;
+            let paso = std::f32::consts::TAU / n.round().max(2.0);
+            let giro = (num("giro") as f32).to_radians() + tv * 0.35;
+            pintar!(|x, y, _| {
+                let (u, v) = (x - cx, y - cy);
+                let r = (u * u + v * v).sqrt();
+                let a = (v.atan2(u) + giro).rem_euclid(paso);
+                let a = if a > paso / 2.0 { paso - a } else { a } - giro * 0.5;
+                s.espejo(cx + r * a.cos(), cy + r * a.sin())
             })
         }
         _ => img.clone(),

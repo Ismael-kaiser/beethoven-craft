@@ -26,7 +26,7 @@ La imagen y el sonido de un video quedan vinculados; clic derecho para desvincul
 
 ![Panel de archivos](img/movie-archivos.jpg)
 
-Se abre y se cierra con el botón de carpetas de arriba a la izquierda o con **⌘B**. Está en todas las pestañas.
+Es una ventana flotante: se mueve de donde no hay botones, se estira de las orillas y con su botón se pega a la izquierda. Se abre y se cierra con el botón de carpetas de arriba a la izquierda o con **⌘B**. Está en todas las pestañas.
 
 - La flecha de una carpeta la abre ahí mismo; doble clic entra en ella. Arriba se ve el camino y cada parte se puede tocar.
 - El buscador busca también en las subcarpetas. Se puede filtrar por video, audio o imagen, ordenar y ver como cuadrícula.
@@ -43,6 +43,31 @@ Se abre y se cierra con el botón de carpetas de arriba a la izquierda o con **�
 - **Texto**: animación letra por letra, por palabra o por línea.
 - **Pistas**: los cuadros clave de cada propiedad. **Gráfica**: la curva, con manijas.
 - **Grabar claves**: con el botón encendido, mover el cuadro en la pantalla crea las claves.
+
+## Animación libre
+
+![Animación libre](img/movie-libre.jpg)
+
+Elige un clip y abre **◆ Animar**, arriba a la izquierda de la imagen. Está en todas las pestañas.
+
+- **Poner una llave**: clic derecho en la imagen o en el clip de la línea de tiempo → «Poner llave de…» posición, giro, escala, ancho y alto, opacidad o todo. Guarda el valor que tiene en ese momento; después mueve el cursor, cambia el valor y la siguiente se guarda sola.
+- **Mover las llaves**: los rombos del clip elegido se arrastran en la línea de tiempo. Cada tipo tiene su color. Clic derecho: cambiar su curva o quitarla.
+- **Puntos**: cada clic en la imagen es una posición y el cursor avanza lo que diga «cada». Los puntos se arrastran.
+- **A mano**: dibuja el camino con el ratón y el clip lo recorre a la misma velocidad. Con «Que dure el clip» se reparte en lo que le queda.
+- **Grabar llaves**: cualquier cambio pone su llave.
+- **Camino**: curvo o recto, velocidad pareja, girar con el camino, al revés o borrarlo. Las marcas juntas son lento; separadas, rápido.
+
+## Ajustes del proyecto
+
+![Ajustes](img/movie-ajustes.jpg)
+
+**⌘⇧P**, o el tamaño que sale debajo de la imagen. Cambia la resolución (12 formatos o a la medida) y los fotogramas por segundo, y decide qué hacer con los clips si cambia la forma. En el menú de un clip, «Acomodar en el cuadro» lo deja completo, llenando o estirado. Al exportar se puede escoger otro tamaño y otros fotogramas.
+
+## Audio
+
+![Audio](img/movie-audio.jpg)
+
+«+ Agregar efecto» tiene los efectos por grupo. El grupo **Beethoven DAW** trae el ecualizador paramétrico (los puntos se arrastran sobre la curva, la rueda cambia el ancho), distorsión, moldeador estéreo, vocoder y balance.
 
 ## Nodos
 
@@ -77,6 +102,7 @@ Se cambian en **Atajos de teclado…** (⌘⌥K). En Windows y Linux, ⌘ es Ctr
 | Abrir proyecto… | ⌘+O |
 | Importar video o audio… | ⌘+I |
 | Exportar video con mi audio… | ⌘+M |
+| Ajustes del proyecto… | ⌘+Shift+P |
 | Menú principal | (sin tecla) |
 | Atajos de teclado… | ⌘+Alt+K |
 
