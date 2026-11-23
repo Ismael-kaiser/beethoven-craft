@@ -13,7 +13,7 @@ rm -rf dist
 mkdir -p "$T"
 cp target/release/toma-uno "$T/beethoven-craft"
 cp daw/target/release/beethoven_daw "$T/beethoven-daw"
-cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE AVISOS.md LEEME.md "$T/"
+cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE AVISOS.md README.md "$T/"
 cp daw/crates/os-app/assets/beethoven_daw.png "$T/beethoven-craft.png"
 cat > "$T/beethoven-craft.desktop" <<'FIN'
 [Desktop Entry]

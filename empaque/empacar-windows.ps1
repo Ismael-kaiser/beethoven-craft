@@ -18,7 +18,7 @@ if (Test-Path dist) { Remove-Item dist -Recurse -Force }
 New-Item -ItemType Directory -Force $T | Out-Null
 Copy-Item target\release\toma-uno.exe "$T\beethoven-craft.exe"
 Copy-Item daw\target\release\beethoven_daw.exe "$T\beethoven-daw.exe"
-Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, AVISOS.md, LEEME.md $T
+Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, AVISOS.md, README.md $T
 if ($Ffmpeg -ne "") {
     Copy-Item (Join-Path $Ffmpeg "ffmpeg.exe"), (Join-Path $Ffmpeg "ffprobe.exe") $T
 }

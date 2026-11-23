@@ -18,6 +18,8 @@ Todo está en pestañas que se abren, se cierran y se cambian como en un navegad
 
 Plugins: carga CLAP, VST3 y VST2. No carga Audio Units ni los plugins internos de FL Studio (son de formato cerrado). Abre proyectos `.flp`.
 
+La guía con imágenes está en [`docs/daw.md`](../docs/daw.md).
+
 Normalmente se abre desde el menú de Beethoven Craft («Nueva canción»), que le pasa el idioma. Para compilarlo solo:
 
     cargo build --release -p beethoven_daw
