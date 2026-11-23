@@ -330,6 +330,10 @@ pub struct Recuerdo {
     pub favoritos: Vec<PathBuf>,
     pub cuadricula: bool,
     pub todos: bool,
+    /// Pegado a la izquierda en vez de flotar.
+    pub anclado: bool,
+    /// Dónde quedó la ventana: x, y, ancho y alto.
+    pub lugar: Option<[f32; 4]>,
 }
 
 impl Recuerdo {
@@ -390,7 +394,7 @@ mod tests {
     fn recuerda() {
         let a = std::env::temp_dir().join(format!("recuerdo-{}.json", std::process::id()));
         assert!(Recuerdo::leer(&a).abierto, "la primera vez sale abierto");
-        let r = Recuerdo { abierto: false, carpeta: Some("/x".into()), favoritos: vec!["/y".into()], cuadricula: true, todos: true };
+        let r = Recuerdo { abierto: false, carpeta: Some("/x".into()), favoritos: vec!["/y".into()], cuadricula: true, todos: true, anclado: true, lugar: Some([1.0, 2.0, 3.0, 4.0]) };
         r.guardar(&a);
         assert_eq!(Recuerdo::leer(&a), r);
         let _ = std::fs::remove_file(a);

@@ -394,14 +394,41 @@ impl App {
     /// El panel, a la izquierda de cualquier pestaña.
     pub fn panel_archivos(&mut self, ui: &mut Ui) {
         self.archivos.recibir(ui.ctx());
-        if self.archivos.rec.abierto {
+        if self.archivos.rec.abierto && !self.archivos.rec.anclado {
+            self.ventana_archivos(ui);
+        } else if self.archivos.rec.abierto {
             let ancho = ui.available_width();
             Panel::left("archivos").frame(Frame::new().fill(WINDOW_TITLE).inner_margin(Margin::symmetric(7, 6))).resizable(true).default_size(256.0).size_range(190.0..=(ancho * 0.45).max(200.0)).show(ui, |ui| self.ui_archivos(ui));
         } else if self.archivos.vista.as_ref().is_some_and(|v| v.tocando) {
             self.parar_origen();
         }
-        if !self.sin_dispositivo {
+        if !self.sin_dispositivo && !ui.input(|i| i.pointer.any_down()) {
             self.archivos.recordar();
+        }
+    }
+
+    /// Flotando encima de todo: se mueve de donde no hay nada y se estira de las orillas.
+    fn ventana_archivos(&mut self, ui: &mut Ui) {
+        let pantalla = ui.ctx().content_rect();
+        let [x, y, w, h] = self.archivos.rec.lugar.unwrap_or([pantalla.left() + 24.0, pantalla.top() + 96.0, 330.0, (pantalla.height() - 150.0).clamp(340.0, 620.0)]);
+        let sombra = Shadow { offset: [0, 8], blur: 24, spread: 0, color: Color32::from_black_alpha(140) };
+        let marco = Frame::new().fill(WINDOW_TITLE).corner_radius(10.0).inner_margin(Margin::symmetric(9, 8)).stroke(Stroke::new(1.0, BUTTON_HI)).shadow(sombra);
+        let r = Window::new("archivos")
+            .id(Id::new("ventana-archivos"))
+            .title_bar(false)
+            .frame(marco)
+            .resizable(true)
+            .default_pos(pos2(x, y))
+            .default_size(vec2(w, h))
+            .min_size(vec2(230.0, 320.0))
+            .constrain_to(pantalla)
+            .show(ui.ctx(), |ui| {
+                ui.set_min_size(ui.available_size());
+                self.ui_archivos(ui);
+            });
+        if let Some(r) = r {
+            let q = r.response.rect;
+            self.archivos.rec.lugar = Some([q.left(), q.top(), q.width() - 20.0, q.height() - 18.0].map(f32::round));
         }
     }
 
@@ -428,6 +455,9 @@ impl App {
                     self.archivos.rec.abierto = false;
                 }
                 let a = &mut self.archivos;
+                if boton_color(ui, &tabler::LAYOUT_ROWS, a.rec.anclado, if a.rec.anclado { "Que flote en su ventana" } else { "Pegar a la izquierda" }, GLYPH, 24.0).clicked() {
+                    a.rec.anclado = !a.rec.anclado;
+                }
                 if boton_color(ui, &tabler::GRID_DOTS, a.rec.cuadricula, "Ver como cuadrícula", GLYPH, 24.0).clicked() {
                     a.rec.cuadricula = !a.rec.cuadricula;
                 }
@@ -452,7 +482,7 @@ impl App {
                 });
             });
         });
-        self.camino(ui);
+        self.ruta_ui(ui);
         if self.archivos.rec.carpeta.is_none() {
             return self.lugares_ui(ui);
         }
@@ -472,7 +502,7 @@ impl App {
     }
 
     /// «Videos › Viaje › Día 1»: cada parte se puede abrir.
-    fn camino(&mut self, ui: &mut Ui) {
+    fn ruta_ui(&mut self, ui: &mut Ui) {
         let Some(c) = self.archivos.rec.carpeta.clone() else {
             ui.label(RichText::new(t("Archivos")).size(16.0).color(TEXT));
             return;

@@ -221,7 +221,7 @@ fn exportar_compuesto() {
     p.capas.push(Capa { nombre: "V2".into(), visible: true, bloqueada: false });
     let mut t = p.nuevo_video("t".into(), Contenido::Titulo(toma_uno::titulos::plantilla(3).1), 1.0, 2.0);
     t.capa = 1;
-    t.mov.opacidad = Prop { v: Valor::Num(100.0), claves: vec![(0.0, Valor::Num(0.0)), (0.5, Valor::Num(100.0))], curvas: vec![] };
+    t.mov.opacidad = Prop { v: Valor::Num(100.0), claves: vec![(0.0, Valor::Num(0.0)), (0.5, Valor::Num(100.0))], curvas: vec![], libre: false };
     p.video.push(t);
     p.pistas[0].clips[0].dur = 8.0;
     p.pistas[0].clips[0].desde = 30.0;

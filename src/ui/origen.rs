@@ -188,7 +188,7 @@ impl App {
         }
         let mut ids = vec![];
         if let (Some((w, h, fps)), Some(capa)) = (info.video, capa) {
-            if self.p.video.is_empty() {
+            if self.p.video.is_empty() && !self.p.fijo {
                 (self.p.ancho, self.p.alto, self.p.fps) = (w, h, if imagen { 30.0 } else { fps });
             }
             let con = if imagen { Contenido::Imagen } else { Contenido::Archivo };

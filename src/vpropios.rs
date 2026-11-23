@@ -115,7 +115,7 @@ pub fn nuevo(id: u64, d: &Def) -> FxVideo {
                 O(k, _, _) => (*k, Valor::Op(0)),
                 R(k, _) => (*k, Valor::Punto([0.0; 2])),
             };
-            (k.to_string(), Prop { v, claves: vec![], curvas: vec![] })
+            (k.to_string(), Prop { v, claves: vec![], curvas: vec![], libre: false })
         })
         .collect();
     FxVideo { id, tipo: d.id.into(), activo: true, p }

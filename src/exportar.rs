@@ -32,6 +32,8 @@ pub enum Codec {
 pub struct Opciones {
     /// Alto y ancho; `None` = los del proyecto.
     pub tam: Option<(u32, u32)>,
+    /// Cuadros por segundo; `None` = los del proyecto.
+    pub fps: Option<f64>,
     pub codec: Codec,
     /// 0 ligera, 1 normal, 2 alta.
     pub calidad: usize,
@@ -41,7 +43,7 @@ pub struct Opciones {
 
 impl Default for Opciones {
     fn default() -> Self {
-        Opciones { tam: None, codec: Codec::H264, calidad: 1, tramo: None }
+        Opciones { tam: None, fps: None, codec: Codec::H264, calidad: 1, tramo: None }
     }
 }
 
@@ -92,6 +94,8 @@ pub fn exportar_con(
     avance: &AtomicU32,
     cancelar: &AtomicBool,
 ) -> Result<(), String> {
+    let otro = op.fps.filter(|f| (f - p.fps).abs() > 1e-6).map(|fps| Proyecto { fps, ..p.clone() });
+    let p = otro.as_ref().unwrap_or(p);
     for c in p.pistas.iter().flat_map(|t| &t.clips) {
         if !almacen.contains_key(&c.clave()) {
             return Err(crate::idioma::tf("Falta el audio de «{}»", &[&c.nombre]));

@@ -134,11 +134,14 @@ pub struct Prop {
     /// La curva del tramo que empieza en cada cuadro clave, por su segundo. Sin entrada: `Curva::Suave`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub curvas: Vec<(f64, Curva)>,
+    /// Pasa por sus claves sin detenerse en cada una, como un trazo a mano. Los tramos con curva propia la respetan.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub libre: bool,
 }
 
 impl Prop {
     pub fn num(v: f64) -> Prop {
-        Prop { v: Valor::Num(v), claves: vec![], curvas: vec![] }
+        Prop { v: Valor::Num(v), claves: vec![], curvas: vec![], libre: false }
     }
     pub fn en(&self, t: f64) -> Valor {
         let c = &self.claves;
@@ -151,7 +154,34 @@ impl Prop {
         }
         let i = c.iter().rposition(|k| k.0 <= t).unwrap_or(0);
         let k = (t - c[i].0) / (c[i + 1].0 - c[i].0).max(1e-9);
-        c[i].1.mezclar(&c[i + 1].1, self.curva_en(c[i].0).aplicar(k))
+        let curva = self.curva_en(c[i].0);
+        if self.libre && curva == Curva::Suave {
+            return self.trazo(i, k);
+        }
+        c[i].1.mezclar(&c[i + 1].1, curva.aplicar(k))
+    }
+    /// Curva que pasa por todas las claves (Hermite, con la pendiente de las vecinas).
+    fn trazo(&self, i: usize, k: f64) -> Valor {
+        let c = &self.claves;
+        let cubica = |n: &dyn Fn(usize) -> f64| {
+            let pend = |j: usize| {
+                let (a, b) = (j.saturating_sub(1), (j + 1).min(c.len() - 1));
+                (n(b) - n(a)) / (c[b].0 - c[a].0).max(1e-9)
+            };
+            let h = c[i + 1].0 - c[i].0;
+            let (k2, k3) = (k * k, k * k * k);
+            (2.0 * k3 - 3.0 * k2 + 1.0) * n(i) + (k3 - 2.0 * k2 + k) * h * pend(i) + (3.0 * k2 - 2.0 * k3) * n(i + 1) + (k3 - k2) * h * pend(i + 1)
+        };
+        match (&c[i].1, &c[i + 1].1) {
+            (Valor::Num(_), Valor::Num(_)) => Valor::Num(cubica(&|j| c[j].1.num())),
+            (Valor::Punto(_), Valor::Punto(_)) => Valor::Punto([0, 1].map(|e| {
+                cubica(&|j| match &c[j].1 {
+                    Valor::Punto(p) => p[e],
+                    _ => 0.0,
+                })
+            })),
+            (a, b) => a.mezclar(b, k),
+        }
     }
     /// La curva del tramo que empieza en el cuadro clave de `t`.
     pub fn curva_en(&self, t: f64) -> Curva {
@@ -598,6 +628,9 @@ pub struct Proyecto {
     /// Tramo elegido (entrada y salida) en segundos.
     #[serde(default)]
     pub tramo: (Option<f64>, Option<f64>),
+    /// El usuario eligió tamaño y cuadros por segundo: el primer video ya no los cambia.
+    #[serde(default)]
+    pub fijo: bool,
 }
 
 impl Proyecto {
@@ -617,6 +650,7 @@ impl Proyecto {
             patrones: vec![],
             marcas: vec![],
             tramo: (None, None),
+            fijo: false,
         };
         let mut f = p.nuevo_fx(TipoFx::Limitador);
         // El del maestro solo cuida que no truene.

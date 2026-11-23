@@ -8,8 +8,16 @@ use super::tabler::TablerIcon;
 use eframe::egui::{self, *};
 use std::f32::consts::PI;
 
+/// Un color. Los grises de las superficies se llevan al modo oscuro: más abajo y con un toque frío; los de las letras
+/// se quedan.
 pub const fn c(h: u32) -> Color32 {
-    Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
+    let (r, g, b) = ((h >> 16) as u8, (h >> 8) as u8, h as u8);
+    if r == g && g == b && r < 0x70 {
+        let v = r as u32;
+        let n = v * 58 / 100;
+        return Color32::from_rgb(n as u8, (n + n / 22) as u8, (n + n / 7 + 1) as u8);
+    }
+    Color32::from_rgb(r, g, b)
 }
 pub const MAIN: Color32 = c(0xffe066);
 pub const HIGHLIGHT: Color32 = c(0xfff1b8);

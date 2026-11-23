@@ -9,12 +9,14 @@ pub mod editor;
 pub mod inicio;
 pub mod estilo;
 pub mod inspector;
+pub mod libre;
 pub mod linea;
 pub mod muestras;
 pub mod nodos;
 pub mod musica;
 pub mod origen;
 pub mod pestanas;
+pub mod proyecto;
 #[rustfmt::skip]
 #[allow(dead_code)]
 mod tabler;
@@ -145,6 +147,7 @@ pub struct App {
     pub anim: animacion::Estado,
     pub atajos: atajos::Estado,
     pub archivos: archivos::Estado,
+    pub ajustes_proyecto: Option<proyecto::Ajustes>,
     pub nodos: nodos::Estado,
     aplicado: Option<Proyecto>,
     ultimo: Proyecto,
@@ -248,6 +251,7 @@ impl App {
             anim: animacion::Estado::default(),
             atajos: Default::default(),
             archivos: Default::default(),
+            ajustes_proyecto: None,
             nodos: Default::default(),
             aplicado: None,
             ultimo: p.clone(),
@@ -556,7 +560,7 @@ impl App {
     pub fn importar_video(&mut self, ruta: PathBuf, info: Info, modo: AudioVideo) {
         let Some((ancho, alto, fps)) = info.video else { return };
         let inicio = self.p.video.iter().filter(|c| c.capa == 0).map(|c| c.fin()).fold(0.0, f64::max);
-        if self.p.video.is_empty() {
+        if self.p.video.is_empty() && !self.p.fijo {
             (self.p.ancho, self.p.alto, self.p.fps) = (ancho, alto, fps);
         }
         let mut c = self.p.nuevo_video(ruta.clone(), Contenido::Archivo, inicio, info.dur);
@@ -1200,6 +1204,7 @@ impl App {
                 self.inicio.mostrar();
             }
             "atajos" => self.atajos.abierto = true,
+            "ajustes" => self.abrir_ajustes_proyecto(),
             "archivos" => self.archivos.rec.abierto = !self.archivos.rec.abierto,
             "tocar" => self.alternar(),
             "pausa" if self.tocando() => self.alternar(),
@@ -1397,6 +1402,9 @@ impl App {
                 }
                 if ui.button(crate::idioma::t("Guardar con todo incluido…")).on_hover_text(crate::idioma::t("Un solo archivo con tus videos y audios adentro, para respaldar o llevar a otra Mac")).clicked() {
                     self.menu_guardar_todo();
+                }
+                if ui.add(Button::new(crate::idioma::t("Ajustes del proyecto…")).shortcut_text(crate::atajos::menu("ajustes"))).on_hover_text(crate::idioma::t("Resolución y fotogramas por segundo")).clicked() {
+                    self.abrir_ajustes_proyecto();
                 }
                 ui.separator();
                 if ui.add(Button::new(crate::idioma::t("Importar video o audio…")).shortcut_text(crate::atajos::menu("importar"))).clicked() {
@@ -1606,10 +1614,14 @@ impl App {
         if trae {
             ui.painter().rect_stroke(r.shrink(6.0), 8, Stroke::new(2.0, MAIN), StrokeKind::Inside);
         }
-        if self.espacio == Espacio::Animacion {
-            self.trayectoria(ui, d);
-        }
+        // En la pestaña de animación lo hace ella, con todo lo que cambie.
+        let antes = (self.anim.auto && self.espacio != Espacio::Animacion).then(|| self.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id).cloned())).flatten();
         self.mover_en_vista(ui, d);
+        self.camino(ui, d);
+        self.barra_libre(ui, r);
+        if let Some(a) = antes {
+            self.claves_automaticas(&a);
+        }
         ui.painter().rect_filled(barra, 0, WINDOW_TITLE);
         let mut u = ui.new_child(UiBuilder::new().max_rect(barra.shrink2(vec2(8.0, 3.0))).layout(Layout::left_to_right(Align::Center)));
         u.label(RichText::new(tiempo(self.ahora())).color(MAIN).size(15.0));
@@ -1637,6 +1649,9 @@ impl App {
                 ui.selectable_value(&mut self.calidad, 720, "Nítida");
             }).response.on_hover_text(crate::idioma::t("Calidad de la vista previa. No cambia lo que se exporta."));
             ui.label(RichText::new(tiempo(self.p.fin())).color(TEXT_DIM));
+            if ui.available_width() > 130.0 && ui.add(Button::new(RichText::new(format!("{}×{} · {}", self.p.ancho, self.p.alto, proyecto::nombre_fps((self.p.fps * 100.0).round() / 100.0))).size(13.0).color(TEXT_DIM)).frame(false)).on_hover_text(crate::idioma::t("Resolución y fotogramas por segundo del proyecto")).clicked() {
+                self.abrir_ajustes_proyecto();
+            }
         });
     }
 
@@ -1670,7 +1685,16 @@ impl App {
         let arriba = d.clamp(centro + giro * vec2(0.0, -medio.y * est.y - 22.0));
         let asa_giro = Rect::from_center_size(arriba, Vec2::splat(16.0));
         p.circle(arriba, 5.0, WINDOW_TITLE, Stroke::new(1.5, MAIN));
-        let cuerpo = ui.interact(d, Id::new("vista-mover").with(ui.id()), Sense::drag());
+        let cuerpo = ui.interact(d, Id::new("vista-mover").with(ui.id()), Sense::click_and_drag());
+        cuerpo.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, crate::idioma::t("Imagen")));
+        cuerpo.context_menu(|ui| {
+            ui.set_min_width(210.0);
+            self.menu_llaves(ui, id, ahora);
+        });
+        if self.anim.libre.modo != libre::Modo::Mover {
+            return self.vista_libre(ui, d, &cuerpo);
+        }
+        let Some(c) = self.p.clip_video(id) else { return };
         let resp = ui.interact(asa, Id::new("vista-escala").with(ui.id()), Sense::drag());
         let rgiro = ui.interact(asa_giro, Id::new("vista-giro").with(ui.id()), Sense::drag()).on_hover_text(crate::idioma::t("Girar (Shift: de 15 en 15 grados)"));
         if resp.hovered() || resp.dragged() {
@@ -1887,12 +1911,21 @@ impl App {
             });
             let (w, h) = (self.p.ancho, self.p.alto);
             let alto = |a: u32| Some(((w as f64 * a as f64 / h.max(1) as f64 / 2.0).round() as u32 * 2, a));
-            let tams = [("Original", None), ("720p", alto(720)), ("1080p", alto(1080)), ("4K", alto(2160)), ("Vertical 1080×1920", Some((1080, 1920))), ("Cuadrado 1080", Some((1080, 1080)))];
+            let tams = [("Original", None), ("720p", alto(720)), ("1080p", alto(1080)), ("480p", alto(480)), ("1440p", alto(1440)), ("4K", alto(2160)), ("Vertical 1080×1920", Some((1080, 1920))), ("Cuadrado 1080", Some((1080, 1080)))];
             fila(ui, "Tamaño", &mut |ui| {
                 let n = tams.iter().find(|t| t.1 == op.tam).map_or("Original", |t| t.0);
                 ComboBox::from_id_salt("tam").selected_text(n).show_ui(ui, |ui| {
                     for (n, t) in tams {
                         ui.selectable_value(&mut op.tam, t, n);
+                    }
+                });
+            });
+            fila(ui, "Fotogramas", &mut |ui| {
+                let propios = crate::idioma::tf("Los del proyecto ({})", &[&proyecto::nombre_fps(self.p.fps)]);
+                ComboBox::from_id_salt("fps-exp").selected_text(op.fps.map_or(propios.clone(), proyecto::nombre_fps)).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut op.fps, None, propios);
+                    for f in proyecto::FPS {
+                        ui.selectable_value(&mut op.fps, Some(f), proyecto::nombre_fps(f));
                     }
                 });
             });
@@ -1945,6 +1978,7 @@ impl App {
 
     fn dialogos(&mut self, ctx: &Context) {
         self.dialogo_exportar(ctx);
+        self.dialogo_proyecto(ctx);
         if let Some((ruta, info)) = self.preguntar.clone() {
             let mut elegido = None;
             let mut cerrar = false;

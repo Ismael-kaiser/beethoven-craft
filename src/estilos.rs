@@ -88,7 +88,7 @@ pub fn aplicar(p: &mut Proyecto, clip: u64, i: usize) -> usize {
     if let Some(c) = p.clip_video(clip) {
         c.fx.extend(v);
         if let Some((a, b)) = es.escala {
-            c.mov.escala = Prop { v: Valor::Num(a), claves: if a == b { vec![] } else { vec![(0.0, Valor::Num(a)), (c.dur, Valor::Num(b))] }, curvas: vec![] };
+            c.mov.escala = Prop { v: Valor::Num(a), claves: if a == b { vec![] } else { vec![(0.0, Valor::Num(a)), (c.dur, Valor::Num(b))] }, curvas: vec![], libre: false };
         }
     }
     n + usize::from(es.escala.is_some())

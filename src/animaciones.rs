@@ -3,6 +3,8 @@
 //! del valor que el clip ya tiene, así que se pueden juntar.
 use crate::curvas::{Curva, Familia, Sentido};
 use crate::modelo::{ClipVideo, FxVideo, Prop, Valor};
+#[cfg(test)]
+use crate::modelo::{Contenido, Proyecto};
 
 /// Propiedad del movimiento de un clip.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -272,5 +274,334 @@ pub fn quitar_todo(c: &mut ClipVideo, t: f64) {
             p.claves.clear();
             p.curvas.clear();
         }
+    }
+}
+
+// ---- Llaves puestas a mano y trazos libres
+
+/// Qué guarda una llave: un tipo de movimiento, o todo.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Llave {
+    Posicion,
+    Escala,
+    Estirado,
+    Giro,
+    Opacidad,
+    Todo,
+}
+
+impl Llave {
+    pub const TODAS: [(Llave, &'static str); 6] =
+        [(Llave::Posicion, "Posición"), (Llave::Giro, "Giro"), (Llave::Escala, "Escala"), (Llave::Estirado, "Ancho y alto"), (Llave::Opacidad, "Opacidad"), (Llave::Todo, "Todo")];
+
+    pub fn propiedades(self) -> &'static [Propiedad] {
+        use Propiedad::*;
+        match self {
+            Llave::Posicion => &[X, Y],
+            Llave::Escala => &[Escala],
+            Llave::Estirado => &[Ancho, Alto],
+            Llave::Giro => &[Giro],
+            Llave::Opacidad => &[Opacidad],
+            Llave::Todo => &[X, Y, Escala, Ancho, Alto, Giro, Opacidad],
+        }
+    }
+
+    pub fn de(p: &Pista) -> Option<Llave> {
+        Some(match p {
+            Pista::Mov(Propiedad::X | Propiedad::Y) => Llave::Posicion,
+            Pista::Mov(Propiedad::Escala) => Llave::Escala,
+            Pista::Mov(Propiedad::Ancho | Propiedad::Alto) => Llave::Estirado,
+            Pista::Mov(Propiedad::Giro) => Llave::Giro,
+            Pista::Mov(Propiedad::Opacidad) => Llave::Opacidad,
+            Pista::Fx(..) => return None,
+        })
+    }
+}
+
+/// Guarda el valor que cada propiedad tiene en `tl`. Las llaves que ya estaban se quedan igual.
+pub fn poner_llave(c: &mut ClipVideo, l: Llave, tl: f64) {
+    for p in l.propiedades() {
+        let q = p.de_mut(c);
+        if q.clave_en(tl).is_none() {
+            q.alternar_clave(tl);
+        }
+    }
+    c.animado = true;
+}
+
+/// Segundos con llaves y qué se guarda en cada uno.
+pub fn momentos(c: &ClipVideo) -> Vec<(f64, Vec<Pista>)> {
+    let mut v: Vec<(f64, Vec<Pista>)> = vec![];
+    for p in Pista::todas(c) {
+        for k in p.de(c).map_or(&[][..], |q| &q.claves) {
+            match v.iter_mut().find(|m| (m.0 - k.0).abs() < 0.02) {
+                Some(m) => m.1.push(p.clone()),
+                None => v.push((k.0, vec![p.clone()])),
+            }
+        }
+    }
+    v.sort_by(|a, b| a.0.total_cmp(&b.0));
+    v
+}
+
+/// Quita las llaves de `tl`: las de un tipo, o todas.
+pub fn quitar_llaves(c: &mut ClipVideo, tl: f64, solo: Option<Llave>) {
+    for p in Pista::todas(c) {
+        if solo.is_some_and(|l| l != Llave::Todo && Llave::de(&p) != Some(l)) {
+            continue;
+        }
+        if let Some(q) = p.de_mut(c).filter(|q| q.clave_en(tl).is_some()) {
+            q.alternar_clave(tl);
+        }
+    }
+}
+
+/// Lleva todas las llaves de un momento a otro. No se encima en un momento que ya tenga llaves.
+pub fn mover_momento(c: &mut ClipVideo, de: f64, a: f64) -> bool {
+    let a = a.clamp(0.0, c.dur);
+    if momentos(c).iter().any(|m| (m.0 - a).abs() < 0.03 && (m.0 - de).abs() >= 0.02) {
+        return false;
+    }
+    for p in Pista::todas(c) {
+        if let Some(q) = p.de_mut(c) {
+            if let Some(i) = q.clave_en(de) {
+                q.mover_clave(i, a);
+            }
+        }
+    }
+    true
+}
+
+/// La curva que sigue a las llaves de un momento.
+pub fn curva_de_momento(c: &mut ClipVideo, tl: f64, cv: Curva) {
+    for p in Pista::todas(c) {
+        if let Some(q) = p.de_mut(c).filter(|q| q.clave_en(tl).is_some()) {
+            q.poner_curva(tl, cv);
+        }
+    }
+}
+
+/// Pone la posición en `tl`, siempre con llave.
+pub fn poner_posicion(c: &mut ClipVideo, tl: f64, p: [f64; 2]) {
+    for (prop, v) in [(Propiedad::X, p[0]), (Propiedad::Y, p[1])] {
+        let q = prop.de_mut(c);
+        if q.clave_en(tl).is_none() {
+            q.alternar_clave(tl);
+        }
+        q.poner(tl, Valor::Num(v));
+    }
+    c.animado = true;
+}
+
+/// Los segundos con llave de posición.
+pub fn puntos(c: &ClipVideo) -> Vec<f64> {
+    let mut v: Vec<f64> = c.mov.x.claves.iter().chain(&c.mov.y.claves).map(|k| k.0).collect();
+    v.sort_by(f64::total_cmp);
+    v.dedup_by(|a, b| (*a - *b).abs() < 0.02);
+    v
+}
+
+/// Menos puntos para el mismo trazo: quita los que caen a menos de `eps` de donde estaría el movimiento sin ellos.
+pub fn simplificar(v: &[(f64, [f64; 2])], eps: f64) -> Vec<(f64, [f64; 2])> {
+    let Some((a, z)) = v.first().zip(v.last()) else { return vec![] };
+    let mut peor = (0, eps);
+    for (i, q) in v.iter().enumerate().skip(1).take(v.len().saturating_sub(2)) {
+        let k = (q.0 - a.0) / (z.0 - a.0).max(1e-9);
+        let d = (0..2).map(|e| (a.1[e] + (z.1[e] - a.1[e]) * k - q.1[e]).powi(2)).sum::<f64>().sqrt();
+        if d > peor.1 {
+            peor = (i, d);
+        }
+    }
+    if v.len() < 2 || peor.0 == 0 {
+        return if v.len() < 2 { v.to_vec() } else { vec![*a, *z] };
+    }
+    let mut o = simplificar(&v[..=peor.0], eps);
+    o.pop();
+    o.extend(simplificar(&v[peor.0..], eps));
+    o
+}
+
+/// Cambia la posición de ese tramo del clip por un trazo: (segundo del clip, posición en por ciento).
+pub fn trazar(c: &mut ClipVideo, v: &[(f64, [f64; 2])]) {
+    let Some((a, z)) = v.first().zip(v.last()) else { return };
+    let (a, z) = (a.0 - 0.02, z.0 + 0.02);
+    for p in [Propiedad::X, Propiedad::Y] {
+        let q = p.de_mut(c);
+        q.claves.retain(|k| k.0 < a || k.0 > z);
+        q.curvas.retain(|k| k.0 < a || k.0 > z);
+        q.libre = true;
+    }
+    for (t, p) in v {
+        poner_posicion(c, (*t).clamp(0.0, c.dur), *p);
+    }
+}
+
+/// Reparte los puntos del camino en el tiempo según lo que se recorre entre uno y otro.
+pub fn emparejar(c: &mut ClipVideo, razon: f64) {
+    let v = puntos(c);
+    let (Some(a), Some(z)) = (v.first().copied(), v.last().copied()) else { return };
+    let en = |t: f64| [c.mov.x.en(t).num() * razon, c.mov.y.en(t).num()];
+    // Largo de cada tramo, medido sobre la curva.
+    let largo: Vec<f64> = v
+        .windows(2)
+        .map(|w| {
+            (0..24)
+                .map(|i| {
+                    let (p, q) = (en(w[0] + (w[1] - w[0]) * i as f64 / 24.0), en(w[0] + (w[1] - w[0]) * (i + 1) as f64 / 24.0));
+                    (p[0] - q[0]).hypot(p[1] - q[1])
+                })
+                .sum()
+        })
+        .collect();
+    let total: f64 = largo.iter().sum();
+    if total < 1e-6 {
+        return;
+    }
+    let sitios: Vec<[f64; 2]> = v.iter().map(|t| [c.mov.x.en(*t).num(), c.mov.y.en(*t).num()]).collect();
+    let mut va = 0.0;
+    let mut nuevos = vec![(a, sitios[0])];
+    for (l, p) in largo.iter().zip(&sitios[1..]) {
+        va += l;
+        nuevos.push((a + (z - a) * va / total, *p));
+    }
+    // Los que quedan casi juntos no dejan de ser puntos aparte.
+    for i in 1..nuevos.len() {
+        nuevos[i].0 = nuevos[i].0.max(nuevos[i - 1].0 + 0.03);
+    }
+    rehacer(c, &nuevos);
+}
+
+/// Recorre el camino del final al principio.
+pub fn invertir(c: &mut ClipVideo) {
+    let v = puntos(c);
+    let (Some(a), Some(z)) = (v.first().copied(), v.last().copied()) else { return };
+    let mut n: Vec<(f64, [f64; 2])> = v.iter().map(|t| (a + z - t, [c.mov.x.en(*t).num(), c.mov.y.en(*t).num()])).collect();
+    n.reverse();
+    rehacer(c, &n);
+}
+
+/// Cambia todos los puntos del camino.
+fn rehacer(c: &mut ClipVideo, v: &[(f64, [f64; 2])]) {
+    for p in [Propiedad::X, Propiedad::Y] {
+        let q = p.de_mut(c);
+        (q.claves, q.curvas) = (vec![], vec![]);
+        if !q.libre {
+            // Con frenado en cada punto no habría velocidad pareja.
+            q.curvas = v.iter().map(|k| (k.0, Curva::Lineal)).collect();
+        }
+    }
+    for (t, p) in v {
+        poner_posicion(c, *t, *p);
+    }
+}
+
+/// Gira el clip hacia donde va su camino. `razon`: ancho entre alto del cuadro.
+pub fn orientar(c: &mut ClipVideo, razon: f64) {
+    let v = puntos(c);
+    let (Some(a), Some(z)) = (v.first().copied(), v.last().copied()) else { return };
+    if z - a < 0.05 {
+        return;
+    }
+    let en = |t: f64| [c.mov.x.en(t).num() * razon, c.mov.y.en(t).num()];
+    let n = (((z - a) / 0.12).ceil() as usize).clamp(v.len(), 400);
+    let mut claves: Vec<(f64, f64)> = vec![];
+    for i in 0..=n {
+        let t = a + (z - a) * i as f64 / n as f64;
+        let (p, q) = (en((t - 0.03).max(a)), en((t + 0.03).min(z)));
+        let d = [q[0] - p[0], q[1] - p[1]];
+        if d[0].hypot(d[1]) < 1e-4 {
+            continue;
+        }
+        let mut g = d[1].atan2(d[0]).to_degrees();
+        // La vuelta más cercana a la anterior, para que no gire de más.
+        if let Some(u) = claves.last() {
+            g += ((u.1 - g) / 360.0).round() * 360.0;
+        }
+        claves.push((t, g));
+    }
+    let v: Vec<(f64, [f64; 2])> = claves.into_iter().map(|(t, g)| (t, [g, 0.0])).collect();
+    let q = &mut c.mov.giro;
+    q.claves = simplificar(&v, 2.0).into_iter().map(|(t, g)| (t, Valor::Num(g[0]))).collect();
+    // Recta entre giros: una curva se pasaría de largo en las esquinas del camino.
+    (q.curvas, q.libre) = (q.claves.iter().map(|k| (k.0, Curva::Lineal)).collect(), false);
+    c.animado = true;
+}
+
+#[cfg(test)]
+mod pruebas_libres {
+    use super::*;
+
+    fn clip() -> ClipVideo {
+        Proyecto::nuevo().nuevo_video("x".into(), Contenido::Color([1.0; 4]), 0.0, 4.0)
+    }
+
+    #[test]
+    fn llaves_por_tipo() {
+        let mut c = clip();
+        c.mov.giro.v = Valor::Num(30.0);
+        poner_llave(&mut c, Llave::Giro, 1.0);
+        assert_eq!((c.mov.giro.claves.len(), c.mov.x.claves.len()), (1, 0), "solo lo pedido");
+        assert_eq!(c.mov.giro.claves[0], (1.0, Valor::Num(30.0)));
+        // Otra vez en el mismo lugar no la quita.
+        poner_llave(&mut c, Llave::Giro, 1.0);
+        assert_eq!(c.mov.giro.claves.len(), 1);
+        poner_llave(&mut c, Llave::Posicion, 1.0);
+        poner_llave(&mut c, Llave::Todo, 3.0);
+        let m = momentos(&c);
+        assert_eq!(m.iter().map(|x| (x.0, x.1.len())).collect::<Vec<_>>(), [(1.0, 3), (3.0, 7)]);
+        assert!(mover_momento(&mut c, 1.0, 2.0));
+        assert_eq!(c.mov.giro.claves[0].0, 2.0);
+        assert!(!mover_momento(&mut c, 2.0, 3.0), "no se encima");
+        assert_eq!(momentos(&c).len(), 2);
+        quitar_llaves(&mut c, 2.0, Some(Llave::Giro));
+        assert_eq!(momentos(&c)[0].1.len(), 2);
+        quitar_llaves(&mut c, 2.0, None);
+        assert_eq!(momentos(&c).len(), 1);
+    }
+
+    #[test]
+    fn el_trazo_pasa_por_sus_puntos() {
+        let mut c = clip();
+        // Un círculo dibujado a mano, con muchos puntos.
+        let v: Vec<(f64, [f64; 2])> = (0..=240).map(|i| i as f64 / 240.0).map(|k| (0.5 + 3.0 * k, [30.0 * (k * 6.2832).cos(), 30.0 * (k * 6.2832).sin()])).collect();
+        let s = simplificar(&v, 0.6);
+        assert!(s.len() > 8 && s.len() < 60, "{}", s.len());
+        assert_eq!((s[0], *s.last().unwrap()), (v[0], v[240]));
+        trazar(&mut c, &s);
+        for (t, p) in &v {
+            let q = [c.mov.x.en(*t).num(), c.mov.y.en(*t).num()];
+            assert!((q[0] - p[0]).hypot(q[1] - p[1]) < 1.2, "{t}: {q:?} {p:?}");
+        }
+        // Sin detenerse en cada punto: la velocidad es pareja.
+        let vel = |t: f64| (c.mov.x.en(t + 0.01).num() - c.mov.x.en(t - 0.01).num()).hypot(c.mov.y.en(t + 0.01).num() - c.mov.y.en(t - 0.01).num());
+        let vs: Vec<f64> = (0..50).map(|i| vel(0.8 + i as f64 * 0.05)).collect();
+        let (lo, hi) = vs.iter().fold((f64::MAX, 0f64), |a, v| (a.0.min(*v), a.1.max(*v)));
+        assert!(hi / lo < 2.0, "{lo} {hi}");
+        // Un trazo nuevo cambia solo su tramo.
+        trazar(&mut c, &[(1.0, [0.0, 0.0]), (2.0, [10.0, 5.0])]);
+        assert_eq!(puntos(&c).iter().filter(|t| (0.99..=2.01).contains(*t)).count(), 2);
+        assert!(puntos(&c).len() > 4);
+        // Un tramo con curva propia la respeta.
+        c.mov.x.poner_curva(1.0, Curva::Salto);
+        assert_eq!(c.mov.x.en(1.5).num(), 0.0);
+    }
+
+    #[test]
+    fn gira_con_el_camino() {
+        let mut c = clip();
+        for (t, p) in [(0.0, [0.0, 0.0]), (1.0, [20.0, 0.0]), (2.0, [20.0, 20.0])] {
+            poner_posicion(&mut c, t, p);
+        }
+        for q in [&mut c.mov.x, &mut c.mov.y] {
+            for t in [0.0, 1.0] {
+                q.poner_curva(t, Curva::Lineal);
+            }
+        }
+        orientar(&mut c, 1.0);
+        assert!(c.mov.giro.en(0.5).num().abs() < 4.0, "a la derecha");
+        assert!((c.mov.giro.en(1.6).num() - 90.0).abs() < 4.0, "hacia abajo");
+        // Con libre guardado y vuelto a leer.
+        let s = serde_json::to_string(&c).unwrap();
+        assert_eq!(serde_json::from_str::<ClipVideo>(&s).unwrap(), c);
     }
 }

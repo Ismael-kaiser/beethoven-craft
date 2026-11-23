@@ -45,6 +45,8 @@ pub struct Estado {
     /// Alto de las pistas.
     pub alto: f32,
     arrastre: Option<Arrastre>,
+    /// Llave que se está moviendo: clip y segundo.
+    llave: Option<(u64, f64)>,
     /// Automatización visible por pista: índice en `Pista::auto`.
     pub auto_ver: HashMap<u64, usize>,
     punto: Option<(u64, usize)>,
@@ -62,6 +64,7 @@ impl Default for Estado {
             herramienta: Herramienta::Flecha,
             alto: 64.0,
             arrastre: None,
+            llave: None,
             auto_ver: HashMap::new(),
             punto: None,
             guia: None,
@@ -914,15 +917,10 @@ impl App {
                 }
             }
             let m = &v.mov;
-            for q in m.props().into_iter().chain(v.fx.iter().flat_map(|f| f.p.values())) {
-                for k in q.claves.iter().filter(|k| k.0 >= 0.0 && k.0 <= v.dur) {
-                    let o = pos2(a_x(v.inicio + k.0), cuerpo.bottom() - 6.0);
-                    pr.add(Shape::convex_polygon(
-                        vec![o - vec2(0.0, 4.0), o + vec2(4.0, 0.0), o + vec2(0.0, 4.0), o - vec2(4.0, 0.0)],
-                        HIGHLIGHT,
-                        Stroke::new(1.0, COLORED_DARK),
-                    ));
-                }
+            let llaves = crate::animaciones::momentos(&v);
+            let sitio = |tl: f64| pos2(a_x(v.inicio + tl), cuerpo.bottom() - 7.0);
+            for (tl, que) in llaves.iter().filter(|k| k.0 >= 0.0 && k.0 <= v.dur) {
+                libre::pinta_rombo(&pr, sitio(*tl), 4.5, libre::resumen(que).1, COLORED_DARK);
             }
             let tr = tit.intersect(carril);
             let mut nombre = match &v.contenido {
@@ -955,7 +953,29 @@ impl App {
             if resp.double_clicked() {
                 ac.push(Accion::VerControles(v.id));
             }
+            // Las llaves del clip elegido: clic va a ella, se arrastra en el tiempo y clic derecho la cambia.
+            if self.clip == Some(v.id) && !bloqueada {
+                self.llaves_en_clip(ui, &v, &llaves, carril, &sitio, a_t);
+            }
+            let k = Id::new("menu-llave-t");
+            if !resp.context_menu_opened() {
+                ui.data_mut(|d| d.remove::<f64>(k));
+            }
             resp.context_menu(|ui| {
+                let donde = ui.input(|i| i.pointer.press_origin().or(i.pointer.interact_pos())).map_or(self.ahora(), |m| a_t(m.x).clamp(v.inicio, v.fin()));
+                let donde = ui.data_mut(|d| *d.get_temp_mut_or(k, donde));
+                ui.menu_button(RichText::new(format!("◆ {}", crate::idioma::t("Poner llave aquí"))).color(MAIN), |ui| {
+                    ui.set_min_width(210.0);
+                    self.menu_llaves(ui, v.id, donde);
+                });
+                ui.menu_button(crate::idioma::t("Acomodar en el cuadro"), |ui| {
+                    for (i, n) in ["Completo", "Llenar el cuadro", "Estirar al cuadro"].into_iter().enumerate() {
+                        if ui.button(crate::idioma::t(n)).clicked() {
+                            self.acomodar(v.id, i);
+                        }
+                    }
+                });
+                ui.separator();
                 if ui.button(crate::idioma::t("Dividir en el cursor")).clicked() {
                     ac.push(Accion::Dividir(v.id, self.ahora(), false));
                 }
@@ -996,6 +1016,48 @@ impl App {
             ac.push(Accion::Soltado((*s).clone(), soltado_en, Some(capa), None, t, final_));
         }
         r.top()
+    }
+
+    fn llaves_en_clip(&mut self, ui: &mut Ui, v: &ClipVideo, llaves: &[(f64, Vec<crate::animaciones::Pista>)], carril: Rect, sitio: &dyn Fn(f64) -> Pos2, a_t: &dyn Fn(f32) -> f64) {
+        let moviendo = self.linea.llave.filter(|l| l.0 == v.id);
+        for (i, (tl, que)) in llaves.iter().enumerate() {
+            let o = sitio(*tl);
+            let zona = Rect::from_center_size(o, vec2(13.0, 14.0)).intersect(carril);
+            if zona.width() <= 0.0 {
+                continue;
+            }
+            let r = ui.interact(zona, Id::new(("llave", v.id, i)), Sense::click_and_drag());
+            let (nombre, col) = libre::resumen(que);
+            r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, crate::idioma::tf("Llave: {}", &[&nombre])));
+            if r.hovered() || moviendo.is_some_and(|l| (l.1 - tl).abs() < 0.02) {
+                libre::pinta_rombo(&ui.painter_at(carril), o, 7.0, col, Color32::WHITE);
+                ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
+            }
+            if r.clicked() {
+                self.ir(v.inicio + tl);
+            }
+            if r.drag_started() {
+                self.linea.llave = Some((v.id, *tl));
+            }
+            r.context_menu(|ui| {
+                ui.set_min_width(210.0);
+                self.menu_llaves(ui, v.id, v.inicio + tl);
+            });
+            r.on_hover_text(crate::idioma::tf("{} en {}. Arrástrala para moverla; clic derecho: más", &[&nombre, &tiempo(v.inicio + tl)]));
+        }
+        if let Some((id, de)) = moviendo {
+            let (m, abajo) = ui.input(|i| (i.pointer.interact_pos(), i.pointer.primary_down()));
+            if !abajo {
+                self.linea.llave = None;
+            } else if let Some(m) = m {
+                let a = self.a_cuadro(a_t(m.x) - v.inicio).clamp(0.0, v.dur);
+                if let Some(c) = self.p.clip_video(id).filter(|_| (a - de).abs() > 1e-6) {
+                    if crate::animaciones::mover_momento(c, de, a) {
+                        self.linea.llave = Some((id, a));
+                    }
+                }
+            }
+        }
     }
 
     /// Dónde quedaría lo que se arrastra desde el panel de archivos.

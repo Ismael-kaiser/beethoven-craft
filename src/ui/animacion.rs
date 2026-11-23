@@ -43,6 +43,7 @@ pub struct Estado {
     menu: Option<Clave>,
     encuadrar: bool,
     pub buscar: String,
+    pub libre: super::libre::Libre,
 }
 
 impl Default for Estado {
@@ -63,6 +64,7 @@ impl Default for Estado {
             menu: None,
             encuadrar: true,
             buscar: String::new(),
+            libre: Default::default(),
         }
     }
 }
@@ -118,7 +120,7 @@ fn ambito(p: &Pista) -> (f64, f64) {
 }
 
 /// Curvas a un clic.
-fn rapidas() -> [(&'static str, Curva); 8] {
+pub fn rapidas() -> [(&'static str, Curva); 8] {
     use Familia::*;
     use Sentido::*;
     [
@@ -203,7 +205,7 @@ impl App {
     }
 
     /// Lo que cambió sin estar animado recibe cuadros clave: el valor de antes al principio y el nuevo en el cursor.
-    fn claves_automaticas(&mut self, a: &ClipVideo) {
+    pub fn claves_automaticas(&mut self, a: &ClipVideo) {
         let tl = (self.ahora() - a.inicio).clamp(0.0, a.dur);
         let Some(c) = self.p.clip_video(a.id) else { return };
         let mut v: Vec<Pista> = Propiedad::TODAS.into_iter().map(Pista::Mov).collect();
@@ -1304,27 +1306,6 @@ impl App {
                 Hacer::Borrar => self.borrar_claves(),
                 _ => {}
             }
-        }
-    }
-
-    /// Trayectoria del clip sobre la vista previa: por dónde va y dónde están sus cuadros clave.
-    pub fn trayectoria(&self, ui: &Ui, d: Rect) {
-        let Some(c) = self.anim.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id)) else { return };
-        if c.mov.x.claves.len() + c.mov.y.claves.len() < 2 {
-            return;
-        }
-        let en = |tl: f64| d.center() + vec2(c.mov.x.en(tl).num() as f32 / 100.0 * d.width(), c.mov.y.en(tl).num() as f32 / 100.0 * d.height());
-        let p = ui.painter_at(d);
-        let pts: Vec<Pos2> = (0..=120).map(|i| en(c.dur * i as f64 / 120.0)).collect();
-        for w in pts.windows(2).step_by(2) {
-            p.line_segment([w[0], w[1]], Stroke::new(1.5, HIGHLIGHT.gamma_multiply(0.8)));
-        }
-        for k in c.mov.x.claves.iter().chain(&c.mov.y.claves) {
-            rombo(&p, en(k.0), 5.0, MAIN);
-        }
-        let tl = self.ahora() - c.inicio;
-        if (0.0..=c.dur).contains(&tl) {
-            p.circle(en(tl), 5.0, Color32::WHITE, Stroke::new(1.5, Color32::BLACK));
         }
     }
 }

@@ -69,7 +69,7 @@ pub fn fx_nuevo(id: u64, tipo: &str) -> Option<FxVideo> {
                     craft_trans::ParamValue::Bool(b) => Valor::Si(*b),
                     craft_trans::ParamValue::Choice(i) => Valor::Op(*i),
                 };
-                (p.id.to_string(), Prop { v, claves: vec![], curvas: vec![] })
+                (p.id.to_string(), Prop { v, claves: vec![], curvas: vec![], libre: false })
             })
             .collect();
         let mut f = FxVideo { id, tipo: tipo.into(), activo: true, p };
@@ -87,7 +87,7 @@ pub fn fx_nuevo(id: u64, tipo: &str) -> Option<FxVideo> {
     let p = s
         .params
         .iter()
-        .filter_map(|p| Some((p.id.to_string(), Prop { v: valor(&p.default)?, claves: vec![], curvas: vec![] })))
+        .filter_map(|p| Some((p.id.to_string(), Prop { v: valor(&p.default)?, claves: vec![], curvas: vec![], libre: false })))
         .collect();
     let mut f = FxVideo { id, tipo: tipo.into(), activo: true, p };
     for (k, v) in arranque(tipo) {

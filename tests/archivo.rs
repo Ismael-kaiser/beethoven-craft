@@ -13,7 +13,7 @@ fn dir(n: &str) -> PathBuf {
 fn proyecto(medio: PathBuf) -> Proyecto {
     let mut p = Proyecto::nuevo();
     let mut c = p.nuevo_video(medio, Contenido::Archivo, 0.0, 3.0);
-    c.mov.escala = Prop { v: Valor::Num(100.0), claves: vec![(0.0, Valor::Num(1.0)), (2.0, Valor::Num(90.0))], curvas: vec![] };
+    c.mov.escala = Prop { v: Valor::Num(100.0), claves: vec![(0.0, Valor::Num(1.0)), (2.0, Valor::Num(90.0))], curvas: vec![], libre: false };
     c.fx.push(fx_nuevo(9, "ec.color.lumetri").unwrap());
     c.fx.push(fx_nuevo(10, "fc:light_leaks").unwrap());
     c.entrada = Some(Transicion { tipo: "cross_dissolve".into(), dur: 1.0, p: Default::default() });

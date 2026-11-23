@@ -22,6 +22,7 @@ pub const ACCIONES: &[Accion] = &[
     a("abrir", "Proyecto", "Abrir proyecto…", "Cmd+O"),
     a("importar", "Proyecto", "Importar video o audio…", "Cmd+I"),
     a("exportar", "Proyecto", "Exportar video con mi audio…", "Cmd+M"),
+    a("ajustes", "Proyecto", "Ajustes del proyecto…", "Cmd+Shift+P"),
     a("menu", "Proyecto", "Menú principal", ""),
     a("atajos", "Proyecto", "Atajos de teclado…", "Cmd+Alt+K"),
     a("tocar", "Reproducción", "Reproducir / pausa", "Space"),

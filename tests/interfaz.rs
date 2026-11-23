@@ -91,7 +91,7 @@ fn con_video_real() {
     let id = h.state().p.video[0].id;
     let a = &mut h.state_mut().p;
     a.dividir(id, 60.0);
-    a.video[0].mov.escala = Prop { v: Valor::Num(100.0), claves: vec![(10.0, Valor::Num(100.0)), (40.0, Valor::Num(80.0))], curvas: vec![] };
+    a.video[0].mov.escala = Prop { v: Valor::Num(100.0), claves: vec![(10.0, Valor::Num(100.0)), (40.0, Valor::Num(80.0))], curvas: vec![], libre: false };
     let f = fx_nuevo(77, "ec.color.huesaturation").unwrap();
     a.video[0].fx.push(f);
     let f = fx_nuevo(78, "ec.stylize.glow").unwrap();
@@ -711,8 +711,8 @@ fn pestana_nodos() {
 }
 
 /// Carpeta con un video, un sonido, una imagen y una subcarpeta.
-fn carpeta_de_prueba() -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("beethoven-archivos-{}", std::process::id()));
+fn carpeta_de_prueba(n: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("beethoven-{n}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(d.join("Día 1")).unwrap();
     let ff = |args: &[&str], f: &str| {
@@ -742,7 +742,7 @@ fn esperar(h: &mut Harness<App>, que: &str, f: impl Fn(&mut Harness<App>) -> boo
 
 #[test]
 fn panel_de_archivos() {
-    let d = carpeta_de_prueba();
+    let d = carpeta_de_prueba("archivos");
     // Pasos cortos, para que un doble clic quepa.
     let mut h = Harness::builder().with_size([1440.0, 860.0]).with_step_dt(1.0 / 60.0).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
     h.run_steps(3);
@@ -829,5 +829,144 @@ fn panel_de_archivos() {
     h.get_by_label("Cerrar el panel de archivos").click();
     h.run_steps(3);
     assert!(h.query_by_label("tema.wav").is_none());
+    let _ = std::fs::remove_dir_all(d);
+}
+
+fn arnes_corto<'a>() -> Harness<'a, App> {
+    let mut h = Harness::builder().with_size([1440.0, 860.0]).with_step_dt(1.0 / 60.0).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
+    h.run_steps(3);
+    h
+}
+
+fn boton(h: &mut Harness<App>, o: eframe::egui::Pos2, b: eframe::egui::PointerButton) {
+    h.hover_at(o);
+    h.run_steps(2);
+    for pressed in [true, false] {
+        h.event(eframe::egui::Event::PointerButton { pos: o, button: b, pressed, modifiers: Default::default() });
+    }
+    h.run_steps(4);
+}
+
+/// Llaves con clic derecho, puntos con clic y un camino dibujado a mano.
+#[test]
+fn animacion_libre() {
+    use eframe::egui::{PointerButton::*, pos2, vec2};
+    use toma_uno::modelo::*;
+    let mut h = arnes_corto();
+    let id = h.state_mut().poner_forma(TipoForma::TODOS[0].0);
+    h.state_mut().clip = Some(id);
+    h.run_steps(4);
+    let clip = |h: &Harness<App>| h.state().p.video.iter().find(|c| c.id == id).unwrap().clone();
+    let img = h.get_by_label("Imagen").rect();
+    // Clic derecho en la imagen: una llave de giro en el cursor, y nada más.
+    h.state_mut().ir(1.0);
+    h.run_steps(2);
+    boton(&mut h, img.center() + vec2(150.0, 90.0), Secondary);
+    foto(&mut h, "libre-menu");
+    h.get_by_label("◆ Poner llave de Giro").click();
+    h.run_steps(4);
+    let c = clip(&h);
+    assert_eq!((c.mov.giro.claves.len(), c.mov.x.claves.len()), (1, 0));
+    assert!((c.mov.giro.claves[0].0 - 1.0).abs() < 0.02);
+    // Puntos: tres clics, tres posiciones, y el cursor avanza.
+    h.state_mut().ir(0.0);
+    h.get_by_label("◆ Animar").click();
+    h.run_steps(3);
+    h.get_by_label("Puntos").click();
+    h.run_steps(3);
+    for k in 0..3 {
+        boton(&mut h, img.center() + vec2(-220.0 + 200.0 * k as f32, [60.0, -60.0, 70.0][k]), Primary);
+    }
+    let c = clip(&h);
+    assert_eq!(c.mov.x.claves.iter().map(|k| (k.0 * 100.0).round()).collect::<Vec<_>>(), [0.0, 50.0, 100.0]);
+    assert!(c.mov.x.libre, "curvo");
+    assert!((h.state().ahora() - 1.5).abs() < 0.05);
+    foto(&mut h, "libre-puntos");
+    // Un punto se arrastra.
+    let antes = c.mov.x.claves[1].1.num();
+    let o = h.get_by_label("Punto 2 del camino").rect().center();
+    h.hover_at(o);
+    h.run_steps(2);
+    h.drag_at(o);
+    h.run_steps(2);
+    for k in 1..=6 {
+        h.hover_at(o + vec2(10.0 * k as f32, 0.0));
+        h.run_steps(1);
+    }
+    h.drop_at(o + vec2(60.0, 0.0));
+    h.run_steps(3);
+    let c = clip(&h);
+    assert_eq!(c.mov.x.claves.len(), 3);
+    assert!(c.mov.x.claves[1].1.num() > antes + 4.0, "{antes} -> {:?}", c.mov.x.claves[1]);
+    // Las llaves del clip se mueven en la línea de tiempo.
+    let r = h.get_all_by_label("Llave: Posición").map(|n| n.rect().center()).min_by(|a, b| b.x.total_cmp(&a.x)).unwrap();
+    foto(&mut h, "libre-linea");
+    let n = c.mov.x.claves.len();
+    h.hover_at(r);
+    h.run_steps(2);
+    h.drag_at(r);
+    h.run_steps(1);
+    for k in 1..=6 {
+        h.hover_at(r + vec2(12.0 * k as f32, 0.0));
+        h.run_steps(1);
+    }
+    h.drop_at(r + vec2(72.0, 0.0));
+    h.run_steps(3);
+    let c2 = clip(&h);
+    assert_eq!(c2.mov.x.claves.len(), n);
+    assert!(c2.mov.x.claves != c.mov.x.claves, "se movió una llave");
+    // A mano: un arco desde el cursor.
+    h.state_mut().ir(2.0);
+    h.get_by_label("A mano").click();
+    h.run_steps(3);
+    let p = |k: f32| img.center() + vec2(-200.0 * (k * 3.14).cos(), -120.0 * (k * 3.14).sin());
+    h.hover_at(p(0.0));
+    h.run_steps(2);
+    h.drag_at(p(0.0));
+    h.run_steps(1);
+    for k in 1..=60 {
+        h.hover_at(p(k as f32 / 60.0));
+        h.run_steps(1);
+    }
+    foto(&mut h, "libre-mano");
+    h.drop_at(p(1.0));
+    h.run_steps(4);
+    let c = clip(&h);
+    let en = |t: f64| [c.mov.x.en(t).num(), c.mov.y.en(t).num()];
+    let dur = c.mov.x.claves.last().unwrap().0 - 2.0;
+    assert!(dur > 0.8 && dur < 1.6, "dura lo que se tardó: {dur}");
+    assert!(en(2.0 + dur / 2.0)[1] < -15.0, "por arriba a la mitad: {:?}", en(2.0 + dur / 2.0));
+    assert!(en(2.0)[0] < -10.0 && en(2.0 + dur)[0] > 10.0);
+    foto(&mut h, "libre-trazo");
+    // Menú del clip en la línea de tiempo.
+    let _ = pos2(0.0, 0.0);
+}
+
+#[test]
+fn ajustes_del_proyecto() {
+    let mut h = arnes_corto();
+    let d = carpeta_de_prueba("ajustes");
+    h.state_mut().poner_archivos(&[d.join("entrevista.mp4")], 0.0, None, None);
+    h.run_steps(3);
+    h.state_mut().abrir_ajustes_proyecto();
+    h.run_steps(3);
+    h.get_by_label("Vertical · 1080×1920").click();
+    h.run_steps(2);
+    h.get_by_label("60").click();
+    h.run_steps(2);
+    h.get_by_label("Que llenen el cuadro").click();
+    h.run_steps(2);
+    foto(&mut h, "ajustes-proyecto");
+    h.get_by_label("Aplicar").click();
+    h.run_steps(4);
+    let p = &h.state().p;
+    assert_eq!((p.ancho, p.alto, p.fps), (1080, 1920, 60.0));
+    // 16:9 llenando 9:16.
+    assert!((p.video[0].mov.escala.v.num() - 316.0).abs() < 1.0, "{:?}", p.video[0].mov.escala);
+    // El primer video de un proyecto con tamaño elegido no lo cambia.
+    h.state_mut().p.video.clear();
+    h.state_mut().poner_archivos(&[d.join("entrevista.mp4")], 0.0, None, None);
+    assert_eq!(h.state().p.ancho, 1080);
+    foto(&mut h, "vertical");
     let _ = std::fs::remove_dir_all(d);
 }
