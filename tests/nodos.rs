@@ -157,3 +157,25 @@ fn filtros() {
     p.video[0].fx = vec![fx_nuevo(3, "bc:color").unwrap()];
     assert!(dif(&a, &cuadro(&p)) < 0.6);
 }
+
+/// Los efectos propios no truenan ni dan números rotos en ningún momento, tamaño o valor extremo.
+#[test]
+fn efectos_propios_estables() {
+    let mut img = effectcraft_raster::Image::new(96, 54);
+    img.data.iter_mut().enumerate().for_each(|(i, p)| *p = [(i % 96) as f32 / 96.0, (i / 96) as f32 / 54.0, 0.4, if i % 7 == 0 { 0.5 } else { 1.0 }]);
+    for d in &toma_uno::vpropios::DEFS {
+        for lado in 0..3 {
+            let mut f = toma_uno::vpropios::nuevo(3, d);
+            for c in d.ctl {
+                if let (toma_uno::vpropios::Ctl::N(k, _, a, b, ..), true) = (c, lado > 0) {
+                    f.p.insert(k.to_string(), Prop::num(if lado == 1 { *a } else { *b }));
+                }
+            }
+            for t in [0.0, 0.37, 1.9, 61.3] {
+                let o = toma_uno::vpropios::aplicar(&f, t, &img, 0.1);
+                assert_eq!((o.width, o.height), (96, 54));
+                assert!(o.data.iter().flatten().all(|v| v.is_finite()), "{} lado {lado} en {t}", d.nombre);
+            }
+        }
+    }
+}

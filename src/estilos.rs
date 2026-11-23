@@ -19,7 +19,7 @@ const fn e(nombre: &'static str, ayuda: &'static str, fx: &'static [(&'static st
 
 const LUM: &str = "ec.color.lumetri";
 
-pub const ESTILOS: [Estilo; 43] = [
+pub const ESTILOS: [Estilo; 54] = [
     e("Cinta VHS", "Colores corridos, ruido y rayas", &[("fc:rgb_split", &[("amount", 9.0, 9.0)]), ("ec.noise.noise", &[("amount", 14.0, 14.0)]), (LUM, &[("basicCorrection/saturation", 125.0, 125.0), ("creative/adjustments/fadedFilm", 35.0, 35.0)]), ("ec.blur.channel", &[("redBlurriness", 10.0, 10.0), ("blueBlurriness", 14.0, 14.0)])], None),
     e("Película vieja", "Sepia, grano y viñeta", &[("ec.color.tint", &[("amount", 70.0, 70.0)]), ("ec.noise.noise", &[("amount", 18.0, 18.0)]), (LUM, &[("creative/adjustments/fadedFilm", 60.0, 60.0), ("basicCorrection/whiteBalance/temperature", 40.0, 40.0), ("vignette/vignetteAmount", -2.5, -2.5)])], None),
     e("Cine", "Contraste, sombras suaves y viñeta", &[(LUM, &[("basicCorrection/tone/contrast", 30.0, 30.0), ("basicCorrection/tone/highlights", -25.0, -25.0), ("basicCorrection/tone/shadows", 15.0, 15.0), ("basicCorrection/saturation", 85.0, 85.0), ("vignette/vignetteAmount", -1.5, -1.5)])], None),
@@ -63,6 +63,17 @@ pub const ESTILOS: [Estilo; 43] = [
     e("Rollo de 8 mm", "Polvo, rayones y color de película", &[("bc:polvo", &[]), (LUM, &[("creative/adjustments/fadedFilm", 40.0, 40.0), ("basicCorrection/whiteBalance/temperature", 28.0, 28.0), ("vignette/vignetteAmount", -2.0, -2.0)])], Some((103.0, 103.0))),
     e("Gala", "Brillos y halo sobre negro profundo", &[("bc:brillos", &[]), ("bc:halo", &[("cant", 65.0, 65.0)]), (LUM, &[("basicCorrection/tone/contrast", 30.0, 30.0), ("vignette/vignetteAmount", -1.8, -1.8)])], None),
     e("Entrada veloz", "Llega con fuga de zoom y se asienta", &[("bc:radial", &[("cant", 80.0, 0.0)])], None),
+    e("Corazón acelerado", "Late con fuerza y aprieta las orillas", &[("bc:latido", &[("cant", 50.0, 50.0)]), (LUM, &[("vignette/vignetteAmount", -2.0, -2.0), ("basicCorrection/tone/contrast", 15.0, 15.0)])], None),
+    e("Pista de baile", "Haces de colores, humo y golpe de zoom", &[("bc:discoteca", &[]), ("bc:neblina", &[("cant", 20.0, 20.0)]), ("bc:ritmo_zoom", &[("fuerza", 7.0, 7.0)])], None),
+    e("Noche de brujas", "Murciélagos, niebla y luz verde", &[("bc:murcielagos", &[]), ("bc:neblina", &[("cant", 30.0, 30.0)]), ("bc:fantasmal", &[("cant", 25.0, 25.0)])], None),
+    e("Cumpleaños", "Globos, confeti y colores alegres", &[("bc:globos", &[]), ("bc:confeti", &[("cant", 60.0, 60.0)]), (LUM, &[("basicCorrection/saturation", 115.0, 115.0)])], None),
+    e("Año nuevo", "Fuegos artificiales sobre la noche", &[(LUM, &[("basicCorrection/tone/exposure", -1.0, -1.0), ("basicCorrection/whiteBalance/temperature", -25.0, -25.0)]), ("bc:fuegos", &[])], None),
+    e("Primavera", "Pétalos, halo y luz limpia", &[("bc:petalos", &[]), ("bc:halo", &[("cant", 40.0, 40.0)])], None),
+    e("Rollo de cine", "Perforaciones, polvo y sepia suave", &[("bc:polvo", &[]), (LUM, &[("creative/adjustments/fadedFilm", 35.0, 35.0), ("basicCorrection/whiteBalance/temperature", 30.0, 30.0), ("basicCorrection/saturation", 70.0, 70.0)]), ("bc:rollo", &[])], None),
+    e("Video casero", "Cinta VHS con visor de cámara", &[("bc:vhs", &[]), ("bc:visor", &[])], None),
+    e("Hackeo", "Lluvia de código y cortes de señal", &[("bc:codigo", &[]), ("bc:estatica", &[("cant", 12.0, 12.0)])], None),
+    e("Tarjeta 3D", "Flota inclinada con esquinas redondas", &[("bc:redondo", &[("orilla", 2.0, 2.0)]), ("bc:giro3d", &[("rx", 8.0, 8.0), ("ry", 16.0, 16.0), ("vaiven", 8.0, 8.0)])], None),
+    e("Abrir el telón", "La imagen se abre en círculo", &[("bc:apertura", &[("abrir", 0.0, 100.0)])], None),
 ];
 
 /// Pone un estilo en un clip. Devuelve cuántos efectos agregó.

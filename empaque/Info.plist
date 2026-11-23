@@ -7,7 +7,7 @@
 <key>CFBundleExecutable</key><string>beethoven-craft</string>
 <key>CFBundleIconFile</key><string>icono</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.7.0</string>
+<key>CFBundleShortVersionString</key><string>0.8.0</string>
 <key>CFBundleVersion</key><string>3</string>
 <key>NSHumanReadableCopyright</key><string>Creado por mixter-ha99. GPL-3.0 o posterior.</string>
 <key>CFBundleDevelopmentRegion</key><string>es</string>

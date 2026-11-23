@@ -32,7 +32,7 @@ fn efectos_de_video_se_notan() {
     }
     println!("{} efectos revisados; sin cambio visible: {no:?}", EFECTOS.len());
     // Estos dependen de un archivo, del momento o de que la imagen tenga lo que buscan.
-    no.retain(|x| !["Aplicar LUT de color", "Luz estroboscópica", "VR: quitar ruido", "VR: enfocar", "Quitar grano", "Quitar reflejo verde (avanzado)", "Quitar reflejo de color", "Eco visual", "Pocos cuadros", "Diferencia de tiempo", "Tiempo ancho", "Brillo de contorno", "Mezcla de color", "Barrido de luz", "Brillos", "Polvo y rayones"].contains(&x.0));
+    no.retain(|x| !["Aplicar LUT de color", "Luz estroboscópica", "VR: quitar ruido", "VR: enfocar", "Quitar grano", "Quitar reflejo verde (avanzado)", "Quitar reflejo de color", "Eco visual", "Pocos cuadros", "Diferencia de tiempo", "Tiempo ancho", "Brillo de contorno", "Mezcla de color", "Barrido de luz", "Brillos", "Polvo y rayones", "Latido", "Rebote", "Onda expansiva", "Fuegos artificiales", "Estrellas fugaces", "Pétalos"].contains(&x.0));
     assert!(no.is_empty(), "{no:?}");
     // Los de títulos, sobre un título con fondo de color.
     let f = p.nuevo_video("f".into(), Contenido::Color([0.5, 0.6, 0.7, 1.0]), 0.0, 10.0);

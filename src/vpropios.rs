@@ -42,8 +42,15 @@ const CO: &str = "Cómic y color";
 const ES: &str = "Espejos y ondas";
 
 const EL: &str = "Elegantes";
+const MO: &str = "Movimiento y pulso";
+const D3: &str = "3D y lentes";
+const LZ: &str = "Luces";
+const FI: &str = "Fiesta y naturaleza";
+const TE: &str = "Terror";
+const MA: &str = "Marcos y aperturas";
+const RE: &str = "Retro y dibujo";
 
-pub const DEFS: [Def; 38] = [
+pub const DEFS: [Def; 76] = [
     Def {
         id: "bc:color",
         nombre: "Mezcla de color",
@@ -105,6 +112,44 @@ pub const DEFS: [Def; 38] = [
     Def { id: "bc:polvo", nombre: "Polvo y rayones", grupo: EL, ctl: &[n("cant", "Cantidad", 0.0, 200.0, 80.0, "%")] },
     Def { id: "bc:radial", nombre: "Fuga de zoom", grupo: EL, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 30.0, "%"), n("x", "Posición X", -50.0, 50.0, 0.0, "%"), n("y", "Posición Y", -50.0, 50.0, 0.0, "%")] },
     Def { id: "bc:caleidoscopio", nombre: "Caleidoscopio", grupo: EL, ctl: &[n("caras", "Caras", 2.0, 16.0, 6.0, ""), n("giro", "Giro", -180.0, 180.0, 0.0, "°"), VEL] },
+    Def { id: "bc:latido", nombre: "Latido", grupo: MO, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 35.0, "%"), n("bpm", "Latidos", 20.0, 200.0, 70.0, "bpm")] },
+    Def { id: "bc:pendulo", nombre: "Péndulo", grupo: MO, ctl: &[n("cant", "Vaivén", 0.0, 60.0, 8.0, "°"), VEL] },
+    Def { id: "bc:rebote", nombre: "Rebote", grupo: MO, ctl: &[n("cant", "Altura", 0.0, 100.0, 25.0, "%"), VEL] },
+    Def { id: "bc:remolino", nombre: "Remolino", grupo: MO, ctl: &[n("cant", "Giro", -720.0, 720.0, 160.0, "°"), n("radio", "Radio", 10.0, 150.0, 80.0, "%"), VEL] },
+    Def { id: "bc:onda", nombre: "Onda expansiva", grupo: MO, ctl: &[n("cant", "Fuerza", 0.0, 200.0, 80.0, "%"), n("cada", "Cada", 0.3, 8.0, 1.5, "s"), n("x", "Posición X", -50.0, 50.0, 0.0, "%"), n("y", "Posición Y", -50.0, 50.0, 0.0, "%")] },
+    Def { id: "bc:sismo", nombre: "Sismo", grupo: MO, ctl: &[n("cant", "Fuerza", 0.0, 200.0, 60.0, "%"), VEL] },
+    Def { id: "bc:azulejos", nombre: "Azulejos", grupo: MO, ctl: &[n("caras", "Por lado", 1.0, 8.0, 2.0, ""), O("modo", "Modo", &["Repetir", "Espejo"])] },
+    Def { id: "bc:espejo", nombre: "Espejo", grupo: MO, ctl: &[O("modo", "Modo", &["Izquierda", "Derecha", "Arriba", "Abajo", "Cuatro"])] },
+    Def { id: "bc:giro3d", nombre: "Giro 3D", grupo: D3, ctl: &[n("rx", "Inclinar", -85.0, 85.0, 12.0, "°"), n("ry", "Voltear", -85.0, 85.0, 28.0, "°"), n("vaiven", "Vaivén", 0.0, 60.0, 10.0, "°"), n("zoom", "Acercar", 20.0, 200.0, 90.0, "%"), VEL] },
+    Def { id: "bc:cubo", nombre: "Cubo", grupo: D3, ctl: &[n("giro", "Giro", -360.0, 360.0, 30.0, "°"), VEL] },
+    Def { id: "bc:bandera", nombre: "Bandera", grupo: D3, ctl: &[n("cant", "Ondas", 0.0, 100.0, 45.0, "%"), n("tam", "Tamaño de ola", 5.0, 100.0, 35.0, "%"), VEL] },
+    Def { id: "bc:lente", nombre: "Lente", grupo: D3, ctl: &[n("cant", "Fuerza", -100.0, 100.0, 60.0, "%"), n("radio", "Radio", 5.0, 120.0, 55.0, "%"), n("x", "Posición X", -50.0, 50.0, 0.0, "%"), n("y", "Posición Y", -50.0, 50.0, 0.0, "%")] },
+    Def { id: "bc:gotas", nombre: "Gotas en el vidrio", grupo: D3, ctl: &[n("cant", "Cantidad", 5.0, 200.0, 100.0, "%"), n("tam", "Tamaño", 1.0, 15.0, 5.0, "%"), VEL] },
+    Def { id: "bc:linterna", nombre: "Linterna", grupo: LZ, ctl: &[n("radio", "Radio", 5.0, 100.0, 35.0, "%"), n("osc", "Oscuridad", 0.0, 100.0, 88.0, "%"), n("vaiven", "Vaivén", 0.0, 50.0, 22.0, "%"), VEL] },
+    Def { id: "bc:discoteca", nombre: "Discoteca", grupo: LZ, ctl: &[n("cant", "Brillo", 0.0, 200.0, 80.0, "%"), n("caras", "Haces", 2.0, 16.0, 7.0, ""), VEL] },
+    Def { id: "bc:iris_luz", nombre: "Luz de arcoíris", grupo: LZ, ctl: &[n("cant", "Brillo", 0.0, 200.0, 70.0, "%"), n("ang", "Ángulo", -90.0, 90.0, 30.0, "°"), VEL] },
+    Def { id: "bc:neon", nombre: "Contorno de neón", grupo: LZ, ctl: &[n("cant", "Brillo", 0.0, 300.0, 140.0, "%"), n("osc", "Oscurecer fondo", 0.0, 100.0, 65.0, "%"), O("modo", "Color", &["Arcoíris", "Un color"]), C("color", "Color", [0.2, 0.9, 1.0, 1.0]), VEL] },
+    Def { id: "bc:rayos", nombre: "Rayos de sol", grupo: LZ, ctl: &[n("cant", "Brillo", 0.0, 200.0, 90.0, "%"), n("desde", "Desde", 0.0, 100.0, 60.0, "%"), n("x", "Posición X", -80.0, 80.0, -30.0, "%"), n("y", "Posición Y", -80.0, 80.0, -45.0, "%")] },
+    Def { id: "bc:relampago", nombre: "Relámpagos", grupo: LZ, ctl: &[n("cant", "Brillo", 0.0, 200.0, 100.0, "%"), n("cada", "Cada", 0.5, 10.0, 2.0, "s")] },
+    Def { id: "bc:fuegos", nombre: "Fuegos artificiales", grupo: FI, ctl: &[CANT, TAM, VEL] },
+    Def { id: "bc:globos", nombre: "Globos", grupo: FI, ctl: &[CANT, TAM, VEL] },
+    Def { id: "bc:burbujas", nombre: "Burbujas", grupo: FI, ctl: &[CANT, TAM, VEL] },
+    Def { id: "bc:petalos", nombre: "Pétalos", grupo: FI, ctl: &[CANT, TAM, VEL, C("color", "Color", [1.0, 0.62, 0.76, 1.0])] },
+    Def { id: "bc:fugaces", nombre: "Estrellas fugaces", grupo: FI, ctl: &[CANT, VEL, C("color", "Color", [0.9, 0.95, 1.0, 1.0])] },
+    Def { id: "bc:murcielagos", nombre: "Murciélagos", grupo: TE, ctl: &[CANT, TAM, VEL] },
+    Def { id: "bc:fantasmal", nombre: "Fantasmal", grupo: TE, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 60.0, "%"), VEL, C("color", "Color", [0.55, 1.0, 0.75, 1.0])] },
+    Def { id: "bc:goteo", nombre: "Goteo", grupo: TE, ctl: &[n("cant", "Avance", 0.0, 100.0, 45.0, "%"), C("color", "Color", [0.42, 0.0, 0.02, 1.0])] },
+    Def { id: "bc:estatica", nombre: "Interferencia", grupo: TE, ctl: &[n("cant", "Fuerza", 0.0, 100.0, 50.0, "%"), VEL] },
+    Def { id: "bc:visor", nombre: "Visor de cámara", grupo: MA, ctl: &[n("cant", "Opacidad", 0.0, 100.0, 90.0, "%"), C("color", "Color", [1.0, 1.0, 1.0, 1.0])] },
+    Def { id: "bc:rollo", nombre: "Rollo de película", grupo: MA, ctl: &[n("tam", "Ancho", 2.0, 20.0, 9.0, "%"), VEL] },
+    Def { id: "bc:redondo", nombre: "Esquinas redondas", grupo: MA, ctl: &[n("tam", "Radio", 0.0, 50.0, 12.0, "%"), n("orilla", "Orilla", 0.0, 30.0, 6.0, "%"), C("color", "Fondo", [0.06, 0.06, 0.08, 1.0])] },
+    Def { id: "bc:apertura", nombre: "Apertura circular", grupo: MA, ctl: &[n("abrir", "Abierto", 0.0, 100.0, 60.0, "%"), n("suave", "Suavidad", 0.0, 50.0, 4.0, "%"), C("color", "Color", [0.0, 0.0, 0.0, 1.0])] },
+    Def { id: "bc:persianas", nombre: "Persianas", grupo: MA, ctl: &[n("abrir", "Abiertas", 0.0, 100.0, 60.0, "%"), n("caras", "Tiras", 2.0, 40.0, 10.0, ""), n("ang", "Ángulo", -90.0, 90.0, 0.0, "°")] },
+    Def { id: "bc:vhs", nombre: "VHS", grupo: RE, ctl: &[n("cant", "Desgaste", 0.0, 200.0, 100.0, "%"), VEL] },
+    Def { id: "bc:boceto", nombre: "Boceto a lápiz", grupo: RE, ctl: &[n("cant", "Trazo", 0.0, 300.0, 140.0, "%"), n("color_k", "Conservar color", 0.0, 100.0, 15.0, "%")] },
+    Def { id: "bc:tramado", nombre: "Dos tintas", grupo: RE, ctl: &[n("tam", "Pixel", 1.0, 20.0, 4.0, ""), C("osc", "Tinta 1", [0.08, 0.10, 0.22, 1.0]), C("cla", "Tinta 2", [0.95, 0.88, 0.70, 1.0])] },
+    Def { id: "bc:codigo", nombre: "Lluvia de código", grupo: RE, ctl: &[n("cant", "Cantidad", 0.0, 200.0, 100.0, "%"), n("tam", "Tamaño", 1.0, 8.0, 2.5, "%"), VEL, C("color", "Color", [0.2, 1.0, 0.4, 1.0])] },
+    Def { id: "bc:mosaico", nombre: "Mosaico", grupo: RE, ctl: &[n("tam", "Tamaño", 1.0, 20.0, 4.0, "%"), n("junta", "Junta", 0.0, 100.0, 35.0, "%")] },
 ];
 
 /// Los que no están en el catálogo de efectos: la mezcla de color y los nodos.
@@ -248,6 +293,30 @@ fn emborronar(d: &[P4], w: usize, h: usize, rx: usize, ry: usize) -> Vec<P4> {
     m
 }
 
+/// La imagen como un plano girado en el espacio. `m`: punto de la pantalla, en altos de cuadro desde el centro.
+fn plano(s: &Img, m: (f32, f32), rx: f32, ry: f32, razon: f32) -> Option<P4> {
+    const CAM: f32 = 1.9;
+    let ((sx, cx), (sy, cy)) = (rx.sin_cos(), ry.sin_cos());
+    // Ejes del plano después de girar.
+    let (ux, uz) = (cy, -sy);
+    let (vx, vy, vz) = (sx * sy, cx, sx * cy);
+    let (nx, ny, nz) = (cx * sy, -sx, cx * cy);
+    let den = m.0 * nx + m.1 * ny + CAM * nz;
+    if den.abs() < 1e-4 {
+        return None;
+    }
+    let k = CAM * nz / den;
+    if k <= 0.0 {
+        return None;
+    }
+    let (px, py, pz) = (m.0 * k, m.1 * k, CAM * k - CAM);
+    let (u, v) = (px * ux + pz * uz, px * vx + py * vy + pz * vz);
+    if u.abs() > razon / 2.0 || v.abs() > 0.5 {
+        return None;
+    }
+    Some(s.en((u / razon + 0.5) * s.w as f32, (v + 0.5) * s.h as f32))
+}
+
 /// Suma de luz que no se quema: 1 - (1-a)(1-b).
 fn pantalla(p: P4, l: [f32; 3]) -> P4 {
     let f = |a: f32, b: f32| 1.0 - (1.0 - a.clamp(0.0, 1.0)) * (1.0 - b.clamp(0.0, 1.0));
@@ -332,6 +401,10 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         _ => [1.0; 4],
     };
     let por = |k: &str| (num(k) / 100.0) as f32;
+    let op = |k: &str| match f.p.get(k).map(|p| p.en(t)) {
+        Some(Valor::Op(i)) => i,
+        _ => 0,
+    };
     let (wf, hf) = (w as f32, h as f32);
     let (cx, cy) = (wf / 2.0, hf / 2.0);
     let e = escala as f32;
@@ -588,7 +661,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
                 let (i, j) = (u.floor() + 0.5, v.floor() + 0.5);
                 let p = s.en((i * co - j * si) * t, (i * si + j * co) * t);
                 let l = luz(p).max(0.02);
-                let r = (1.0 - l * 0.85).sqrt() * 0.66;
+                let r = (1.0 - l * 0.85).max(0.0).sqrt() * 0.66;
                 let d = ((u - i).powi(2) + (v - j).powi(2)).sqrt();
                 let k = escalon(r + 0.08, r - 0.08, d);
                 // Tinta del color del punto, más saturada y oscura, sobre papel.
@@ -893,6 +966,608 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
                 let a = (v.atan2(u) + giro).rem_euclid(paso);
                 let a = if a > paso / 2.0 { paso - a } else { a } - giro * 0.5;
                 s.espejo(cx + r * a.cos(), cy + r * a.sin())
+            })
+        }
+        "bc:latido" => {
+            // Dos golpes seguidos y una pausa.
+            let u = (t * num("bpm") / 60.0).rem_euclid(1.0) as f32;
+            let g = |c: f32, a: f32| a * (-((u - c) / 0.055).powi(2)).exp();
+            let z = 1.0 + por("cant") * 0.35 * (g(0.10, 1.0) + g(0.32, 0.6));
+            pintar!(|x, y, _| s.en(cx + (x - cx) / z, cy + (y - cy) / z))
+        }
+        "bc:pendulo" => {
+            let a = (num("cant") as f32).to_radians() * (tv * 3.0).sin();
+            let (se, co) = a.sin_cos();
+            // Lo justo para que no asomen las orillas.
+            let m = (num("cant") as f32).to_radians().sin().abs();
+            let z = 1.0 / (1.0 + m * (wf / hf).max(hf / wf) * 0.95);
+            pintar!(|x, y, _| {
+                let (u, v) = ((x - cx) * z, (y - cy) * z);
+                s.espejo(cx + u * co + v * se, cy - u * se + v * co)
+            })
+        }
+        "bc:rebote" => {
+            let u = (tv * 1.1).rem_euclid(1.0);
+            let salto = (4.0 * u * (1.0 - u)) * por("cant") * hf * 0.5;
+            let aplasta = 1.0 + 0.12 * por("cant") * (-(u.min(1.0 - u) / 0.06).powi(2)).exp();
+            pintar!(|x, y, _| s.espejo(cx + (x - cx) / aplasta, hf + (y - hf) * aplasta + salto))
+        }
+        "bc:remolino" => {
+            let g = (num("cant") as f32).to_radians() * if tv != 0.0 { (tv * 0.9).sin() } else { 1.0 };
+            let r0 = por("radio") * hf * 0.6;
+            pintar!(|x, y, p| {
+                let (u, v) = (x - cx, y - cy);
+                let r = (u * u + v * v).sqrt();
+                if r >= r0 {
+                    return p;
+                }
+                let (se, co) = (g * (1.0 - r / r0).powi(2)).sin_cos();
+                s.espejo(cx + u * co - v * se, cy + u * se + v * co)
+            })
+        }
+        "bc:onda" => {
+            let u = (t / num("cada").max(0.1)).rem_euclid(1.0) as f32;
+            let (ox, oy) = (cx + por("x") * wf, cy + por("y") * hf);
+            let largo = (wf * wf + hf * hf).sqrt() * 0.6;
+            let (r0, an, g) = (u * largo, hf * 0.09, por("cant") * hf * 0.06 * (1.0 - u));
+            pintar!(|x, y, p| {
+                let (a, b) = (x - ox, y - oy);
+                let r = (a * a + b * b).sqrt().max(1e-3);
+                let k = (r - r0) / an;
+                if k.abs() > 2.5 {
+                    return p;
+                }
+                let d = (k * 2.6).sin() * (-k * k).exp() * g;
+                let q = s.espejo(x - a / r * d, y - b / r * d);
+                let l = 1.0 + 0.35 * d / hf * 12.0;
+                [q[0] * l, q[1] * l, q[2] * l, q[3]]
+            })
+        }
+        "bc:sismo" => {
+            let k = por("cant") * hf * 0.02;
+            let tt = tv * 1.0;
+            let f = |a: f32, b: f32| ((tt * a).sin() + (tt * b + 1.3).sin() * 0.6) * k;
+            let (dx, dy, c) = (f(47.0, 83.0), f(61.0, 97.0), k * 0.35);
+            let z = 1.0 / (1.0 + por("cant") * 0.07);
+            pintar!(|x, y, _| {
+                let (u, v) = (cx + (x - cx) * z + dx, cy + (y - cy) * z + dy);
+                let (a, b, d) = (s.espejo(u - c, v), s.espejo(u, v), s.espejo(u + c, v));
+                [a[0], b[1], d[2], b[3]]
+            })
+        }
+        "bc:azulejos" => {
+            let n = (num("caras") as f32).round().max(1.0);
+            let espejo = op("modo") == 1;
+            pintar!(|x, y, _| {
+                let (u, v) = (x / wf * n, y / hf * n);
+                let f = |u: f32| if espejo && (u.floor() as i32) % 2 == 1 { 1.0 - u.fract() } else { u.fract() };
+                s.en(f(u) * wf, f(v) * hf)
+            })
+        }
+        "bc:espejo" => {
+            let m = op("modo");
+            pintar!(|x, y, _| {
+                let (mut u, mut v) = (x, y);
+                match m {
+                    0 => u = if x > cx { wf - x } else { x },
+                    1 => u = if x < cx { wf - x } else { x },
+                    2 => v = if y > cy { hf - y } else { y },
+                    3 => v = if y < cy { hf - y } else { y },
+                    _ => (u, v) = (if x > cx { wf - x } else { x }, if y > cy { hf - y } else { y }),
+                }
+                s.en(u, v)
+            })
+        }
+        "bc:giro3d" => {
+            let va = (num("vaiven") as f32).to_radians() * (tv * 1.6).sin();
+            let (rx, ry) = ((num("rx") as f32).to_radians(), (num("ry") as f32).to_radians() + va);
+            let z = por("zoom").max(0.05);
+            pintar!(|x, y, _| plano(&s, ((x - cx) / hf / z, (y - cy) / hf / z), rx, ry, wf / hf).unwrap_or([0.0; 4]))
+        }
+        "bc:cubo" => {
+            let a = (num("giro") as f32).to_radians() + tv * 0.8;
+            let razon = wf / hf;
+            let mitad = razon / 2.0;
+            let (se, co) = a.sin_cos();
+            let cam = 2.2 + mitad;
+            pintar!(|x, y, _| {
+                // Rayo desde la cámara contra las cuatro caras de un prisma del ancho de la imagen.
+                let (dx, dy) = ((x - cx) / hf / (cam - mitad) * 1.3, (y - cy) / hf / (cam - mitad) * 1.3);
+                let o = [se * -cam, co * -cam];
+                let dir = [co * dx + se, -se * dx + co];
+                let mut mejor = (f32::MAX, [0.0f32; 4]);
+                for (i, (nx, nz)) in [(0.0f32, -1.0f32), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)].into_iter().enumerate() {
+                    let den = dir[0] * nx + dir[1] * nz;
+                    if den >= -1e-4 {
+                        continue;
+                    }
+                    let k = (mitad - (o[0] * nx + o[1] * nz)) / den;
+                    let (px, pz, py) = (o[0] + dir[0] * k, o[1] + dir[1] * k, dy * k);
+                    let u = -px * nz + pz * nx;
+                    if k > 0.0 && k < mejor.0 && u.abs() <= mitad && py.abs() <= 0.5 {
+                        let l = 0.45 + 0.55 * (-den / (dir[0] * dir[0] + dir[1] * dir[1]).sqrt());
+                        let q = s.en((u + mitad) * hf, (py + 0.5) * hf);
+                        let l = l * if i % 2 == 0 { 1.0 } else { 0.94 };
+                        mejor = (k, [q[0] * l, q[1] * l, q[2] * l, q[3]]);
+                    }
+                }
+                mejor.1
+            })
+        }
+        "bc:bandera" => {
+            let (k, ta) = (por("cant"), por("tam") * wf);
+            pintar!(|x, y, _| {
+                let f = (x / ta * 6.283 - tv * 4.0) + y / hf * 1.4;
+                let a = k * (0.35 + 0.65 * x / wf);
+                let q = s.espejo(x + f.cos() * a * wf * 0.012, y + f.sin() * a * hf * 0.07);
+                let l = 1.0 + f.cos() * a * 0.45;
+                [q[0] * l, q[1] * l, q[2] * l, q[3]]
+            })
+        }
+        "bc:lente" => {
+            let (ox, oy, r0, k) = (cx + por("x") * wf, cy + por("y") * hf, por("radio") * hf * 0.5, por("cant"));
+            pintar!(|x, y, p| {
+                let (u, v) = (x - ox, y - oy);
+                let r = (u * u + v * v).sqrt() / r0.max(1.0);
+                if r >= 1.0 {
+                    return p;
+                }
+                let z = r.max(1e-3).powf(if k >= 0.0 { k * 1.6 } else { k * 0.6 });
+                s.espejo(ox + u * z, oy + v * z)
+            })
+        }
+        "bc:gotas" => {
+            let ta = (por("tam") * hf).max(4.0);
+            let cant = por("cant");
+            pintar!(|x, y, p| {
+                let (mut q, mut a) = (p, 0.0f32);
+                for capa in 0..2 {
+                    let t2 = ta * (1.0 - 0.45 * capa as f32);
+                    let baja = tv * hf * 0.05 * (capa as f32);
+                    let (i, j) = ((x / t2).floor() as i32, ((y - baja) / t2).floor() as i32);
+                    if azar(i + capa * 57, j) > 0.5 * cant {
+                        continue;
+                    }
+                    let (ox, oy) = ((i as f32 + 0.3 + 0.4 * azar(i, j + 9)) * t2, (j as f32 + 0.3 + 0.4 * azar(i + 5, j)) * t2 + baja);
+                    let r = t2 * (0.16 + 0.22 * azar(i + 2, j + 3));
+                    let (u, v) = ((x - ox) / r, (y - oy) / (r * 1.15));
+                    let d = u * u + v * v;
+                    if d < 1.0 {
+                        // Cada gota es una lente que ve la imagen de cabeza.
+                        let f = 1.0 - d;
+                        let z = s.espejo(ox - u * r * 5.0 * f.sqrt(), oy - v * r * 5.0 * f.sqrt());
+                        let l = 1.0 + 0.5 * (-(u + 0.4) * 0.6 - (v + 0.4) * 0.8) * (1.0 - f);
+                        q = mez(q, [z[0] * l, z[1] * l, z[2] * l, p[3]], escalon(0.0, 0.2, f));
+                        a = a.max(f);
+                    }
+                }
+                q
+            })
+        }
+        "bc:linterna" => {
+            let (r0, osc, va) = (por("radio") * hf * 0.6, por("osc"), por("vaiven"));
+            let (ox, oy) = (cx + (tv * 0.9).sin() * va * wf + (tv * 2.3).sin() * wf * 0.01, cy + (tv * 1.3 + 0.7).sin() * va * hf * 0.6);
+            pintar!(|x, y, p| {
+                let d = ((x - ox).powi(2) + (y - oy).powi(2)).sqrt();
+                let l = 1.0 - escalon(r0 * 0.45, r0 * 1.25, d);
+                let k = (1.0 - osc) + osc * l * 1.08;
+                [p[0] * k, p[1] * k * 0.99, p[2] * k * 0.94, p[3]]
+            })
+        }
+        "bc:discoteca" => {
+            let (g, n) = (por("cant"), (num("caras") as f32).round().max(2.0));
+            pintar!(|x, y, p| {
+                let mut l = [0.0f32; 3];
+                for lado in 0..2 {
+                    let (ox, dir) = if lado == 0 { (wf * 0.1, 1.0) } else { (wf * 0.9, -1.0) };
+                    let (u, v) = (x - ox, y + hf * 0.12);
+                    let a = u.atan2(v) * n / 1.9 + dir * tv * 1.7 + lado as f32;
+                    let haz = (a.sin() * 0.5 + 0.5).powi(14);
+                    let c = arcoiris(a.floor() * 0.17 + tv * 0.07 + lado as f32 * 0.4 + (a / 6.283).floor() * 0.29);
+                    let cae = 1.0 - 0.6 * (v / hf).clamp(0.0, 1.0);
+                    (0..3).for_each(|j| l[j] += c[j] * haz * g * 0.55 * cae);
+                }
+                let d = 1.0 - 0.18 * g.min(1.0);
+                pantalla([p[0] * d, p[1] * d, p[2] * d, p[3]], l)
+            })
+        }
+        "bc:iris_luz" => {
+            let (se, co) = (num("ang") as f32).to_radians().sin_cos();
+            let g = por("cant");
+            pintar!(|x, y, p| {
+                let u = ((x - cx) * co + (y - cy) * se) / hf;
+                let o = nubes(u * 1.3 + tv * 0.15, y / hf * 0.6 + 3.0);
+                let b = (-((u - (tv * 0.5).sin() * 0.6) * 2.6).powi(2)).exp() * (0.5 + o);
+                let c = arcoiris(u * 0.7 + o * 0.3 + tv * 0.05);
+                pantalla(p, [c[0] * b * g * 0.55, c[1] * b * g * 0.55, c[2] * b * g * 0.55])
+            })
+        }
+        "bc:neon" => {
+            let (g, osc, uno) = (por("cant"), 1.0 - por("osc"), op("modo") == 1);
+            let d = e.max(0.5) * 1.5;
+            pintar!(|x, y, p| {
+                let l = |a: f32, b: f32| luz(s.en(x + a, y + b));
+                let gx = l(d, -d) + 2.0 * l(d, 0.0) + l(d, d) - l(-d, -d) - 2.0 * l(-d, 0.0) - l(-d, d);
+                let gy = l(-d, d) + 2.0 * l(0.0, d) + l(d, d) - l(-d, -d) - 2.0 * l(0.0, -d) - l(d, -d);
+                let b = escalon(0.12, 0.9, (gx * gx + gy * gy).sqrt()) * g;
+                let c = if uno { c1 } else { arcoiris(x / wf * 0.6 + y / hf * 0.4 + tv * 0.15) };
+                pantalla([p[0] * osc, p[1] * osc, p[2] * osc, p[3]], [c[0] * b, c[1] * b, c[2] * b])
+            })
+        }
+        "bc:rayos" => {
+            let (m, k) = luces(&s, por("desde"), 2.0 * e, 2.0 * e);
+            let (ox, oy, g) = (cx + por("x") * wf, cy + por("y") * hf, por("cant"));
+            const N: usize = 28;
+            pintar!(|x, y, p| {
+                let mut q = [0.0f32; 3];
+                let r = azar(x as i32, y as i32);
+                let mut peso = 1.0;
+                for i in 0..N {
+                    let z = 1.0 - (i as f32 + r) / N as f32 * 0.85;
+                    let v = m.en((ox + (x - ox) * z) * k, (oy + (y - oy) * z) * k);
+                    (0..3).for_each(|j| q[j] += v[j] * peso / N as f32);
+                    peso *= 0.965;
+                }
+                pantalla(p, [q[0] * g * 1.9, q[1] * g * 1.75, q[2] * g * 1.4])
+            })
+        }
+        "bc:relampago" => {
+            let cada = num("cada").max(0.2);
+            let (n, u) = ((t / cada).floor() as i32, (t / cada).rem_euclid(1.0) * cada);
+            let pulso = |d: f64, a: f32| if u >= d { a * (-((u - d) / 0.07) as f32).exp() } else { 0.0 };
+            let g = por("cant") * (pulso(0.0, 1.0) + pulso(0.16 + 0.1 * azar(n, 3) as f64, 0.75));
+            // Un rayo quebrado que cambia en cada relámpago.
+            let sx = (0.15 + 0.7 * azar(n, 1)) * wf;
+            let raya = |y: f32| sx + (0..5).map(|k| (ruido(y / hf * (4.0 * 2f32.powi(k)) + 30.0 * azar(n, 9 + k), 5.0 * n as f32) - 0.5) * wf * 0.22 / 1.9f32.powi(k)).sum::<f32>();
+            let fin = hf * (0.55 + 0.4 * azar(n, 6));
+            pintar!(|x, y, p| {
+                let base = 0.72 + 0.28 * g.min(1.0);
+                let mut l = g * 0.45;
+                if y < fin && g > 0.02 {
+                    let d = (x - raya(y)).abs() / (hf * 0.006);
+                    l += g * (1.6 / (1.0 + d * d) + 0.5 * (-d * 0.12).exp());
+                }
+                pantalla([p[0] * base, p[1] * base, p[2] * base * 1.04, p[3]], [l * 0.82, l * 0.9, l])
+            })
+        }
+        "bc:fuegos" => {
+            let n = (5.0 * por("cant")).ceil() as i32;
+            let mut ps: Vec<(f32, f32, f32, i32)> = vec![];
+            for k in 0..n {
+                let ciclo = 1.7 + azar(k, 2);
+                let tt = tv + azar(k, 8) * ciclo;
+                let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0));
+                let (ox, oy) = ((0.12 + 0.76 * azar(k, vez)) * wf, (0.12 + 0.4 * azar(k + 7, vez)) * hf);
+                if u < 0.22 {
+                    ps.push((ox, hf + (oy - hf) * (u / 0.22), hf * 0.006 * por("tam"), k * 1000 + 999));
+                    continue;
+                }
+                let v = (u - 0.22) / 0.78;
+                let r = hf * 0.24 * por("tam") * (1.0 - (1.0 - v).powi(3));
+                for j in 0..46 {
+                    let a = j as f32 * 2.39996 + azar(k, vez + 3) * 6.0;
+                    let q = r * (0.45 + 0.55 * azar(j, k + vez));
+                    let vivo = (1.0 - v) * (0.6 + 0.4 * (tv * 30.0 + j as f32).sin());
+                    ps.push((ox + a.cos() * q, oy + a.sin() * q + v * v * hf * 0.07, hf * 0.011 * por("tam") * vivo.max(0.05), k * 1000 + j));
+                }
+            }
+            estampar(&ps, &|i| { let c = arcoiris(azar(i / 1000, 5)); [0.35 + 0.65 * c[0], 0.35 + 0.65 * c[1], 0.35 + 0.65 * c[2], 1.0] }, &|u, v, _| (1.0 - (u * u + v * v).sqrt()).max(0.0).powf(1.4), true)
+        }
+        "bc:globos" => {
+            let ps = particulas(12.0, -0.9, 0.06);
+            estampar(
+                &ps,
+                &|i| { let c = arcoiris(azar(i, 21)); [0.25 + 0.75 * c[0], 0.2 + 0.7 * c[1], 0.25 + 0.75 * c[2], 1.0] },
+                &|u, v, _| {
+                    let cuerpo = 1.0 - escalon(0.93, 1.0, ((u / 0.62).powi(2) + ((v + 0.25) / 0.72).powi(2)).sqrt());
+                    let hilo = if v > 0.46 && (u - (v * 9.0).sin() * 0.05).abs() < 0.015 { 0.6 } else { 0.0 };
+                    let luz = 1.0 - 0.35 * escalon(0.1, 0.9, ((u + 0.2).powi(2) + (v + 0.5).powi(2)).sqrt());
+                    (cuerpo * 0.92 * luz).max(hilo)
+                },
+                false,
+            )
+        }
+        "bc:burbujas" => {
+            let ps = particulas(22.0, -0.5, 0.045);
+            estampar(
+                &ps,
+                &|i| { let c = arcoiris(azar(i, 11) + tv * 0.1); [0.6 + 0.4 * c[0], 0.6 + 0.4 * c[1], 0.6 + 0.4 * c[2], 1.0] },
+                &|u, v, _| {
+                    let d = (u * u + v * v).sqrt();
+                    let anillo = (-((d - 0.9) / 0.07).powi(2)).exp() * 0.75;
+                    let brillo = (-(((u + 0.38).powi(2) + (v + 0.42).powi(2)) / 0.025)).exp() * 0.9;
+                    (anillo + brillo + if d < 0.9 { 0.07 } else { 0.0 }).min(1.0)
+                },
+                true,
+            )
+        }
+        "bc:petalos" => {
+            let ps = particulas(46.0, 0.75, 0.016);
+            estampar(
+                &ps,
+                &|i| { let k = 0.8 + 0.3 * azar(i, 4); [c1[0] * k, c1[1] * k, c1[2] * k, 1.0] },
+                &|u, v, i| {
+                    let a = azar(i, 8) * 6.28 + tv * (1.0 + 2.0 * azar(i, 9));
+                    let (se, co) = a.sin_cos();
+                    let (p, q) = (u * co + v * se, (-u * se + v * co) / (0.35 + 0.4 * (tv * 2.0 + azar(i, 6) * 9.0).sin().abs()));
+                    let r = (p * p + q * q).sqrt() + 0.22 * p;
+                    (1.0 - escalon(0.62, 0.8, r)) * (0.75 + 0.25 * (1.0 - p.abs()))
+                },
+                false,
+            )
+        }
+        "bc:fugaces" => {
+            let n = (7.0 * por("cant")).ceil() as i32;
+            let v: Vec<(f32, f32, f32, f32, f32)> = (0..n)
+                .filter_map(|i| {
+                    let ciclo = 2.5 + 3.0 * azar(i, 2);
+                    let tt = tv + azar(i, 3) * ciclo;
+                    let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0) * ciclo / 0.9);
+                    (u < 1.0).then(|| {
+                        let (ox, oy) = (azar(i, vez) * wf * 1.1, azar(i + 4, vez) * hf * 0.5);
+                        let l = hf * (0.25 + 0.25 * azar(i, vez + 2));
+                        (ox - u * l * 1.6, oy + u * l, l * 0.55, (u * 3.14).sin(), 0.5)
+                    })
+                })
+                .collect();
+            pintar!(|x, y, p| {
+                let mut l = 0.0f32;
+                for (ox, oy, largo, a, _) in &v {
+                    // Cola hacia atrás del movimiento.
+                    let (u, w2) = ((x - ox) * 0.848 - (y - oy) * 0.53, (x - ox) * 0.53 + (y - oy) * 0.848);
+                    if u > 0.0 && u < *largo {
+                        l += 1.6 * a * (1.0 - u / largo).powi(2) / (1.0 + (w2 / (2.2 * e.max(0.5))).powi(2));
+                    }
+                    l += a * 1.2 / (1.0 + (u * u + w2 * w2) / (3.0 * e * e).max(1.0));
+                }
+                pantalla(p, [c1[0] * l, c1[1] * l, c1[2] * l])
+            })
+        }
+        "bc:murcielagos" => {
+            let ps: Vec<(f32, f32, f32, i32)> = (0..(16.0 * por("cant")) as i32)
+                .map(|i| {
+                    let x = (azar(i, 1) + tv * (0.09 + 0.1 * azar(i, 2))).rem_euclid(1.3) - 0.15;
+                    let y = azar(i, 3) * 0.75 + 0.05 + 0.07 * (tv * 2.0 + azar(i, 4) * 9.0).sin();
+                    (x * wf, y * hf, hf * 0.05 * (0.4 + azar(i, 5)) * por("tam"), i)
+                })
+                .collect();
+            estampar(
+                &ps,
+                &|_| [0.02, 0.01, 0.03, 1.0],
+                &|u, v, i| {
+                    let ala = (tv * (9.0 + 4.0 * azar(i, 6)) + azar(i, 7) * 6.0).sin() * 0.28;
+                    let a = u.abs();
+                    let arriba = -0.12 - ala * a * 1.6 - 0.16 * (a * 3.14).sin();
+                    let abajo = arriba + 0.36 * (1.0 - a) + 0.09 * (a * 14.0).sin().abs();
+                    let alas = a < 0.98 && v > arriba && v < abajo;
+                    let cuerpo = (u / 0.13).powi(2) + (v / 0.26).powi(2) < 1.0;
+                    let orejas = (a - 0.07).abs() < 0.05 && v < -0.18 && v > -0.36 + (a - 0.07).abs() * 3.0;
+                    if alas || cuerpo || orejas { 0.96 } else { 0.0 }
+                },
+                false,
+            )
+        }
+        "bc:fantasmal" => {
+            let g = por("cant");
+            // Respira: la luz va y viene.
+            let pul = 0.9 + 0.12 * (tv * 2.7).sin();
+            pintar!(|x, y, p| {
+                let d = (nubes(x / hf * 2.0 + tv * 0.3, y / hf * 2.0 - tv * 0.5) - 0.5) * hf * 0.08 * g;
+                let (a, b) = (s.espejo(x + d + hf * 0.03 * g, y), s.espejo(x - d - hf * 0.03 * g, y - hf * 0.02 * g));
+                let l = luz(a) * 0.5 + luz(b) * 0.5;
+                let q = [l * c1[0] * pul, l * c1[1] * pul, l * c1[2] * pul, p[3]];
+                let m = mez(p, q, g * 0.85);
+                let vi = 1.0 - g * 0.55 * escalon(0.25, 1.0, ((x - cx) / cx).powi(2) * 0.5 + ((y - cy) / cy).powi(2) * 0.5);
+                [m[0] * vi, m[1] * vi, m[2] * vi, m[3]]
+            })
+        }
+        "bc:goteo" => {
+            let g = por("cant");
+            let ta = hf * 0.05;
+            pintar!(|x, y, p| {
+                let i = (x / ta).floor();
+                let alto = |k: f32| {
+                    let k = k as i32;
+                    g * hf * (0.12 + 0.95 * azar(k, 3).powi(2))
+                };
+                let u = x / ta - i - 0.5;
+                // Cada chorro es un tubo con punta redonda; entre chorros baja menos.
+                let h0 = alto(i);
+                let base = g * hf * (0.08 + 0.05 * nubes(x / hf * 5.0, 2.0));
+                let an = 0.22 + 0.18 * azar(i as i32, 8);
+                let punta = h0 - ta * an;
+                let d = if y > punta { (u * u + ((y - punta) / ta).powi(2)).sqrt() } else { u.abs() };
+                let a = (1.0 - escalon(an - 0.06, an, d)).max(1.0 - escalon(base - 2.0, base + 2.0, y - (1.0 - (u * 2.0).powi(2)).max(0.0) * 0.0));
+                if g <= 0.0 || a <= 0.0 {
+                    return p;
+                }
+                let brillo = 0.75 + 0.55 * (-((u + an * 0.4) / 0.09).powi(2)).exp();
+                mez(p, [c1[0] * brillo, c1[1] * brillo, c1[2] * brillo, p[3]], a)
+            })
+        }
+        "bc:estatica" => {
+            let g = por("cant");
+            let k = (tv * 24.0).floor() as i32;
+            pintar!(|x, y, p| {
+                let fila = (y / (hf * 0.02)).floor() as i32;
+                let salto = if azar(fila, k) > 0.9 { (azar(fila + 3, k) - 0.5) * wf * 0.2 * g } else { 0.0 };
+                let q = s.espejo(x + salto, y);
+                let nie = azar((x / e.max(0.5)) as i32 + k * 131, (y / e.max(0.5)) as i32 + k * 7);
+                let m = g * (0.35 + 0.5 * escalon(0.6, 0.9, nubes(y / hf * 3.0, tv * 2.0)));
+                mez([q[0], q[1], q[2], p[3]], [nie, nie, nie, p[3]], m.min(0.95))
+            })
+        }
+        "bc:visor" => {
+            let g = por("cant");
+            let (mx, my, l, gr) = (wf * 0.06, hf * 0.08, hf * 0.09, (hf * 0.006).max(1.0));
+            let rec = t.rem_euclid(1.0) < 0.6;
+            pintar!(|x, y, p| {
+                let (u, v) = (x.min(wf - x), y.min(hf - y));
+                let esq = (u >= mx && u < mx + l && (v - my).abs() < gr) || (v >= my && v < my + l && (u - mx).abs() < gr);
+                let (a, b) = ((x - cx).abs(), (y - cy).abs());
+                let cruz = (a < gr * 0.5 && b < hf * 0.03) || (b < gr * 0.5 && a < hf * 0.03);
+                // Batería, arriba a la derecha.
+                let (bx, by) = (x - (wf - mx - hf * 0.13), y - (my + hf * 0.04));
+                let dentro = bx >= 0.0 && bx < hf * 0.09 && by >= 0.0 && by < hf * 0.04;
+                let bat = (dentro && (bx < gr || bx > hf * 0.09 - gr || by < gr || by > hf * 0.04 - gr)) || (dentro && bx > gr * 2.0 && bx < hf * 0.06 && by > gr * 2.0 && by < hf * 0.04 - gr * 2.0) || (bx >= hf * 0.09 && bx < hf * 0.097 && by > hf * 0.012 && by < hf * 0.028);
+                let (rx, ry) = (x - (mx + hf * 0.06), y - (my + hf * 0.06));
+                let punto = 1.0 - escalon(hf * 0.016, hf * 0.019, (rx * rx + ry * ry).sqrt());
+                let mut q = p;
+                if esq || cruz || bat {
+                    q = mez(q, [c1[0], c1[1], c1[2], q[3].max(g)], g);
+                }
+                if rec && punto > 0.0 {
+                    q = mez(q, [1.0, 0.12, 0.12, q[3].max(g)], punto * g);
+                }
+                q
+            })
+        }
+        "bc:rollo" => {
+            let an = por("tam") * wf;
+            let paso = hf / 7.0;
+            let baja = tv * hf * 0.9;
+            pintar!(|x, y, p| {
+                let u = x.min(wf - x);
+                if u > an {
+                    return p;
+                }
+                let v = (y + baja).rem_euclid(paso) / paso - 0.5;
+                let (a, b) = ((u / an - 0.5).abs() / 0.28, v.abs() / 0.27);
+                // Perforación con esquinas redondas.
+                let d = (a.max(0.7) - 0.7).hypot(b.max(0.7) - 0.7);
+                let hueco = 1.0 - escalon(0.24, 0.3, d);
+                let c = 0.03 + 0.9 * hueco;
+                [c, c * 0.98, c * 0.94, 1.0]
+            })
+        }
+        "bc:redondo" => {
+            let m = por("orilla") * hf;
+            let (hw, hh) = (cx - m, cy - m);
+            let r = (por("tam") * hf).min(hw).min(hh);
+            pintar!(|x, y, _| {
+                let (u, v) = ((x - cx).abs() - (hw - r), (y - cy).abs() - (hh - r));
+                let d = u.max(0.0).hypot(v.max(0.0)) + u.max(v).min(0.0) - r;
+                let (sx, sy) = (cx + (x - cx) * cx / hw.max(1.0), cy + (y - cy) * cy / hh.max(1.0));
+                let q = s.en(sx, sy);
+                let som = 1.0 - 0.45 * (1.0 - escalon(0.0, m * 0.8 + 1.0, d.max(0.0)));
+                mez([c1[0] * som, c1[1] * som, c1[2] * som, c1[3]], q, 1.0 - escalon(-1.0 * e, 1.0 * e, d))
+            })
+        }
+        "bc:apertura" => {
+            let r = por("abrir") * (cx * cx + cy * cy).sqrt() * 1.02;
+            let su = (por("suave") * hf).max(1.0);
+            pintar!(|x, y, p| {
+                let d = ((x - cx).powi(2) + (y - cy).powi(2)).sqrt();
+                let a = escalon(r - su, r + su * 0.2, d) * if por("abrir") >= 0.999 { 0.0 } else { 1.0 };
+                mez(p, [c1[0], c1[1], c1[2], p[3]], a)
+            })
+        }
+        "bc:persianas" => {
+            let (se, co) = (num("ang") as f32).to_radians().sin_cos();
+            let n = (num("caras") as f32).round().max(1.0);
+            let a = por("abrir");
+            let largo = wf * co.abs() + hf * se.abs();
+            pintar!(|x, y, p| {
+                let u = (((x - cx) * co + (y - cy) * se) / largo + 0.5) * n;
+                let d = (u.fract() - 0.5).abs() * 2.0;
+                let tapa = escalon(a - 0.04, a + 0.01, d) * if a >= 0.999 { 0.0 } else { 1.0 };
+                [p[0] * (1.0 - tapa), p[1] * (1.0 - tapa), p[2] * (1.0 - tapa), p[3]]
+            })
+        }
+        "bc:vhs" => {
+            let g = por("cant");
+            let k = (tv * 25.0).floor() as i32;
+            pintar!(|x, y, p| {
+                // Temblor de renglón, más fuerte en la banda de seguimiento de abajo.
+                let banda = escalon(0.93, 0.97, y / hf + 0.02 * (tv * 1.3).sin());
+                let dx = ((ruido(y / hf * 70.0, tv * 9.0) - 0.5) * 0.006 + banda * (ruido(y / hf * 240.0, k as f32) - 0.5) * 0.12) * wf * g;
+                let l = luz(s.espejo(x + dx, y));
+                // El color llega corrido y más borroso que la luz.
+                let c = (0..5).map(|i| s.espejo(x + dx + (i as f32 - 1.0) * 0.0035 * wf * g.max(0.1), y)).fold([0.0f32; 4], |a, q| std::array::from_fn(|j| a[j] + q[j] / 5.0));
+                let lc = luz(c);
+                let mut q = [l + (c[0] - lc) * 1.15, l + (c[1] - lc) * 0.95, l + (c[2] - lc) * 1.1, p[3]];
+                let nie = azar((x / (2.0 * e.max(0.5))) as i32 + k * 91, (y / e.max(0.5)) as i32 + k * 17) - 0.5;
+                let raya = if (y / (2.0 * e.max(0.5))) as i32 % 2 == 0 { 0.94 } else { 1.0 };
+                for v in q.iter_mut().take(3) {
+                    *v = ((*v * 0.9 + 0.045) + nie * (0.10 + 0.5 * banda) * g) * (1.0 - (1.0 - raya) * g.min(1.0));
+                }
+                q
+            })
+        }
+        "bc:boceto" => {
+            let (g, k) = (por("cant"), por("color_k"));
+            let d = e.max(0.5) * 1.2;
+            pintar!(|x, y, p| {
+                let l = |a: f32, b: f32| luz(s.en(x + a, y + b));
+                let gx = l(d, 0.0) - l(-d, 0.0);
+                let gy = l(0.0, d) - l(0.0, -d);
+                let b = (gx * gx + gy * gy).sqrt() * g * 4.0;
+                // Rayado cruzado en lo oscuro.
+                let lo = luz(p);
+                let paso = 6.0 * e.max(0.5);
+                let ray = |a: f32| ((a / paso).fract() - 0.5).abs() * 2.0;
+                let mut som = 0.0;
+                if lo < 0.55 { som += 0.28 * (1.0 - escalon(0.25, 0.6, ray(x + y + 1e4))); }
+                if lo < 0.3 { som += 0.30 * (1.0 - escalon(0.25, 0.6, ray(x - y + 2e4))); }
+                let v = (0.97 - b - som + (azar(x as i32, y as i32) - 0.5) * 0.05).clamp(0.0, 1.0);
+                mez([v, v, v * 0.98, p[3]], [p[0] * v, p[1] * v, p[2] * v, p[3]], k)
+            })
+        }
+        "bc:tramado" => {
+            let ta = ((num("tam") as f32) * e).max(1.0);
+            let (a, b) = (col("osc"), col("cla"));
+            const M: [u8; 16] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+            pintar!(|x, y, p| {
+                let (i, j) = ((x / ta).floor(), (y / ta).floor());
+                let q = s.en((i + 0.5) * ta, (j + 0.5) * ta);
+                let u = (M[((j as i32 & 3) * 4 + (i as i32 & 3)) as usize] as f32 + 0.5) / 16.0;
+                let c = if (luz(q) - 0.5) * 1.15 + 0.5 > u { b } else { a };
+                [c[0], c[1], c[2], p[3]]
+            })
+        }
+        "bc:codigo" => {
+            let ta = (por("tam") * hf).max(4.0);
+            let g = por("cant");
+            pintar!(|x, y, p| {
+                let (i, j) = ((x / ta).floor() as i32, (y / ta).floor() as i32);
+                let filas = hf / ta;
+                let v = 4.0 + 9.0 * azar(i, 1);
+                let cab = (tv * v + azar(i, 2) * filas * 2.0).rem_euclid(filas * 1.7);
+                let d = cab - j as f32;
+                let k = (tv * 7.0 * (0.3 + azar(i, j)) + azar(j, i) * 50.0) as i32;
+                // Signo de 5×7 puntos hecho al azar.
+                let (u, w2) = (((x / ta).fract() * 6.0) as i32, ((y / ta).fract() * 8.0) as i32);
+                let prende = u < 5 && w2 < 7 && azar(i * 37 + u.min(4 - u) + k * 13, j * 71 + w2) > 0.52;
+                let l = if d >= 0.0 && prende { (1.0 - d / (filas * 0.55)).max(0.0) } else { 0.0 };
+                let cabeza = if d >= 0.0 && d < 1.0 && prende { 0.8 } else { 0.0 };
+                let os = 1.0 - 0.45 * g.min(1.0);
+                let b = luz(p);
+                let z = [p[0] * os * 0.6, p[1] * os * (0.8 + 0.2 * b), p[2] * os * 0.6, p[3]];
+                pantalla(z, [c1[0] * l * g + cabeza, c1[1] * l * g + cabeza, c1[2] * l * g + cabeza])
+            })
+        }
+        "bc:mosaico" => {
+            let ta = (por("tam") * hf).max(3.0);
+            let junta = por("junta");
+            pintar!(|x, y, p| {
+                // La pieza más cercana de una rejilla movida al azar.
+                let (i, j) = ((x / ta).floor() as i32, (y / ta).floor() as i32);
+                let (mut d1, mut d2, mut o) = (f32::MAX, f32::MAX, (x, y));
+                for a in -1..=1 {
+                    for b in -1..=1 {
+                        let (u, v) = (i + a, j + b);
+                        let q = ((u as f32 + 0.15 + 0.7 * azar(u, v)) * ta, (v as f32 + 0.15 + 0.7 * azar(u + 91, v)) * ta);
+                        let d = (x - q.0).hypot(y - q.1);
+                        if d < d1 {
+                            (d2, d1, o) = (d1, d, q);
+                        } else if d < d2 {
+                            d2 = d;
+                        }
+                    }
+                }
+                let q = s.en(o.0, o.1);
+                let l = 1.0 - junta * (1.0 - escalon(ta * 0.03, ta * 0.12, d2 - d1));
+                [q[0] * l, q[1] * l, q[2] * l, p[3]]
             })
         }
         _ => img.clone(),

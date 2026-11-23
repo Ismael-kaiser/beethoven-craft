@@ -85,6 +85,10 @@ Los efectos de un clip se conectan en lugar de ir en lista. Cada nodo tiene entr
 
 Son 66 y todos son puntos de partida de «Mezcla de color»: después de ponerlos se pueden ajustar.
 
+## Efectos y estilos propios
+
+Además de los efectos de EffectCraft y FilmCraft, Movie trae 76 hechos para este proyecto, por grupo: Al ritmo, Pantallas y cámaras, Adornos, Cómic y color, Espejos y ondas, Elegantes, Movimiento y pulso, 3D y lentes, Luces, Fiesta y naturaleza, Terror, Marcos y aperturas, Retro y dibujo. Los **estilos** juntan varios con sus valores. Todos sus controles se pueden animar.
+
 ## Proyecto
 
 `.bcraft` es un binario propio, comprimido y con suma de control. «Guardar con todo incluido» mete también los videos y audios. Los proyectos viejos en JSON se siguen abriendo.
