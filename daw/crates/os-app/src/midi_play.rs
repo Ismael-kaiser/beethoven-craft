@@ -1,0 +1,675 @@
+// Copyright (C) 2026 ItsAlphaNeon
+// SPDX-License-Identifier: GPL-3.0-or-later
+// This file is part of Beethoven DAW, based on Lemon Studio: https://github.com/ItsAlphaNeon/Lemon-Studio
+
+//! What the input devices' messages do (spec: ui/midi-settings.md §3, §4, §8): notes play the selected channel through
+//! the velocity curve and links, the foot pedal holds them, the channels set on Settings > MIDI preview, jump and mute,
+//! pitch bend bends, linked controllers drive their knobs (`crate::remote`), the rest goes to the hosted instrument,
+//! and the external sync device's Start / Continue / Stop / position drive playback. Also what Settings > MIDI shows
+//! of the devices (`Page`) and what master sync sends (`App::midi_out_tick`).
+// spec: ui/midi-settings.md
+
+use std::time::{Duration, Instant};
+
+use crate::app::App;
+use crate::session::Session;
+use crate::midi_cfg::{self as cfg, Offset, Switch};
+use crate::midi_in::{Ev, InPort, Msg};
+use crate::midi_notes::{self, Then, To};
+use crate::prefs;
+use crate::views::midi_page::{CurveEdit, MAct};
+
+/// What Settings > MIDI shows of the devices, kept up to date by `App::midi_tick`.
+#[derive(Debug, Default, Clone)]
+pub struct Page {
+    pub inputs: Vec<InPort>,
+    pub outputs: Vec<String>,
+    /// The device each list has selected (its options show under it).
+    pub input: usize,
+    pub output: usize,
+    /// External sync's status line ("Status: off").
+    pub status: String,
+    /// The mapping curve window, while open.
+    pub curve: Option<crate::views::midi_page::CurveEdit>,
+}
+
+impl Page {
+    pub fn selected_input(&self) -> Option<&InPort> {
+        self.inputs.get(self.input)
+    }
+
+    pub fn selected_output(&self) -> Option<&String> {
+        self.outputs.get(self.output)
+    }
+}
+
+/// The external tempo is applied when it moved more than this, at most every `TEMPO_EVERY` (spec §8).
+const TEMPO_STEP: f64 = 0.05;
+const TEMPO_EVERY: Duration = Duration::from_millis(250);
+
+impl App {
+    /// The input devices' messages, the device lists, the external clock and what master sync sends: on every tick.
+    pub fn midi_tick(&mut self) {
+        if self.state.session.midi.take_changed() {
+            self.midi_refresh(false);
+        }
+        let evs = self.state.session.midi.poll();
+        self.midi_events(evs);
+        self.midi_pending();
+        self.ext_sync_tick();
+        self.remote_tick();
+        midi_notes::unbend_in(&mut self.state.session, self.state.selected_channel);
+        self.midi_out_tick();
+    }
+
+    /// Lists the devices again (Refresh device list, the watcher, a device switched on or off); `said` names what
+    /// changed in the hint bar.
+    pub fn midi_refresh(&mut self, said: bool) {
+        let before: Vec<String> = self.midi_page().inputs.iter().map(|i| i.name.clone()).collect();
+        let opened = self.state.session.midi.refresh(&self.state.session.settings);
+        self.state.session.midi.set_ext_sync(cfg::ext_sync(&self.state.session.settings).as_deref());
+        let p = &mut self.state.midi;
+        p.inputs = self.state.session.midi.inputs.clone();
+        p.outputs = self.state.session.midi.outputs.clone();
+        p.input = p.input.min(p.inputs.len().saturating_sub(1));
+        p.output = p.output.min(p.outputs.len().saturating_sub(1));
+        let failed: Vec<&str> = p.inputs.iter().filter(|i| i.failed).map(|i| i.name.as_str()).collect();
+        let added: Vec<&String> = opened.iter().filter(|n| !before.contains(n)).collect();
+        let msg = if !failed.is_empty() {
+            Some(format!("MIDI input in use by another program: {}", failed.join(", ")))
+        } else if !added.is_empty() {
+            Some(format!("MIDI input: {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")))
+        } else if said {
+            Some(format!("MIDI devices: {} input(s), {} output(s)", p.inputs.len(), p.outputs.len()))
+        } else {
+            None
+        };
+        if let Some(m) = msg {
+            self.state.message = Some(m);
+        }
+        self.invalidate();
+    }
+
+    fn midi_page(&self) -> &Page {
+        &self.state.midi
+    }
+
+    /// Where the devices' notes go: the selected channel.
+    fn midi_to(&self) -> To {
+        let row = self.state.selected_channel;
+        To { row, through: crate::rack::through(&self.state, row) }
+    }
+
+    /// Messages received, oldest first (spec §3, §4, §8): the session plays them (`crate::midi_notes`), and what else
+    /// they do happens here. With Enable MIDI remote control off, all are ignored.
+    pub fn midi_events(&mut self, evs: Vec<Ev>) {
+        if evs.is_empty() || !Switch::Remote.on(&self.state.session.settings) {
+            return;
+        }
+        let pedal = prefs::check(&prefs::FOOT_PEDAL);
+        let notes = evs.iter().any(|e| matches!(e.msg, Msg::On { .. } | Msg::Off { .. }) || pedal && matches!(e.msg, Msg::Cc { n: 64, .. }));
+        if evs.iter().any(|e| matches!(e.msg, Msg::On { .. })) {
+            self.key_tap();
+        }
+        if std::env::var_os("OS_DEBUG").is_some() {
+            let waited = evs.iter().map(|e| e.at.elapsed()).max().unwrap_or_default();
+            eprintln!("[midi] {} message(s), the oldest waited {:.2} ms for the window", evs.len(), waited.as_secs_f64() * 1000.0);
+        }
+        let to = self.midi_to();
+        let then = midi_notes::events_in(&mut self.state.session, evs, to);
+        self.midi_then(then);
+        if notes {
+            self.typing_lit_changed();
+        }
+    }
+
+    /// What the messages do besides sounding: recording and step input, marker jumps, Performance mode, the muting
+    /// channel, controller links, external sync.
+    fn midi_then(&mut self, then: Vec<Then>) {
+        let ext = cfg::ext_sync(&self.state.session.settings);
+        for t in then {
+            match t {
+                Then::Down { src, key, velocity, extra } => self.step_edit_down_with(src, key, velocity, extra),
+                Then::Up { src, release, at } => self.step_edit_up_with(src, Some(release), Some(at)),
+                Then::Marker(i) => self.marker_jump(i),
+                Then::Perform { key, velocity, down } => self.perform_note(key, velocity, down),
+                Then::Mute(row) => {
+                    crate::rack::toggle_mute(&mut self.state, row);
+                    self.invalidate();
+                }
+                Then::Cc { dev, ch, n, v } => {
+                    if !self.remote_cc(&dev, ch, n, v) {
+                        midi_notes::forward_in(&mut self.state.session, Msg::Cc { ch, n, v }, self.state.selected_channel);
+                    }
+                }
+                Then::Transport { dev, msg } => {
+                    if ext.as_deref() == Some(&*dev) {
+                        self.ext_message(msg);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Tests: messages from a device named "Test".
+    #[cfg(test)]
+    pub fn midi_notes(&mut self, msgs: Vec<Msg>) {
+        let dev: std::sync::Arc<str> = std::sync::Arc::from("Test");
+        self.midi_events(msgs.into_iter().map(|msg| Ev { dev: dev.clone(), msg, at: Instant::now() }).collect());
+    }
+
+    /// A key of the Performance mode MIDI channel (spec: ui/performance-mode.md §3).
+    pub fn perform_note(&mut self, key: u8, vel: u8, down: bool) {
+        let now = self.state.session.transport.playing().then(|| self.state.session.transport.tick().max(0.0) as u32);
+        if let Some(m) = crate::perform_ui::midi_note(&mut self.state, key, vel, down, now) {
+            self.state.message = Some(m);
+        }
+        self.invalidate();
+    }
+
+    /// Every device note ends (the device list changed, remote control switched off).
+    pub fn midi_release_all(&mut self) {
+        let then = midi_notes::release_all_in(&mut self.state.session);
+        self.midi_then(then);
+        self.typing_lit_changed();
+    }
+
+    /// Song marker jump (spec §3): the `i`-th of the playlist's time markers, in SONG mode.
+    fn marker_jump(&mut self, i: usize) {
+        if !self.state.song_mode() {
+            self.state.message = Some("Song marker jump: in SONG mode".into());
+            return self.invalidate();
+        }
+        let mut at: Vec<u32> = self
+            .state
+            .session.project
+            .arrangement()
+            .map(|a| a.markers.iter().filter(|m| m.kind != os_model::TimeMarker::SIGNATURE).map(|m| m.position).collect())
+            .unwrap_or_default();
+        at.sort_unstable();
+        if let Some(&t) = at.get(i) {
+            self.set_song_pos(t, true);
+        }
+    }
+
+    /// The external sync device's transport message (spec §8): with a positive offset it waits that long.
+    fn ext_message(&mut self, m: Msg) {
+        let sel = self.selection_loop();
+        self.host(|ses| ext_message_in(ses, m, sel));
+    }
+
+    fn midi_pending(&mut self) {
+        let sel = self.selection_loop();
+        self.host(|ses| ext_pending_in(ses, sel));
+    }
+
+    /// The external clock's tempo and the status line (spec §8).
+    fn ext_sync_tick(&mut self) {
+        let st = self.state.session.midi.ext_status();
+        let text = st.text();
+        if self.state.midi.status != text {
+            self.state.midi.status = text;
+            if self.state.settings.open && self.state.settings.tab == crate::views::settings::MIDI {
+                self.invalidate();
+            }
+        }
+        let Some(bpm) = st.tempo else { return };
+        if self.host(|ses| ext_tempo_in(ses, bpm)) {
+            self.damage_band(crate::app::TEMPO_RECT);
+        }
+    }
+
+    /// Master sync (spec §7): the outputs with Send master sync while Enable MIDI output and master sync are on; and
+    /// while Enable MIDI output is on, the outputs with a port, for Beethoven MIDI Out (spec: plugins/midi-out.md §6.4).
+    fn midi_out_tick(&mut self) {
+        let send = Switch::Output.on(&self.state.session.settings) && Switch::MasterSync.on(&self.state.session.settings);
+        let sync = if send {
+            self.state.session.midi
+                .outputs
+                .iter()
+                .filter_map(|name| {
+                    let c = cfg::output(&self.state.session.settings, name);
+                    c.sync.then(|| (name.clone(), c.notes_off))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let (mut ports, mut ports_off) = (Vec::new(), Vec::new());
+        if Switch::Output.on(&self.state.session.settings) {
+            for name in &self.state.session.midi.outputs {
+                let c = cfg::output(&self.state.session.settings, name);
+                if let Some(p) = c.port {
+                    ports.push((name.clone(), p));
+                    if c.notes_off {
+                        ports_off.push(name.clone());
+                    }
+                }
+            }
+        }
+        let c = crate::midi_out::Config {
+            sync,
+            ports,
+            ports_off,
+            kind: crate::midi_out::SyncKind::of(prefs::index(&prefs::SYNC_TYPE)),
+            offset_ms: cfg::offset(&self.state.session.settings, Offset::MasterSync),
+            ppq: self.state.session.project.ppq.max(1),
+            tempo: self.state.tempo(),
+        };
+        self.state.session.midi_out.configure(c);
+    }
+
+}
+
+/// Settings > MIDI's controls (`views::midi_page`) and the OPTIONS menu's MIDI switches.
+impl App {
+    /// Settings > MIDI opened: the device lists are read again (spec §1).
+    pub fn midi_page_opened(&mut self) {
+        self.midi_refresh(false);
+    }
+
+    pub fn midi_page_act(&mut self, m: MAct) {
+        let p = &self.state.midi;
+        let out = p.selected_output().cloned();
+        let inp = p.selected_input().map(|i| i.name.clone());
+        match m {
+            MAct::Output(i) => self.state.midi.output = i,
+            MAct::Input(i) => self.state.midi.input = i,
+            MAct::Power(i) => {
+                self.state.midi.input = i;
+                let Some(name) = self.state.midi.inputs.get(i).map(|d| d.name.clone()) else { return };
+                self.midi_enable(&name);
+            }
+            MAct::Enable => {
+                if let Some(name) = inp {
+                    self.midi_enable(&name);
+                }
+            }
+            MAct::OutSync | MAct::OutNotesOff => {
+                let Some(name) = out else { return };
+                let mut c = cfg::output(&self.state.session.settings, &name);
+                let (what, on) = if m == MAct::OutSync {
+                    c.sync = !c.sync;
+                    ("Send master sync", c.sync)
+                } else {
+                    c.notes_off = !c.notes_off;
+                    ("Send all notes off", c.notes_off)
+                };
+                cfg::set_output(&self.state.session.settings, &name, c);
+                let mut msg = format!("{name}: {what} {}", if on { "on" } else { "off" });
+                if m == MAct::OutSync && on && !(Switch::MasterSync.on(&self.state.session.settings) && Switch::Output.on(&self.state.session.settings)) {
+                    msg.push_str(" (OPTIONS > Enable MIDI master sync is off)");
+                }
+                self.state.message = Some(msg);
+            }
+            MAct::Curve(of) => self.state.midi.curve = Some(CurveEdit { of, curve: cfg::curve(&self.state.session.settings, of) }),
+            MAct::CurveClose => self.state.midi.curve = None,
+            MAct::CurveReset => {
+                if let Some(e) = self.state.midi.curve.as_mut() {
+                    e.curve = cfg::Curve::LINE;
+                }
+            }
+            MAct::CurveAccept => {
+                if let Some(e) = self.state.midi.curve.take() {
+                    cfg::set_curve(&self.state.session.settings, e.of, e.curve);
+                    self.state.message = Some(format!("{}: kept", e.of.title()));
+                }
+            }
+            MAct::CurveHandle(i) => self.drag = Some(crate::app::Drag::MidiCurve(i)),
+            MAct::ExtSync(x, y) => return self.ext_sync_menu(x, y),
+            MAct::CurveBody | MAct::OutPort | MAct::InPort | MAct::Offset(_) => {
+                if m.is_value() {
+                    self.drag = Some(crate::app::Drag::MidiBox { part: m, y0: self.mouse.1, steps: 0 });
+                }
+            }
+        }
+        self.invalidate();
+    }
+
+    /// A curve handle dragged to `y` (`Drag::MidiCurve`).
+    pub fn midi_curve_drag(&mut self, which: u8, y: f32) {
+        let win = crate::views::settings::rect(&self.state);
+        let (_, graph, ..) = crate::views::midi_page::curve_rects(win);
+        if let Some(e) = self.state.midi.curve.as_mut() {
+            e.curve = crate::views::midi_page::drag_handle(graph, e.curve, which, y);
+            self.invalidate();
+        }
+    }
+
+    /// Switches input `name` on or off; it opens or closes at once (spec §2).
+    fn midi_enable(&mut self, name: &str) {
+        let mut c = cfg::input(&self.state.session.settings, name);
+        c.enabled = !c.enabled;
+        cfg::set_input(&self.state.session.settings, name, c);
+        if !c.enabled {
+            self.midi_release_all();
+        }
+        self.midi_refresh(false);
+        let failed = self.state.midi.inputs.iter().any(|i| i.name == name && i.failed);
+        self.state.message = Some(match (c.enabled, failed) {
+            (true, true) => format!("{name}: in use by another program"),
+            (true, false) => format!("{name}: enabled"),
+            (false, _) => format!("{name}: off"),
+        });
+    }
+
+    /// The wheel (or a drag, or right-click with `reset`) on a value box of the page: `steps` up or down.
+    pub fn midi_page_wheel(&mut self, m: MAct, steps: i32) {
+        self.midi_page_step(m, Some(steps));
+    }
+
+    pub fn midi_page_reset(&mut self, m: MAct) {
+        self.midi_page_step(m, None);
+    }
+
+    fn midi_page_step(&mut self, m: MAct, steps: Option<i32>) {
+        // "---" sits below 0.
+        let port = |p: Option<u8>| -> Option<u8> {
+            let s = steps?;
+            let n = p.map_or(-1, i32::from) + s;
+            (n >= 0).then(|| n.min(255) as u8)
+        };
+        let p = &self.state.midi;
+        let msg = match m {
+            MAct::OutPort => {
+                let Some(name) = p.selected_output().cloned() else { return };
+                let mut c = cfg::output(&self.state.session.settings, &name);
+                c.port = port(c.port);
+                cfg::set_output(&self.state.session.settings, &name, c);
+                format!("{name}: port {}", c.port.map_or_else(|| "---".into(), |p| p.to_string()))
+            }
+            MAct::InPort => {
+                let Some(name) = p.selected_input().map(|i| i.name.clone()) else { return };
+                let mut c = cfg::input(&self.state.session.settings, &name);
+                c.port = port(c.port);
+                cfg::set_input(&self.state.session.settings, &name, c);
+                format!("{name}: port {}", c.port.map_or_else(|| "---".into(), |p| p.to_string()))
+            }
+            MAct::Offset(o) => {
+                let v = steps.map_or(0, |s| cfg::offset(&self.state.session.settings, o) + s);
+                cfg::set_offset(&self.state.session.settings, o, v);
+                let what = if o == Offset::MasterSync { "Master sync offset" } else { "External sync offset" };
+                format!("{what}: {} ms", cfg::offset(&self.state.session.settings, o))
+            }
+            _ => return,
+        };
+        self.state.message = Some(msg);
+        self.invalidate();
+    }
+
+    /// External clock sync's menu: Off and the input devices (spec §8).
+    fn ext_sync_menu(&mut self, x: f32, y: f32) {
+        use crate::playlist::{Cmd, Mark, PItem, Popup};
+        let now = cfg::ext_sync(&self.state.session.settings);
+        let mut items = vec![PItem::new("Off", Cmd::MidiExt(None)).mark(Mark::Radio(now.is_none()))];
+        for d in &self.state.midi.inputs {
+            let on = now.as_deref() == Some(d.name.as_str());
+            let it = PItem::new(d.name.clone(), Cmd::MidiExt(Some(d.name.clone()))).mark(Mark::Radio(on));
+            items.push(if cfg::input(&self.state.session.settings, &d.name).enabled { it } else { it.off() });
+        }
+        self.state.playlist.popup = Some(Popup { x, y: y + 1.0, items, sub: None, scroll: [0; 2] });
+        self.invalidate();
+    }
+
+    /// External clock sync chosen (`Cmd::MidiExt`).
+    pub fn set_ext_sync(&mut self, device: Option<String>) -> Option<String> {
+        cfg::set_ext_sync(&self.state.session.settings, device.as_deref());
+        self.state.session.midi.set_ext_sync(device.as_deref());
+        self.invalidate();
+        Some(format!("External clock sync: {}", device.as_deref().unwrap_or("Off")))
+    }
+
+    /// An OPTIONS menu MIDI switch (spec §5).
+    pub fn toggle_midi_switch(&mut self, sw: Switch) {
+        let on = !sw.on(&self.state.session.settings);
+        sw.set(&self.state.session.settings, on);
+        if sw == Switch::Remote && !on {
+            self.midi_release_all();
+        }
+        self.state.message = Some(format!("{}: {}", sw.label(), if on { "on" } else { "off" }));
+        self.invalidate();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn on(key: u8) -> Msg {
+        Msg::On { ch: 0, key, vel: 100 }
+    }
+
+    fn off(key: u8) -> Msg {
+        Msg::Off { ch: 0, key, vel: 64 }
+    }
+
+    fn cc(n: u8, v: u8) -> Msg {
+        Msg::Cc { ch: 0, n, v }
+    }
+
+    fn app() -> App {
+        let mut app = App::new(None);
+        app.state.selected_channel = 0;
+        assert!(app.state.session.project.channels.len() >= 2, "the new project has channels");
+        app
+    }
+
+    /// spec §3 Foot pedal controls note off.
+    #[test]
+    fn the_foot_pedal_holds_released_keys() {
+        let mut app = app();
+        app.midi_notes(vec![on(60), off(60)]);
+        assert!(app.state.session.midi_play.held.is_empty());
+        app.midi_notes(vec![cc(64, 127), on(60), off(60)]);
+        assert_eq!(app.state.session.midi_play.held.len(), 1, "held by the pedal");
+        assert_eq!(app.state.session.midi_play.lit().count(), 0, "not lit: the key is up");
+        app.midi_notes(vec![on(60)]);
+        assert_eq!(app.state.session.midi_play.held.len(), 1, "struck again: the earlier note ended");
+        app.midi_notes(vec![off(60), cc(64, 0)]);
+        assert!(app.state.session.midi_play.held.is_empty(), "the pedal's release ends it");
+        // Off: the pedal goes to the instrument and the keys end at once.
+        prefs::set_check(&prefs::FOOT_PEDAL, false);
+        app.midi_notes(vec![cc(64, 127), on(62), off(62)]);
+        assert!(app.state.session.midi_play.held.is_empty());
+    }
+
+    /// spec §3: the omni preview and generator muting channels.
+    #[test]
+    fn special_channels() {
+        let mut app = app();
+        prefs::set_number(&prefs::OMNI_CHANNEL, 3);
+        app.midi_notes(vec![Msg::On { ch: 2, key: 50, vel: 90 }]);
+        let h = app.state.session.midi_play.held[0];
+        assert_eq!((h.row, h.play), (1, 60), "white key 50 previews channel 2 at C5");
+        app.midi_notes(vec![Msg::Off { ch: 2, key: 50, vel: 64 }, Msg::On { ch: 2, key: 49, vel: 90 }]);
+        assert!(app.state.session.midi_play.held.is_empty(), "black keys do nothing");
+        prefs::set_number(&prefs::MUTING_CHANNEL, 4);
+        let was = app.state.session.project.channels[0].enabled;
+        app.midi_notes(vec![Msg::On { ch: 3, key: 48, vel: 90 }, Msg::Off { ch: 3, key: 48, vel: 64 }]);
+        assert_eq!(app.state.session.project.channels[0].enabled, !was, "toggled");
+        prefs::set_check(&prefs::TOGGLE_ON_RELEASE, true);
+        app.midi_notes(vec![Msg::On { ch: 3, key: 48, vel: 90 }]);
+        assert_eq!(app.state.session.project.channels[0].enabled, was);
+        app.midi_notes(vec![Msg::Off { ch: 3, key: 48, vel: 64 }]);
+        assert_eq!(app.state.session.project.channels[0].enabled, !was, "momentary");
+        assert!(app.state.session.midi_play.held.is_empty(), "nothing played on the selected channel");
+    }
+
+    /// spec §5: remote control off ignores every message.
+    #[test]
+    fn remote_control_off() {
+        let mut app = app();
+        app.toggle_midi_switch(Switch::Remote);
+        app.midi_notes(vec![on(60)]);
+        assert!(app.state.session.midi_play.held.is_empty());
+        app.toggle_midi_switch(Switch::Remote);
+        app.midi_notes(vec![on(60)]);
+        assert_eq!(app.state.session.midi_play.held.len(), 1);
+    }
+
+    /// ui/remote-control.md: the box's auto accept, a link driving its knob, pickup, Multilink.
+    #[test]
+    fn controller_links() {
+        use crate::knobs::KnobId;
+        use crate::remote::RCmd;
+        use crate::typein::Target;
+        let mut app = app();
+        let vol = Target::Knob(KnobId::ChanVol(0));
+        app.remote_cmd(RCmd::Link(vol));
+        assert!(app.state.link_box.is_some());
+        app.midi_notes(vec![cc(21, 5)]);
+        assert!(app.state.link_box.is_none(), "auto accepted");
+        assert_eq!(crate::remote::link_of(&crate::settings_file::store(), vol).map(|l| (l.ch, l.cc)), Some((0, 21)));
+        app.midi_notes(vec![cc(21, 127)]);
+        assert!((app.state.knob(KnobId::ChanVol(0)) - 1.0).abs() < 1e-4);
+        app.midi_notes(vec![cc(21, 0)]);
+        assert!(app.state.knob(KnobId::ChanVol(0)).abs() < 1e-4);
+        // Pickup: after a change elsewhere the controller waits until it crosses the knob.
+        prefs::set_check(&prefs::PICKUP, true);
+        app.state.set_knob(KnobId::ChanVol(0), 0.5);
+        app.midi_notes(vec![cc(21, 10), cc(21, 30)]);
+        assert!((app.state.knob(KnobId::ChanVol(0)) - 0.5).abs() < 1e-4, "not picked up yet");
+        app.midi_notes(vec![cc(21, 80)]);
+        assert!((app.state.knob(KnobId::ChanVol(0)) - 80.0 / 127.0).abs() < 1e-4, "crossed: taken over");
+        // Multilink: knobs queued in order, then the next unlinked controllers.
+        let pan = Target::Knob(KnobId::ChanPan(1));
+        app.toggle_multilink();
+        app.multilink_knob(pan);
+        app.multilink_knob(Target::Knob(KnobId::MasterVol));
+        app.midi_notes(vec![cc(30, 64), cc(31, 64)]);
+        assert_eq!(crate::remote::link_of(&crate::settings_file::store(), pan).map(|l| l.cc), Some(30));
+        assert_eq!(crate::remote::link_of(&crate::settings_file::store(), Target::Knob(KnobId::MasterVol)).map(|l| l.cc), Some(31));
+        assert!(!app.state.multilink.on, "the queue is empty: off");
+        // An unlinked controller goes to the instrument; Remove link drops the link.
+        assert!(!app.remote_cc("Test", 0, 99, 1));
+        app.remote_cmd(RCmd::Unlink(pan));
+        assert!(crate::remote::link_of(&crate::settings_file::store(), pan).is_none());
+    }
+    /// Master sync to a real loopback port (loopMIDI's "BeethovenKeys" here): Start, then clocks at 24 a quarter, then Stop
+    /// (needs the port and an audio device): `cargo test -p os-app master_clock_loopback -- --ignored`.
+    #[cfg(feature = "midi-io")]
+    #[test]
+    #[ignore]
+    fn master_clock_loopback() {
+        use std::sync::{Arc, Mutex};
+        let mut app = App::new(None);
+        app.state.session.midi = crate::midi_in::MidiIn::open(&crate::settings_file::store(), || {});
+        app.state.session.midi_out = crate::midi_out::MidiOut::start(app.state.session.transport.watch());
+        let name = app.state.session.midi.outputs.iter().find(|n| n.contains("BeethovenKeys")).cloned().expect("a BeethovenKeys output");
+        let input = midir::MidiInput::new("Beethoven DAW clock test").unwrap();
+        let port = input.ports().into_iter().find(|p| input.port_name(p).is_ok_and(|n| n.contains("BeethovenKeys")));
+        let got: Arc<Mutex<Vec<u8>>> = Arc::default();
+        let sink = got.clone();
+        let mut input = midir::MidiInput::new("Beethoven DAW clock test").unwrap();
+        input.ignore(midir::Ignore::None);
+        let _conn = input
+            .connect(&port.expect("a BeethovenKeys input"), "clock", move |_, b, _| sink.lock().unwrap().push(b[0]), ())
+            .unwrap();
+        cfg::set_output(&crate::settings_file::store(), &name, cfg::OutCfg { sync: true, ..cfg::OutCfg::default() });
+        Switch::Output.set(&crate::settings_file::store(), true);
+        Switch::MasterSync.set(&crate::settings_file::store(), true);
+        app.midi_out_tick();
+        std::thread::sleep(Duration::from_millis(300));
+        app.act(crate::app::Action::Play);
+        std::thread::sleep(Duration::from_millis(1000));
+        app.act(crate::app::Action::Stop);
+        std::thread::sleep(Duration::from_millis(300));
+        let got = got.lock().unwrap().clone();
+        let clocks = got.iter().filter(|b| **b == 0xf8).count();
+        assert!(got.contains(&0xfa) && got.contains(&0xfc), "start and stop: {got:x?}");
+        // 1 s at the tempo: 24 clocks a beat.
+        let want = app.state.tempo() / 60.0 * 24.0;
+        assert!((clocks as f64 - want).abs() < want * 0.25, "{clocks} clocks, want about {want}");
+    }
+}
+
+/// The external sync device's transport message (spec §8): with a positive offset it waits that long. `sel` is the
+/// time selection that loops playback.
+pub fn ext_message_in(s: &mut Session, m: Msg, sel: Option<(u32, u32)>) {
+    let off = cfg::offset(&s.settings, Offset::External);
+    if off > 0 {
+        s.ext_pending.push_back((Instant::now() + Duration::from_millis(off as u64), m));
+    } else {
+        ext_apply_in(s, m, (-off) as u32, sel);
+    }
+}
+
+/// The messages whose offset has passed.
+pub fn ext_pending_in(s: &mut Session, sel: Option<(u32, u32)>) {
+    let now = Instant::now();
+    while s.ext_pending.front().is_some_and(|p| p.0 <= now) {
+        let Some((_, m)) = s.ext_pending.pop_front() else { break };
+        ext_apply_in(s, m, 0, sel);
+    }
+}
+
+/// The external clock's tempo `bpm`, applied at most every `TEMPO_EVERY` when it moved by more than `TEMPO_STEP`;
+/// whether the tempo changed.
+pub fn ext_tempo_in(s: &mut Session, bpm: f64) -> bool {
+    let bpm = (bpm * 100.0).round() / 100.0;
+    let due = s.ext_tempo_at.is_none_or(|t| t.elapsed() >= TEMPO_EVERY);
+    if !(due && (bpm - s.tempo()).abs() > TEMPO_STEP) {
+        return false;
+    }
+    s.ext_tempo_at = Some(Instant::now());
+    let t = bpm.clamp(10.0, 522.0);
+    if s.tempo() == t {
+        return false;
+    }
+    s.set_tempo(t);
+    s.dirty = true;
+    true
+}
+
+/// Start plays from the beginning, Continue resumes, Stop pauses, Song Position Pointer moves the position;
+/// `ahead_ms` starts that far into the song (a negative offset).
+pub fn ext_apply_in(s: &mut Session, m: Msg, ahead_ms: u32, sel: Option<(u32, u32)>) {
+    use crate::transport::State as T;
+    let ppq = u32::from(s.project.ppq.max(1));
+    let ahead = (f64::from(ahead_ms) / 1000.0 * s.tempo() / 60.0 * f64::from(ppq)).round() as u32;
+    match m {
+        Msg::Start => {
+            s.transport.stop();
+            ext_position_in(s, ahead);
+            crate::app::play_in(s, sel, 0);
+        }
+        Msg::Continue => match s.transport.state() {
+            T::Paused => s.transport.resume(),
+            T::Stopped => {
+                if ahead > 0 {
+                    let at = if s.song_mode() { s.song_pos } else { s.pat_pos };
+                    ext_position_in(s, at + ahead);
+                }
+                crate::app::play_in(s, sel, 0);
+            }
+            T::Playing => {}
+        },
+        Msg::Stop => {
+            if s.transport.state() == T::Playing {
+                s.transport.pause();
+            }
+        }
+        Msg::Spp(sixteenths) => {
+            let t = u32::from(sixteenths) * ppq / 4;
+            let running = s.transport.state() == T::Playing;
+            // The position counts from a stop: a paused playback would resume where it paused.
+            s.transport.stop();
+            ext_position_in(s, t);
+            if running {
+                crate::app::play_in(s, sel, 0);
+            }
+        }
+        _ => {}
+    }
+    s.touched.repaint = true;
+}
+
+/// Puts the song position (SONG) or the play-start marker (PAT) at `t` without restarting.
+fn ext_position_in(s: &mut Session, t: u32) {
+    if s.song_mode() {
+        s.song_pos = t;
+        crate::init::apply(s);
+    } else {
+        s.pat_pos = t;
+    }
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>Beethoven Craft</string>
+<key>CFBundleDisplayName</key><string>Beethoven Craft</string>
+<key>CFBundleIdentifier</key><string>local.beethovencraft.app</string>
+<key>CFBundleExecutable</key><string>beethoven-craft</string>
+<key>CFBundleIconFile</key><string>icono</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.4.0</string>
+<key>CFBundleVersion</key><string>3</string>
+<key>NSHumanReadableCopyright</key><string>Creado por mixter-ha99. GPL-3.0 o posterior.</string>
+<key>CFBundleDevelopmentRegion</key><string>es</string>
+<key>LSMinimumSystemVersion</key><string>12.0</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>Beethoven Craft usa el micrófono para grabar tu voz o instrumento sobre el video.</string>
+<key>CFBundleDocumentTypes</key><array><dict>
+<key>CFBundleTypeName</key><string>Proyecto de Beethoven Craft</string>
+<key>CFBundleTypeRole</key><string>Editor</string>
+<key>CFBundleTypeIconFile</key><string>proyecto</string>
+<key>LSItemContentTypes</key><array><string>local.beethovencraft.proyecto</string></array>
+</dict></array>
+<key>UTExportedTypeDeclarations</key><array><dict>
+<key>UTTypeIdentifier</key><string>local.beethovencraft.proyecto</string>
+<key>UTTypeDescription</key><string>Proyecto de Beethoven Craft</string>
+<key>UTTypeIconFile</key><string>proyecto</string>
+<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+<key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>bcraft</string><string>toma</string></array></dict>
+</dict></array>
+</dict></plist>

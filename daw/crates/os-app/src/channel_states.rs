@@ -1,0 +1,216 @@
+// Copyright (C) 2026 ItsAlphaNeon
+// SPDX-License-Identifier: GPL-3.0-or-later
+// This file is part of Beethoven DAW, based on Lemon Studio: https://github.com/ItsAlphaNeon/Lemon-Studio
+
+//! Channel states (Beethoven DAW's design): a plugin window menu's "Save channel state as..." writes the channel, its
+//! settings and its plugin's state, to a file in the user folder's `Channel presets`; "Browse channel states" shows that
+//! folder in the browser, and a channel state file dropped (from there or the desktop) adds the channel it holds.
+//!
+//! A file is a project of the one channel, in the project file format (`os_flp::project::create`), with its own
+//! extension: the original's channel state files were not examined, so they are not read and these are not claimed to
+//! be theirs.
+// spec: ui/plugin-window.md "Channel states", ui/browser.md "Channel presets"
+
+use std::path::{Path, PathBuf};
+
+use crate::app::App;
+use os_model::ChannelKind;
+
+/// File extension of a channel state.
+pub const EXT: &str = "oschannel";
+
+/// `Channel presets` in the user folder; in tests, the test thread's own folder when it set one (`tests::ROOT`).
+pub fn root() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(p) = tests::ROOT.with(|r| r.borrow().clone()) {
+        return Some(p);
+    }
+    os_paths::user_file("Channel presets")
+}
+
+/// Whether `p` names a channel state file.
+pub fn is_state_file(p: &Path) -> bool {
+    p.extension().is_some_and(|e| e.eq_ignore_ascii_case(EXT))
+}
+
+/// Whether channel `row` can be saved as a channel state: a plugin, sampler or audio clip channel.
+pub fn savable(app: &App, row: usize) -> bool {
+    app.state.session.project.channels.get(row).is_some_and(|c| matches!(c.kind, ChannelKind::Plugin | ChannelKind::Sampler | ChannelKind::AudioClip))
+}
+
+/// The commands of the plugin window menu's Channel column and the browser.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CsCmd {
+    /// Save channel state as...: the save dialog, for this rack row.
+    Save(usize),
+    /// Browse channel states: the browser at Channel presets.
+    Browse,
+    /// A channel state file added as a new channel.
+    Add(PathBuf),
+}
+
+pub fn run(app: &mut App, c: CsCmd) -> Option<String> {
+    match c {
+        CsCmd::Save(row) => save_as(app, row),
+        CsCmd::Browse => browse(app),
+        CsCmd::Add(p) => add(app, &p),
+    }
+}
+
+/// Save channel state as...: the save dialog in Channel presets, named after the channel (`save_chosen` writes it).
+fn save_as(app: &mut App, row: usize) -> Option<String> {
+    if !savable(app, row) {
+        return Some("This channel has no state to save".into());
+    }
+    let dir = root()?;
+    let _ = std::fs::create_dir_all(&dir);
+    let name = crate::presets::folder_name(&crate::edit::rack::channel_name(&app.state.session, row));
+    let dlg = crate::filedlg::FileDlg::new(crate::filedlg::Mode::Save, "Save channel state as", "channel state", crate::dialog::Then::SaveChannelState(row))
+        .filter("Beethoven DAW channel state", &[EXT])
+        .start(Some(&dir))
+        .name(&format!("{name}.{EXT}"));
+    app.file_dialog(dlg);
+    None
+}
+
+/// The file chosen in Save channel state as...: channel `row` is written there. Returns the status message.
+pub fn save_chosen(app: &mut App, row: usize, target: PathBuf) -> Option<String> {
+    let target = if is_state_file(&target) { target } else { target.with_extension(EXT) };
+    let shown = target.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Some(match state_bytes(app, row).and_then(|b| std::fs::write(&target, b).map_err(|e| e.to_string())) {
+        Ok(()) => {
+            app.state.browser_dirs.borrow_mut().clear();
+            format!("Saved channel state {shown}")
+        }
+        Err(e) => format!("Channel state not saved: {e}"),
+    })
+}
+
+/// Channel `row` as a channel state file: its settings and its plugin's current state, as a save writes them.
+pub fn state_bytes(app: &mut App, row: usize) -> Result<Vec<u8>, String> {
+    if !savable(app, row) {
+        return Err("this channel has no state to save".into());
+    }
+    // As a project save does: the built-in plugins' and the hosted plugins' states into a copy of the model.
+    app.store_builtin_states();
+    let mut proj = app.state.session.project.clone();
+    crate::project_plugins::store_hosted(&mut proj, &app.state.session.plugins);
+    let mut ch = proj.channels.swap_remove(row);
+    if ch.kind.is_sampler() {
+        let beethoven = app.state.session.plugins.descriptor(row).is_some_and(|d| d.name == crate::plugins::BEETHOVEN_SAMPLER);
+        if let Some(st) = app.state.session.plugins.state(row).filter(|_| beethoven) {
+            crate::plugins::store_sampler(&app.state.session.settings, &mut ch, &st);
+        }
+        if let Some(p) = app.state.session.plugins.sampler_path(row).filter(|p| !p.is_empty()) {
+            if !ch.sample_path.as_deref().is_some_and(|old| crate::plugins::resolve_sample(&app.state.session.settings, old) == p) {
+                ch.sample_path = Some(p);
+            }
+        }
+    }
+    ch.index = 0;
+    ch.id = os_model::Id::NONE;
+    let one = os_model::Project { ppq: proj.ppq, channels: vec![ch], ..Default::default() };
+    os_flp::project::create(&one).map_err(|e| e.to_string())?.to_bytes().map_err(|e| e.to_string())
+}
+
+/// The channel a channel state file holds.
+pub fn read(path: &Path) -> Result<os_model::Channel, String> {
+    crate::edit::rack::read_channel_state(path)
+}
+
+/// A channel state file dropped or added: its channel becomes the rack's last row, selected, one undo step ("Load
+/// channel state"); its plugin starts on the next tick, from the state the file holds. Returns the status message.
+pub fn add(app: &mut App, path: &Path) -> Option<String> {
+    use crate::control::command::Command;
+    let shown = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let s = &mut app.state;
+    crate::control_ui::settle_ids(s);
+    let c = Command::LoadChannelState { path: path.to_string_lossy().into_owned(), name: None };
+    let r = match crate::control_ui::command(s, LOAD, None, vec![c]) {
+        Ok(r) => r,
+        Err(e) => return Some(format!("Channel state {shown} not loaded: {}", e.rsplit(": ").next().unwrap_or(&e))),
+    };
+    let id = r.first().and_then(|v| v["channel"].as_u64());
+    let row = s.session.project.channels.iter().position(|c| Some(u64::from(c.id.0)) == id)?;
+    s.selected_channel = row;
+    s.rack.select_only(row);
+    app.invalidate();
+    Some(format!("Loaded channel state {shown}"))
+}
+
+/// The undo step of a loaded channel state.
+pub const LOAD: &str = "Load channel state";
+
+/// Browse channel states: the browser shows, on its All tab, Channel presets opened (the folder made when missing).
+fn browse(app: &mut App) -> Option<String> {
+    if let Some(dir) = root() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let s = &mut app.state;
+    s.show_browser = true;
+    s.browser_tab = 0;
+    s.browser_search.clear();
+    s.browser_dirs.borrow_mut().clear();
+    let key = crate::views::browser::channel_presets_key();
+    s.browser_open.insert(key.clone());
+    crate::browser::select(s, &key);
+    crate::browser::reveal(s);
+    app.invalidate();
+    None
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    thread_local! {
+        /// This test thread's Channel presets folder. One per thread, not a process-wide setting (it was an
+        /// environment variable): the browser lists this folder, and a folder set by one test showed in the browser
+        /// of the tests painting beside it.
+        pub static ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    }
+
+    /// A channel state round trip (Beethoven DAW's design): Save writes the channel, Add brings it back as the last row,
+    /// selected, named and set as it was, and is one undo step; Browse opens Channel presets in the browser, listing it.
+    #[test]
+    fn save_add_and_browse() {
+        let dir = std::env::temp_dir().join(format!("ls_channel_states_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        ROOT.with(|r| *r.borrow_mut() = Some(dir.clone()));
+        let mut app = App::new(None);
+        app.state.session.project = crate::locked::Locked::new(crate::projects::test_project());
+        let row = 1;
+        {
+            let ch = &mut app.state.session.project.get_mut().channels[row];
+            ch.name = Some("Snare top".into());
+            ch.volume = 0.25;
+            ch.misc.cpu.smart_disable = true;
+        }
+        let path = dir.join("Snare top");
+        let m = save_chosen(&mut app, row, path.clone()).unwrap();
+        assert_eq!(m, "Saved channel state Snare top");
+        let file = path.with_extension(EXT);
+        assert!(file.exists());
+        let back = read(&file).unwrap();
+        assert_eq!((back.name.as_deref(), back.kind, back.volume), (Some("Snare top"), app.state.session.project.channels[row].kind, 0.25));
+
+        let n = app.state.session.project.channels.len();
+        let m = run(&mut app, CsCmd::Add(file.clone())).unwrap();
+        assert_eq!(m, "Loaded channel state Snare top");
+        assert_eq!(app.state.session.project.channels.len(), n + 1);
+        let added = &app.state.session.project.channels[n];
+        assert_eq!((added.index as usize, added.name.as_deref(), added.volume), (n, Some("Snare top"), 0.25));
+        assert_eq!(app.state.selected_channel, n);
+        crate::history_ui::undo(&mut app.state);
+        assert_eq!(app.state.session.project.channels.len(), n, "one undo step");
+
+        assert!(read(&dir.join("missing.oschannel")).is_err());
+        run(&mut app, CsCmd::Browse);
+        let key = crate::views::browser::channel_presets_key();
+        assert!(app.state.show_browser && app.state.browser_open.contains(&key));
+        let rows = crate::views::browser::rows(&app.state);
+        assert!(rows.iter().any(|r| r.label == "Snare top.oschannel" && r.item == crate::views::browser::Item::Preset(file.to_string_lossy().into_owned())), "{:?}", rows.iter().map(|r| &r.label).collect::<Vec<_>>());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

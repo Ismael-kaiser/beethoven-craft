@@ -1,0 +1,23 @@
+// Beethoven Craft. Creado por mixter-ha99. Copyright (C) 2026. SPDX-License-Identifier: GPL-3.0-or-later
+pub mod archivo;
+pub mod audio;
+pub mod composicion;
+pub mod curvas;
+pub mod animaciones;
+pub mod edicion;
+pub mod idioma;
+pub mod efectos;
+pub mod estilos;
+pub mod exportar;
+pub mod instrumentos;
+pub mod medios;
+pub mod midi;
+pub mod modelo;
+pub mod nombres;
+pub mod titulos;
+pub mod motor;
+pub mod propios;
+pub mod separar;
+pub mod video;
+pub mod vpropios;
+pub mod ui;

@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["crates/os-model", "crates/os-flp", "crates/os-engine", "crates/os-dsp", "tools/flp-dump", "tools/os-render", "tools/os-play", "tools/bundle-app", "crates/os-native", "tools/os-native-probe", "crates/os-theme", "crates/os-ui", "crates/os-app", "crates/os-session", "crates/beethoven_daw", "plugins/beethoven-sampler", "tools/bundle-plugins", "crates/os-clap", "crates/os-hostlink", "crates/os-plugkit", "plugins/beethoven-parametric-eq-2", "crates/os-host", "crates/os-vst3", "crates/os-vst2", "plugins/beethoven-3x-osc", "plugins/beethoven-limiter", "plugins/beethoven-reverb", "plugins/beethoven-delay", "plugins/beethoven-small-fx", "plugins/beethoven-soft-clipper", "plugins/beethoven-fast-distortion", "plugins/beethoven-balance", "plugins/beethoven-stereo-enhancer", "plugins/beethoven-transient-processor", "plugins/beethoven-chorus", "plugins/beethoven-stereo-shaper", "plugins/beethoven-filter", "plugins/citrus", "plugins/smith", "plugins/tesla", "plugins/pulp-filter", "plugins/press", "crates/os-paths", "tools/watermark", "crates/os-smf", "tools/notices", "tools/updater", "plugins/beethoven-flanger", "plugins/beethoven-phaser", "plugins/beethoven-peak-controller", "plugins/beethoven-formula-controller", "plugins/beethoven-slicer", "plugins/beethoven-vocoder", "plugins/beethoven-drum-sampler", "plugins/beethoven-drop", "crates/os-vst2-bridge", "plugins/beethoven-soundfont"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+os-model = { path = "crates/os-model" }
+os-flp = { path = "crates/os-flp" }
+os-engine = { path = "crates/os-engine" }
+os-dsp = { path = "crates/os-dsp" }
+os-hostlink = { path = "crates/os-hostlink" }
+os-host = { path = "crates/os-host" }
+os-vst3 = { path = "crates/os-vst3" }
+os-vst2 = { path = "crates/os-vst2" }
+os-vst2-bridge = { path = "crates/os-vst2-bridge" }
+os-paths = { path = "crates/os-paths" }
+os-smf = { path = "crates/os-smf" }
+os-session = { path = "crates/os-session" }
+thiserror = "2"
+
+[profile.dev]
+opt-level = 3
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3

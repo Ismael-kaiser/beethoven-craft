@@ -1,0 +1,282 @@
+// Copyright (C) 2026 ItsAlphaNeon
+// Copyright (C) 2026 thacer13
+// SPDX-License-Identifier: GPL-3.0-or-later
+// This file is part of Beethoven DAW, based on Lemon Studio: https://github.com/ItsAlphaNeon/Lemon-Studio
+
+//! Plugin menus (the full-screen plugin picker is retired): Add one ▸, Insert ▸, Replace ▸ and the other submenus list
+//! the installed plugins in the app's own popup, and a pick adds the plugin where that menu says. What opened a plugin
+//! menu on its own (F8, the toolbar's plugin button, the channel rack's "+", an empty mixer slot) opens the plugin
+//! palette (`crate::plugin_palette`), which lists the same plugins and picks the same way.
+// spec: ui/plugin-menu.md
+
+use std::collections::BTreeMap;
+
+use crate::app::{App, State};
+use crate::playlist::{Cmd, Mark, PItem};
+use crate::plugin_db::{self as db, Entry, MenuView, Mode};
+
+/// What a plugin menu entry does (`Cmd::Plugin`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PlugCmd {
+    /// Generator `index` (into `Plugins::available`): a new channel at the bottom of the rack, or right below row
+    /// `after`.
+    Generator { index: usize, after: Option<usize> },
+    /// Generator `index` in place of rack row `row`'s (channel menu / plugin window menu > Replace ▸).
+    Replace { index: usize, row: usize },
+    /// Effect `index` (into `Plugins::effects`) into the selected mixer track: slot `slot`, else its first empty slot.
+    Effect { index: usize, slot: Option<u8> },
+    /// Find new plugins (a background scan).
+    Find,
+    /// Settings > Plugins.
+    Manage,
+    View(MenuView),
+}
+
+/// Which plugins a menu lists and where a pick goes (spec §1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Target {
+    /// F8, the toolbar button, VIEW / ADD > Plugin picker: generators and effects.
+    All,
+    /// Generators: a new channel at the bottom (`None`) or right below row `r`.
+    Gen(Option<usize>),
+    /// Generators in place of rack row `r`'s generator.
+    Replace(usize),
+    /// Effects into the selected track: slot `k`, else its first empty slot.
+    Fx(Option<u8>),
+    /// Effects added at the end of the container in the selected track's slot `k` (`crate::container`); for a
+    /// channel's container (`container::CHANNEL`), instruments and effects.
+    Container(u8),
+    /// Effects in place of member `.1` (its place in the list) of the container in the selected track's slot `.0`.
+    Member(u8, usize),
+    /// Instruments in place of instrument member `.1` of a channel's container.
+    MemberInst(u8, usize),
+    /// Generators for playlist track `.0`'s Track mode ▸ Instrument track ▸: a new channel, the track's instrument track
+    /// (spec: ui/playlist.md §6c).
+    Track(u16),
+}
+
+/// What picking plugin `index` (a generator, or an effect with `effect`) runs for `target`.
+pub fn pick(target: Target, effect: bool, index: usize) -> Cmd {
+    use crate::mixer::MCmd;
+    match target {
+        Target::Container(slot) if effect => return Cmd::Mixer(MCmd::MemberAdd(slot, index)),
+        Target::Container(slot) => return Cmd::Mixer(MCmd::MemberAddInst(slot, index)),
+        Target::Member(slot, i) => return Cmd::Mixer(MCmd::MemberReplace(slot, i, index)),
+        Target::MemberInst(slot, i) => return Cmd::Mixer(MCmd::MemberReplaceInst(slot, i, index)),
+        Target::Track(t) => return Cmd::TrackMode(t, crate::track_links::Mode::NewInstrument(index)),
+        _ => {}
+    }
+    Cmd::Plugin(match (target, effect) {
+        (Target::Fx(slot), _) => PlugCmd::Effect { index, slot },
+        (_, true) => PlugCmd::Effect { index, slot: None },
+        (Target::Gen(after), false) => PlugCmd::Generator { index, after },
+        (Target::Replace(row), false) => PlugCmd::Replace { index, row },
+        (Target::All | Target::Container(_) | Target::Member(..) | Target::MemberInst(..) | Target::Track(_), false) => PlugCmd::Generator { index, after: None },
+    })
+}
+
+fn item(e: &Entry, target: Target, effect: bool) -> PItem {
+    PItem::new(e.label.clone(), pick(target, effect, e.index))
+}
+
+/// A header with a run-time label.
+fn head(label: String) -> PItem {
+    PItem { head: true, ..PItem::new(label, Cmd::Nothing) }
+}
+
+/// One section's entries (spec §2): favourites, a separator, then the rest by display mode. `nested`: the list is a
+/// submenu itself, so "By vendor" uses headers instead of submenus (popups open one submenu level).
+fn section(s: &State, effect: bool, target: Target, nested: bool) -> Vec<PItem> {
+    let list = if effect { &s.plugdb.lists.fx } else { &s.plugdb.lists.gens };
+    if list.is_empty() {
+        return vec![PItem::new(if effect { "(no effect plugins found)" } else { "(no instruments found)" }, Cmd::Nothing).off()];
+    }
+    let mut v: Vec<PItem> = list.iter().filter(|e| e.favorite).map(|e| item(e, target, effect)).collect();
+    let rest: Vec<&Entry> = list.iter().filter(|e| !e.favorite).collect();
+    if !v.is_empty() && !rest.is_empty() {
+        v.push(PItem::sep());
+    }
+    match s.plugdb.prefs.menu_view {
+        MenuView::Simple => v.extend(rest.iter().map(|e| item(e, target, effect))),
+        MenuView::Categories => {
+            for cat in db::categories(effect) {
+                let in_cat: Vec<&&Entry> = rest.iter().filter(|e| e.category == cat).collect();
+                if !in_cat.is_empty() {
+                    v.push(PItem::head(cat));
+                    v.extend(in_cat.iter().map(|e| item(e, target, effect)));
+                }
+            }
+        }
+        MenuView::Vendor => {
+            let mut by: BTreeMap<String, (String, Vec<&Entry>)> = BTreeMap::new();
+            for e in &rest {
+                by.entry(e.vendor.to_lowercase()).or_insert_with(|| (e.vendor.clone(), Vec::new())).1.push(e);
+            }
+            for (_, (vendor, es)) in by {
+                let items: Vec<PItem> = es.iter().map(|e| item(e, target, effect)).collect();
+                if nested {
+                    v.push(head(vendor));
+                    v.extend(items);
+                } else {
+                    v.push(PItem { children: items, ..PItem::new(vendor, Cmd::Nothing) });
+                }
+            }
+        }
+    }
+    v
+}
+
+/// The display modes as their radio items name them (spec §2-3); ADD's radios are the same.
+pub const VIEWS: &[(&str, MenuView)] = &[("Categories", MenuView::Categories), ("Simple", MenuView::Simple), ("By vendor", MenuView::Vendor)];
+
+/// After the lists (spec §2): Find new plugins, Manage plugins..., the display modes.
+fn footer(s: &State) -> Vec<PItem> {
+    let view = s.plugdb.prefs.menu_view;
+    let scanning = s.plugdb.progress.is_some();
+    let find = PItem::new(if scanning { "Scan for new plugins (scanning...)" } else { "Scan for new plugins" }, Cmd::Plugin(PlugCmd::Find));
+    let mut v = vec![PItem::sep(), if scanning { find.off() } else { find }, PItem::new("Manage plugins...", Cmd::Plugin(PlugCmd::Manage)), PItem::sep()];
+    v.extend(VIEWS.iter().map(|&(label, m)| PItem::new(label, Cmd::Plugin(PlugCmd::View(m))).mark(Mark::Radio(view == m))));
+    v
+}
+
+/// The entries of a plugin menu for `target`; `nested` when they fill a submenu.
+pub fn items(s: &State, target: Target, nested: bool) -> Vec<PItem> {
+    let mut v = Vec::new();
+    match target {
+        Target::All => {
+            v.push(PItem::head("Generators"));
+            v.extend(section(s, false, target, nested));
+            v.push(PItem::col());
+            v.push(PItem::head("Effects"));
+            v.extend(section(s, true, target, nested));
+        }
+        // A channel's container takes instruments and effects (spec: plugins/patcher/README.md §4.4).
+        Target::Container(crate::container::CHANNEL) => {
+            v.push(PItem::head("Instruments"));
+            v.extend(section(s, false, target, nested));
+            v.push(PItem::col());
+            v.push(PItem::head("Effects"));
+            v.extend(section(s, true, target, nested));
+        }
+        Target::Gen(_) | Target::Replace(_) | Target::MemberInst(..) | Target::Track(_) => v.extend(section(s, false, target, nested)),
+        Target::Fx(_) | Target::Container(_) | Target::Member(..) => v.extend(section(s, true, target, nested)),
+    }
+    v.extend(footer(s));
+    v
+}
+
+/// The generators an instrument track can be made with (Track mode ▸ Instrument track ▸, spec: ui/playlist.md §6c): the
+/// plugin menu's generator list, picks making a new channel for playlist track `t`.
+pub fn track_generators(s: &State, t: u16) -> Vec<PItem> {
+    section(s, false, Target::Track(t), true)
+}
+
+/// Runs a plugin menu command. Returns a status message.
+pub fn run(app: &mut App, c: PlugCmd) -> Option<String> {
+    let m = match c {
+        PlugCmd::Generator { index, after } => add_generator(app, index, after),
+        PlugCmd::Replace { index, row } => replace_generator(app, index, row),
+        PlugCmd::Effect { index, slot } => add_effect(app, index, slot),
+        PlugCmd::Find => {
+            app.start_scan(Mode::Changed);
+            None
+        }
+        PlugCmd::Manage => {
+            app.open_settings(crate::views::settings::PLUGINS);
+            None
+        }
+        PlugCmd::View(v) => {
+            app.state.plugdb.prefs.menu_view = v;
+            app.prefs_changed();
+            None
+        }
+    };
+    app.invalidate();
+    m
+}
+
+/// A new channel for generator `index` (spec §1): at the bottom of the rack, or right below row `after`; selected and
+/// in view. Beethoven Sampler makes an empty sampler channel (hosted on the next tick); any other generator a plugin
+/// channel hosting it. Its plugin window opens once it is hosted. One undo step, "Add channel" (`Command::AddChannel`):
+/// undone, the channel goes and its instance is kept; redone, it comes back with it (`control::host`).
+pub fn add_generator(app: &mut App, index: usize, after: Option<usize>) -> Option<String> {
+    use crate::control::command::Command;
+    let d = app.state.session.plugins.available.get(index)?.desc.clone();
+    let s = &mut app.state;
+    let sampler = is_sampler(&d);
+    crate::mixer::track_ids(s);
+    let n = s.session.project.channels.len();
+    let to = after.filter(|&r| r + 1 < n).map(|r| r + 1);
+    let first = vec![Command::AddChannel { name: None, plugin: (!sampler).then(|| d.name.clone()), sample: None, track: None, kind: None, color: None, target: None, points: Vec::new(), children: Vec::new() }];
+    let id_of = |r: &[serde_json::Value]| r.first().and_then(|v| v["channel"].as_u64()).map(|id| id as u32);
+    let made = crate::control_ui::command_then(s, crate::history::ADD_CHANNEL, first, |_, r| {
+        id_of(r).zip(to).map(|(channel, row)| Command::MoveChannel { channel, row }).into_iter().collect()
+    });
+    let id = match made {
+        Ok(r) => id_of(&r)?,
+        Err(e) => return Some(e),
+    };
+    let ch = s.session.project.channels.iter().position(|c| c.id.0 == id)?;
+    open_hosted(s, id, ch, sampler, index);
+    s.selected_channel = ch;
+    s.rack.select_only(ch);
+    crate::rack::autosize(s);
+    if after.is_none() {
+        // Keep the new row in view.
+        let r = crate::views::rack::rect(s);
+        let view_h = crate::views::rack::panel(r).h;
+        s.rack_scroll = (crate::views::rack::content_h(s) - view_h).max(0.0);
+    }
+    sampler.then(|| "Added a sampler channel (Beethoven Sampler)".into())
+}
+
+/// Whether generator `d` is the built-in Beethoven Sampler (a channel of its own kind, no plugin).
+pub fn is_sampler(d: &os_host::Descriptor) -> bool {
+    d.name == crate::plugins::BEETHOVEN_SAMPLER && crate::project_plugins::is_builtin(d)
+}
+
+/// Channel `id` on row `row` just given generator `index`: the interface hosts it its own way, so its plugin window
+/// opens (a command's own hosting opens none, `control::host`).
+pub fn open_hosted(s: &mut crate::app::State, id: u32, row: usize, sampler: bool, index: usize) {
+    s.session.control.host.retain(|r| !matches!(r, crate::control::HostReq::Instrument { channel, .. } if channel.0 == id));
+    if sampler {
+        s.session.pending_open = Some(row);
+    } else {
+        s.session.pending_plugin = Some((row, index));
+    }
+}
+
+/// Generator `index` in place of rack row `row`'s (channel menu and plugin window menu > Replace ▸; FL: "the plugin list
+/// of Add one", spec ui/channel-rack.md §18). The channel keeps its row, notes and steps, mixer track, levels and
+/// Misc settings; its old instance goes, the new one starts from its defaults, and the channel takes the new
+/// plugin's name. Beethoven DAW choice where FL was not measured: the name follows the plugin. One undo step, "Replace
+/// channel" (`Command::ReplaceInstrument`): the channel takes a new id, so its old instrument, kept by the old one's
+/// (`Plugins::keep`), comes back with an undo and the new one with a redo (`control::host`).
+pub fn replace_generator(app: &mut App, index: usize, row: usize) -> Option<String> {
+    use crate::control::command::Command;
+    let d = app.state.session.plugins.available.get(index)?.desc.clone();
+    let s = &mut app.state;
+    let sampler = d.name == crate::plugins::BEETHOVEN_SAMPLER && crate::project_plugins::is_builtin(&d);
+    crate::mixer::track_ids(s);
+    let channel = s.session.project.channels.get(row)?.id.0;
+    let c = Command::ReplaceInstrument { channel, plugin: (!sampler).then(|| d.name.clone()) };
+    let id = match crate::control_ui::command(s, crate::history::REPLACE_CHANNEL, None, vec![c]) {
+        Ok(r) => r.first().and_then(|v| v["channel"].as_u64())? as u32,
+        Err(e) => return Some(e),
+    };
+    open_hosted(s, id, row, sampler, index);
+    s.selected_channel = row;
+    s.rack.select_only(row);
+    Some(format!("Replaced with {}", d.name))
+}
+
+/// Effect `index` into the selected mixer track (spec §1): slot `slot`, else the first empty one.
+pub fn add_effect(app: &mut App, index: usize, slot: Option<u8>) -> Option<String> {
+    let s = &app.state;
+    let t = s.selected_mixer;
+    let slot = slot.or_else(|| s.session.project.mixer.iter().find(|m| m.index == t).and_then(|m| m.slots.iter().position(Option::is_none)).map(|k| k as u8));
+    match slot {
+        Some(k) => crate::mixer::run(app, crate::mixer::MCmd::AddEffect(k, index)),
+        None => Some("Every slot of this track is in use".into()),
+    }
+}

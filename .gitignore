@@ -1,0 +1,11 @@
+target/
+dist/
+*.tar.gz
+*-windows.zip
+
+# Mac y empaquetado
+.DS_Store
+Beethoven Craft.app/
+.empaque-nuevo.app/
+.app-vieja-*
+*.parcial

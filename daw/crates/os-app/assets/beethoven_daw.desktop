@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Beethoven DAW
+GenericName=Digital Audio Workstation
+Comment=Pattern-based music production
+Exec=beethoven_daw %f
+Icon=beethoven_daw
+Terminal=false
+Categories=AudioVideo;Audio;Midi;Music;
+StartupWMClass=beethoven_daw
+Keywords=DAW;music;audio;sequencer;

@@ -1,0 +1,137 @@
+[package]
+name = "os-app"
+description = "Beethoven DAW: the application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = [
+    "vst3", "vst2", "export-flac", "export-mp3", "export-ogg", "midi-io", "device", "fl-native", "rpc", "plugin-windows",
+    "stock-soft-clipper", "stock-fast-distortion", "stock-balance", "stock-stereo-enhancer",
+    "stock-transient-processor", "stock-chorus", "stock-stereo-shaper", "stock-filter", "stock-flanger",
+    "stock-phaser", "stock-peak-controller", "stock-formula-controller", "stock-vocoder", "stock-limiter",
+    "stock-reverb", "stock-delay", "stock-pulp-filter", "stock-press", "stock-parametric-eq-2", "stock-drop",
+    "stock-trio", "stock-citrus", "stock-smith", "stock-slicer", "stock-drum-sampler", "stock-soundfont",
+]
+# Hosting VST 3 and VST 2 plugins (the session's features).
+vst3 = ["os-session/vst3"]
+vst2 = ["os-session/vst2"]
+# The export encoders (the session's features).
+export-flac = ["os-session/export-flac"]
+export-mp3 = ["os-session/export-mp3"]
+export-ogg = ["os-session/export-ogg"]
+# The system's MIDI ports.
+midi-io = ["os-session/midi-io", "dep:midir"]
+# The system's audio devices (the session's feature).
+device = ["os-session/device"]
+# FL Studio's native plugins (the session's feature).
+fl-native = ["os-session/fl-native"]
+# Listening for control-plane clients.
+rpc = ["os-session/rpc"]
+# Plugin editors in Beethoven DAW's own frame windows (off: a plugin's editor does not open; `cfg(plugin_windows)`).
+plugin-windows = []
+# Stock plugins (on by default: every build offers them; leaving one out is for forks). Off: it is not listed, and
+# a project's slot holding it opens as a missing plugin.
+stock-soft-clipper = ["os-session/stock-soft-clipper", "dep:beethoven-soft-clipper"]
+stock-fast-distortion = ["os-session/stock-fast-distortion", "dep:beethoven-fast-distortion"]
+stock-balance = ["os-session/stock-balance", "dep:beethoven-balance"]
+stock-stereo-enhancer = ["os-session/stock-stereo-enhancer", "dep:beethoven-stereo-enhancer"]
+stock-transient-processor = ["os-session/stock-transient-processor", "dep:beethoven-transient-processor"]
+stock-chorus = ["os-session/stock-chorus", "dep:beethoven-chorus"]
+stock-stereo-shaper = ["os-session/stock-stereo-shaper", "dep:beethoven-stereo-shaper"]
+stock-filter = ["os-session/stock-filter", "dep:beethoven-filter"]
+stock-flanger = ["os-session/stock-flanger", "dep:beethoven-flanger"]
+stock-phaser = ["os-session/stock-phaser", "dep:beethoven-phaser"]
+stock-peak-controller = ["os-session/stock-peak-controller", "dep:beethoven-peak-controller"]
+stock-formula-controller = ["os-session/stock-formula-controller", "dep:beethoven-formula-controller"]
+stock-vocoder = ["os-session/stock-vocoder", "dep:beethoven-vocoder"]
+stock-limiter = ["os-session/stock-limiter", "dep:beethoven-limiter"]
+stock-reverb = ["os-session/stock-reverb", "dep:beethoven-reverb"]
+stock-delay = ["os-session/stock-delay", "dep:beethoven-delay"]
+stock-pulp-filter = ["os-session/stock-pulp-filter", "dep:pulp-filter"]
+stock-press = ["os-session/stock-press", "dep:press"]
+stock-parametric-eq-2 = ["os-session/stock-parametric-eq-2", "dep:beethoven-parametric-eq-2"]
+stock-drop = ["os-session/stock-drop", "dep:beethoven-drop"]
+stock-trio = ["os-session/stock-trio", "dep:beethoven-3x-osc"]
+stock-citrus = ["os-session/stock-citrus", "dep:citrus"]
+stock-smith = ["os-session/stock-smith", "dep:smith"]
+stock-slicer = ["os-session/stock-slicer", "dep:beethoven-slicer"]
+stock-drum-sampler = ["os-session/stock-drum-sampler", "dep:beethoven-drum-sampler"]
+stock-soundfont = ["os-session/stock-soundfont", "dep:beethoven-soundfont"]
+# The test helpers and test-mode switches (per-thread settings: a test never reads or writes the user's settings file)
+# for the tests of a crate built on this one (`beethoven_daw`'s).
+test-util = ["os-session/test-util"]
+
+[dependencies]
+os-session = { path = "../os-session", default-features = false }
+os-model.workspace = true
+os-dsp.workspace = true
+os-flp.workspace = true
+os-engine.workspace = true
+os-hostlink.workspace = true
+os-theme = { path = "../os-theme" }
+os-ui = { path = "../os-ui" }
+os-clap = { path = "../os-clap" }
+os-host.workspace = true
+os-vst3.workspace = true
+os-vst2.workspace = true
+os-paths.workspace = true
+os-smf.workspace = true
+beethoven-sampler = { path = "../../plugins/beethoven-sampler", features = ["linked", "editor"] }
+beethoven-parametric-eq-2 = { path = "../../plugins/beethoven-parametric-eq-2", optional = true, features = ["linked", "editor"] }
+beethoven-3x-osc = { path = "../../plugins/beethoven-3x-osc", optional = true, features = ["linked", "editor"] }
+citrus = { path = "../../plugins/citrus", optional = true, features = ["linked", "editor"] }
+smith = { path = "../../plugins/smith", optional = true, features = ["linked", "editor"] }
+beethoven-drum-sampler = { path = "../../plugins/beethoven-drum-sampler", optional = true, features = ["linked", "editor"] }
+beethoven-soundfont = { path = "../../plugins/beethoven-soundfont", optional = true, features = ["linked", "editor"] }
+beethoven-limiter = { path = "../../plugins/beethoven-limiter", optional = true, features = ["linked", "editor"] }
+beethoven-reverb = { path = "../../plugins/beethoven-reverb", optional = true, features = ["linked", "editor"] }
+beethoven-delay = { path = "../../plugins/beethoven-delay", optional = true, features = ["linked", "editor"] }
+beethoven-soft-clipper = { path = "../../plugins/beethoven-soft-clipper", optional = true, features = ["linked", "editor"] }
+beethoven-fast-distortion = { path = "../../plugins/beethoven-fast-distortion", optional = true, features = ["linked", "editor"] }
+beethoven-balance = { path = "../../plugins/beethoven-balance", optional = true, features = ["linked", "editor"] }
+beethoven-stereo-enhancer = { path = "../../plugins/beethoven-stereo-enhancer", optional = true, features = ["linked", "editor"] }
+beethoven-transient-processor = { path = "../../plugins/beethoven-transient-processor", optional = true, features = ["linked", "editor"] }
+beethoven-chorus = { path = "../../plugins/beethoven-chorus", optional = true, features = ["linked", "editor"] }
+beethoven-small-fx = { path = "../../plugins/beethoven-small-fx", features = ["editor"] }
+beethoven-stereo-shaper = { path = "../../plugins/beethoven-stereo-shaper", optional = true, features = ["linked", "editor"] }
+beethoven-filter = { path = "../../plugins/beethoven-filter", optional = true, features = ["linked", "editor"] }
+tesla = { path = "../../plugins/tesla", features = ["linked", "editor"] }
+pulp-filter = { path = "../../plugins/pulp-filter", optional = true, features = ["linked", "editor"] }
+press = { path = "../../plugins/press", optional = true, features = ["linked", "editor"] }
+beethoven-flanger = { path = "../../plugins/beethoven-flanger", optional = true, features = ["linked", "editor"] }
+beethoven-phaser = { path = "../../plugins/beethoven-phaser", optional = true, features = ["linked", "editor"] }
+beethoven-peak-controller = { path = "../../plugins/beethoven-peak-controller", optional = true, features = ["linked", "editor"] }
+beethoven-formula-controller = { path = "../../plugins/beethoven-formula-controller", optional = true, features = ["linked", "editor"] }
+beethoven-slicer = { path = "../../plugins/beethoven-slicer", optional = true, features = ["linked", "editor"] }
+beethoven-vocoder = { path = "../../plugins/beethoven-vocoder", optional = true, features = ["linked", "editor"] }
+beethoven-drop = { path = "../../plugins/beethoven-drop", optional = true, features = ["linked", "editor"] }
+crossbeam-queue = "0.3"
+midir = { version = "0.11", optional = true }
+tiny-skia = "0.11"
+# JPEG workspace pictures of theme files (`wallpaper`; PNG goes through tiny-skia). Pure Rust, no threads.
+jpeg-decoder = { version = "0.3", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# Export encoders (`export::encode`): FLAC (pure Rust), MP3 (LAME, built from source) and Ogg Vorbis (libvorbis, built
+# from source).
+flacenc = "0.5"
+mp3lame-encoder = "0.3"
+vorbis_rs = "0.5"
+zip = { version = "9.1.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+os-session = { path = "../os-session", default-features = false, features = ["test-util"] }
+
+[target.'cfg(windows)'.dependencies]
+# Clipboard audio, process statistics, known folders, file association, drag and drop (`audio_clipboard`, `cpu`,
+# `filedlg`, `file_assoc`, `editor_host`).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_Storage_Xps", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Diagnostics_ToolHelp", "Win32_System_DataExchange", "Win32_UI_Shell", "Win32_System_Com", "Win32_System_Diagnostics_Debug", "Win32_System_Console", "Win32_UI_HiDpi", "Win32_System_Registry", "Win32_System_SystemInformation"] }
+
+# The clipboard's audio (`audio_clipboard`) and process statistics (`cpu`).
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSGeometry", "NSObjCRuntime", "NSString", "NSURL", "objc2-core-foundation"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "objc2-quartz-core", "NSApplication", "NSColor", "NSCursor", "NSEvent", "NSCell", "NSGraphics", "NSMenu", "NSMenuItem", "NSPanel", "NSPasteboard", "NSResponder", "NSScreen", "NSTrackingArea", "NSView", "NSWindow"] }

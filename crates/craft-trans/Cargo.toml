@@ -1,0 +1,13 @@
+[package]
+name = "craft-trans"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Transiciones de video tomadas de FilmCraft"
+
+[lib]
+doctest = false
+
+[dependencies]
+rayon = "1"
+serde = { version = "1", features = ["derive"] }

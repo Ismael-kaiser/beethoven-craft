@@ -1,0 +1,24 @@
+[package]
+name = "os-ui"
+description = "Beethoven DAW painting primitives: shapes and text on a CPU canvas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+os-theme = { path = "../os-theme" }
+tiny-skia = "0.11"
+fontdue = "0.9"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi"] }
+
+[target.'cfg(unix)'.dependencies]
+swash = "0.2"
+
+# The outline engine's tests run on Windows too.
+[target.'cfg(windows)'.dev-dependencies]
+swash = "0.2"

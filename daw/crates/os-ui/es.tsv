@@ -1,0 +1,1759 @@
+  Audio system: {}	  Sistema de audio: {}
+  Buffer: {}	  Búfer: {}
+  Exclusive mode: {}	  Modo exclusivo: {}
+  Input: {}	  Entrada: {}
+  Output: {}	  Salida: {}
+  Sample rate: {}	  Frecuencia de muestreo: {}
+  playback: {}	  reproducción: {}
+ already exists. Nothing was renamed.	 ya existe. No se cambió el nombre.
+ already exists. Nothing was saved.	 ya existe. No se guardó nada.
+ asks to save the project to 	 pide guardar el proyecto en 
+ has no notes in the tracks and channels chosen.	 no tiene notas en las pistas y canales elegidos.
+ holds other projects too: no files were deleted.	 también guarda otros proyectos: no se borró ningún archivo.
+ is available. You have {}.	 está disponible. Tienes {}.
+ was written without these samples, which were not found: {}.	 se escribió sin estas muestras, que no se encontraron: {}.
+ {} BPM	 {} BPM
+"{}" not found	No se encontró "{}"
+(Settings > General > Updates); a build from source never goes online.	(Ajustes > General > Actualizaciones); una versión compilada desde el código nunca se conecta.
+(disabled)	(desactivado)
+(empty - plays the built-in pluck)	(vacío: suena el pellizco integrado)
+(empty)	(vacío)
+(in use)	(en uso)
+(new project)	(proyecto nuevo)
+(no audio inputs)	(sin entradas de audio)
+(no channels)	(sin canales)
+(no devices)	(sin dispositivos)
+(no effect plugins found)	(no se encontraron plugins de efecto)
+(no folders)	(sin carpetas)
+(no instruments found)	(no se encontraron instrumentos)
+(no plugin matches)	(ningún plugin coincide)
+(no plugins)	(sin plugins)
+(no presets)	(sin presets)
+(none)	(ninguno)
+(stopped)	(detenido)
++Scene	+Escena
+1 bar	1 compás
+1 dropout	1 corte
+1 row	1 fila
+1 voice	1 voz
+1/2 beat	1/2 de pulso
+1/2 step	1/2 de paso
+1/3 beat	1/3 de pulso
+1/3 step	1/3 de paso
+1/4 beat	1/4 de pulso
+1/4 step	1/4 de paso
+1/6 beat	1/6 de pulso
+1/6 step	1/6 de paso
+100MB (default)	100 MB (predeterminado)
+1:Current project	1:Proyecto actual
+1:Current project/Patterns	1:Proyecto actual/Patrones
+2 bars	2 compases
+2 rows	2 filas
+2-point linear	Lineal de 2 puntos
+2.5 s later, a step of its own	2,5 s después, un paso aparte
+24-point sinc	Sinc de 24 puntos
+27-point sinc (playback)	Sinc de 27 puntos (reproducción)
+2:Plugin library	2:Biblioteca de plugins
+3 slices	3 cortes
+3x Osc state	Estado de 3x Osc
+808 Snare	Caja 808
+A digital audio workstation written in Rust.	Una estación de audio digital escrita en Rust.
+A nightly build of main. It updates itself from the nightly releases.	Una versión nocturna de main. Se actualiza sola con las versiones nocturnas.
+A tour of the window	Un recorrido por la ventana
+A web link for the project	Un enlace web para el proyecto
+ADD	AGREGAR
+AMOUNT	CANTIDAD
+ASIO is a registered trademark of	ASIO es una marca registrada de
+ASIO® output: the ASIO SDK by Steinberg Media Technologies GmbH (GPL version 3).	Salida ASIO®: el SDK de ASIO de Steinberg Media Technologies GmbH (GPL versión 3).
+About	Acerca de
+About Beethoven DAW	Acerca de Beethoven DAW
+Above	Encima
+Absolute	Absoluto
+Absolute / relative time	Tiempo absoluto / relativo
+Absolute pattern	Patrón absoluto
+Accept	Aceptar
+Accept the arpeggio	Aceptar el arpegio
+Accept the change	Aceptar el cambio
+Accept the strum	Aceptar el rasgueo
+Access port number (right-click: reset)	Número de puerto de acceso (clic derecho: restablecer)
+Actions	Acciones
+Add	Agregar
+Add a browser folder	Agregar una carpeta al explorador
+Add a channel	Agregar un canal
+Add a folder to the browser	Agregar una carpeta al explorador
+Add a new track after the selected track	Agregar una pista nueva después de la elegida
+Add a plugin folder	Agregar una carpeta de plugins
+Add an effect at the end of the chain	Agregar un efecto al final de la cadena
+Add an instrument or an effect at the end of the chain	Agregar un instrumento o un efecto al final de la cadena
+Add arrangement	Agregar arreglo
+Add effect	Agregar efecto
+Add folder...	Agregar carpeta...
+Add instrument	Agregar instrumento
+Add more tracks	Agregar más pistas
+Add one lists Beethoven Trio	Agregar uno pone Beethoven Trio
+Add plugin	Agregar plugin
+Add the notes to the channel's notes in the pattern, or replace them	Sumar las notas a las del canal en el patrón, o reemplazarlas
+Add time marker	Agregar marca de tiempo
+Add to channel rack	Agregar al rack de canales
+Add to favourites	Agregar a favoritos
+Add to instrument rack	Agregar al rack de instrumentos
+Add to key	Agregar a la tecla
+Add to selected mixer track	Agregar a la pista del mezclador elegida
+Add {} (Shift+click: keep the palette open)	Agregar {} (Shift+clic: deja la paleta abierta)
+Added a MIDI Out channel (Beethoven MIDI Out)	Se agregó un canal MIDI Out (Beethoven MIDI Out)
+Added a sampler channel (Beethoven Sampler)	Se agregó un canal sampler (Beethoven Sampler)
+Added search folder {}: looking for plugins	Se agregó la carpeta de búsqueda {}: buscando plugins
+Adjustments	Ajustes
+Advanced	Avanzado
+Advanced fill	Relleno avanzado
+Align tick lengths	Alinear largos de tick
+All	Todo
+All files	Todos los archivos
+All tracks	Todas las pistas
+Already checking for updates	Ya se están buscando actualizaciones
+Already recording audio	Ya se está grabando audio
+Also write every mixer track alone (WAV and FLAC), into a stems folder	Escribir también cada pista del mezclador por separado (WAV y FLAC), en una carpeta de stems
+Alternate	Alternar
+Alternate direction	Alternar dirección
+Alternate direction: every second chord strums the other way	Alternar dirección: cada segundo acorde se rasguea al revés
+Alternate meter scale	Escala alterna del medidor
+Alternate undo mode	Modo de deshacer alterno
+Always glide	Siempre deslizar
+An Info frame first, so players that read it skip the encoder's delay (some DAWs still play it as silence)	Primero un cuadro Info, para que los reproductores que lo leen salten el retardo del codificador (algunos DAW aún lo tocan como silencio)
+Animation refresh rate	Frecuencia de animación
+Animations	Animaciones
+Apply	Aplicar
+Apply tempo	Aplicar tempo
+Apply tempo: tapped tempos set the project tempo	Aplicar tempo: los tempos marcados cambian el tempo del proyecto
+Apply the shortcuts and close	Aplicar los atajos y cerrar
+Are you sure you want to rename this project and its data folder?	¿Seguro que quieres cambiar el nombre de este proyecto y de su carpeta de datos?
+Are you sure you want to rename this project?	¿Seguro que quieres cambiar el nombre de este proyecto?
+Arm disk recording	Armar grabación a disco
+Arm recording	Armar grabación
+Arpeggiate...	Arpegiar...
+Arpeggiator	Arpegiador
+Arpeggio direction: {}	Dirección del arpegio: {}
+Arrange alphabetically	Ordenar alfabéticamente
+Arrange by type	Ordenar por tipo
+Arrange by vendor	Ordenar por fabricante
+Arrangement	Arreglo
+Arrangement {}	Arreglo {}
+Arrangements (switch, add, clone, rename, delete)	Arreglos (cambiar, agregar, clonar, renombrar, borrar)
+Arranger	Arreglador
+Arranger - 	Arreglador - 
+Arranger - {}	Arreglador - {}
+Arranger / Maximize arranger (F5)	Arreglador / Maximizar arreglador (F5)
+Arranger fill paint clip	Clip de relleno del arreglador
+Arranger markers	Marcas del arreglador
+Arranger options	Opciones del arreglador
+Ask what to record	Preguntar qué grabar
+Assistant	Asistente
+Assistant: louder kick	Asistente: bombo más fuerte
+Associate project files with application	Asociar los archivos de proyecto con la app
+Audio and automation clips use note colors	Los clips de audio y automatización usan el color de las notas
+Audio clip	Clip de audio
+Audio clips	Clips de audio
+Audio devices / mixer	Dispositivos de audio / mezclador
+Audio input source	Fuente de entrada de audio
+Audio output target	Destino de salida de audio
+Audio recording	Grabación de audio
+Audio settings:	Ajustes de audio:
+Audio track	Pista de audio
+Audio track options	Opciones de la pista de audio
+Audio track: its audio clips play through its mixer track (Track mode in the menu)	Pista de audio: sus clips de audio suenan por su pista del mezclador (modo Pista en el menú)
+Audio, into the arranger as an audio clip	Audio, al arreglador como clip de audio
+Audio, into the audio editor	Audio, al editor de audio
+Augmented	Aumentado
+Author	Autor
+Auto	Auto
+Auto close	Cerrar solo
+Auto contrast text	Contraste automático del texto
+Auto detect	Detectar solo
+Auto keep long audio on disk	Dejar en disco el audio largo
+Auto locate	Ubicar solo
+Auto name channels is on by default	Nombrar canales solo está activado de fábrica
+Auto scrolling - right-click for continuous scrolling	Desplazamiento automático: clic derecho para desplazamiento continuo
+Auto zoom in piano roll	Acercar solo en el piano roll
+Auto-bypass when silent	Saltar en silencio
+Auto-collapse empty channels	Contraer canales vacíos
+Auto-hide	Ocultar solo
+Auto-remove other conflicting assignments	Quitar solo las otras asignaciones que choquen
+Automatic crossfades	Fundidos cruzados automáticos
+Automatically check for updates	Buscar actualizaciones automáticamente
+Automatically download program updates	Descargar actualizaciones automáticamente
+Automation	Automatización
+Automation clip	Clip de automatización
+Automation clips	Clips de automatización
+Automation only	Solo automatización
+Autosave	Autoguardado
+Average quality	Calidad media
+Avoid dropouts under load	Evitar cortes con carga alta
+B side	Lado B
+Back (Alt+Left)	Atrás (Alt+Izquierda)
+Back to the colours from before the picker opened	Volver a los colores de antes de abrir el selector
+Backspace	Retroceso
+Backup	Respaldo
+Bank	Banco
+Bar	Compás
+Bar : Beat/Step : Tick	Compás : Pulso/Paso : Tick
+Bass	Bajo
+Beat	Pulso
+Beats per bar	Pulsos por compás
+Beethoven DAW can't replace itself in {}: that folder can't be written to. Download the new version from the release page instead.	Beethoven DAW no puede reemplazarse en {}: no se puede escribir en esa carpeta. Descarga la versión nueva desde la página de versiones.
+Beethoven DAW cannot find 	Beethoven DAW no encuentra 
+Beethoven DAW has no MIDI scripts	Beethoven DAW no tiene scripts MIDI
+Beethoven DAW has no user folder to update from.	Beethoven DAW no tiene carpeta de usuario desde la cual actualizar.
+Beethoven DAW needs no account.	Beethoven DAW no necesita cuenta.
+Beethoven DAW plays as a JACK client at the server's rate and buffer length (set them in the server, e.g. qjackctl); its ports connect to the system playback and capture ports. With no JACK server running it plays as in shared mode.	Beethoven DAW suena como cliente JACK con la frecuencia y el búfer del servidor (cámbialos en el servidor, p. ej. qjackctl); sus puertos se conectan a los de reproducción y captura del sistema. Sin un servidor JACK suena como en modo compartido.
+Beethoven DAW preset	Preset de Beethoven DAW
+Beethoven DAW project	Proyecto de Beethoven DAW
+Beethoven DAW {} installs when Beethoven DAW closes	Beethoven DAW {} se instala al cerrar Beethoven DAW
+Beethoven DAW's program file has no folder.	El archivo de programa de Beethoven DAW no tiene carpeta.
+Before	Antes
+Behavior	Comportamiento
+Bend strength	Fuerza del bend
+Big kick	Bombo grande
+Bipolar	Bipolar
+Bipolar: move the levels both ways (off: one way, the knob's)	Bipolar: mueve los niveles en ambos sentidos (apagado: en uno, el de la perilla)
+Black notes	Notas negras
+Blend recorded notes	Mezclar las notas grabadas
+Blend with existing data	Mezclar con lo que ya hay
+Block	Bloque
+Both	Ambos
+Bright	Brillante
+Brightness	Brillo
+Browse presets	Ver presets
+Browser	Explorador
+Browser / Plugin palette (Alt+F8)	Explorador / Paleta de plugins (Alt+F8)
+Browser and pickers	Explorador y selectores
+Browser extra search folders	Carpetas extra de búsqueda del explorador
+Browser folder: {}	Carpeta del explorador: {}
+Browser index: the folders hold more than {} entries; a search finds the first ones	Índice del explorador: las carpetas tienen más de {} elementos; una búsqueda encuentra los primeros
+Browser name	Nombre en el explorador
+Browser options	Opciones del explorador
+Browser preview track	Pista de escucha del explorador
+Browser text	Texto del explorador
+Browser: added {}	Explorador: se agregó {}
+Browser: drag to resize, double-click for the default width	Explorador: arrastra para cambiar el ancho, doble clic para el predeterminado
+Buffer length	Largo del búfer
+Build Drum Kit	Armar kit de batería
+Built from its source code: it doesn't update itself (git pull, then build it again).	Compilado desde su código: no se actualiza solo (git pull y vuelve a compilarlo).
+Built-in	Integrado
+Burn MIDI	Fijar MIDI
+Bus {}	Bus {}
+By	Por
+By vendor	Por fabricante
+CPU and memory	CPU y memoria
+Cable physics	Física de los cables
+Cable physics debug panel: drag a slider, right-click resets it	Panel de física de cables: arrastra un deslizador, clic derecho lo restablece
+Cancel	Cancelar
+Caption buttons	Botones de ventana
+Categories	Categorías
+Cell	Celda
+Center	Centro
+Center: {}%	Centro: {}%
+Centered	Centrado
+Change color...	Cambiar color...
+Change the text colour so it reads on every surface	Cambia el color del texto para que se lea sobre cualquier fondo
+Channel	Canal
+Channel #{}	Canal #{}
+Channel color	Color del canal
+Channel colour	Color del canal
+Channel controls	Controles del canal
+Channel display filter (PgUp/PgDn)	Filtro de canales (RePág/AvPág)
+Channel mixer track	Pista del mezclador del canal
+Channel name	Nombre del canal
+Channel on / off	Canal encendido / apagado
+Channel options	Opciones del canal
+Channel panning	Paneo del canal
+Channel panning: {}	Paneo del canal: {}
+Channel pitch	Tono del canal
+Channel presets	Presets de canal
+Channel type	Tipo de canal
+Channel volume	Volumen del canal
+Channel {}	Canal {}
+Channels	Canales
+Check for updates	Buscar actualizaciones
+Checking for updates	Buscando actualizaciones
+Chokes itself: a new note stops the channel's playing notes	Se calla a sí mismo: una nota nueva detiene las que suenan en el canal
+Choose another folder for this row	Elegir otra carpeta para esta fila
+Choose the folder the files go to	Elegir la carpeta a la que van los archivos
+Choose what to do with created project files	Elegir qué hacer con los archivos de proyecto creados
+Chop chords	Cortar acordes
+Chop chords: notes still held where others start are cut there	Cortar acordes: las notas que siguen sonando donde empiezan otras se cortan ahí
+Chop...	Cortar...
+Chopping	Cortando
+Chord	Acorde
+Chord progression	Progresión de acordes
+Chord progression: no instrument to write to	Progresión de acordes: no hay instrumento donde escribir
+Chord progression: type chords, as C G Am F or I V vi IV	Progresión de acordes: escribe acordes, como C G Am F o I V vi IV
+Chords, one a bar (C G Am F, or I V vi IV; "Am:" first sets the key): Enter writes them into the piano roll, Esc cancels	Acordes, uno por compás (C G Am F, o I V vi IV; "Am:" al principio fija la tonalidad): Enter los escribe en el piano roll, Esc cancela
+Chorus	Coro
+Circular	Circular
+Classic	Clásico
+Claw machine...	Máquina de garra...
+Clean up	Limpiar
+Clear the search	Borrar la búsqueda
+Click to change	Clic para cambiar
+Click to close	Clic para cerrar
+Click to play the sample from its start	Clic para tocar la muestra desde el principio
+Click-and-hold gestures	Gestos de clic sostenido
+Click: plugin window, Shift+click: rename, right-click: channel menu	Clic: ventana del plugin, Shift+clic: renombrar, clic derecho: menú del canal
+Client 1	Cliente 1
+Client {}	Cliente {}
+Clip palette	Paleta de clips
+Clip palette / Plugin palette (Ctrl+F8)	Paleta de clips / Paleta de plugins (Ctrl+F8)
+Clipboard files	Archivos del portapapeles
+Clone	Clonar
+Clone channel	Clonar canal
+Clone pattern	Clonar patrón
+Close	Cerrar
+Close (Esc)	Cerrar (Esc)
+Close (drops the changes)	Cerrar (descarta los cambios)
+Close (puts the notes back)	Cerrar (devuelve las notas)
+Close (the measurements are reset)	Cerrar (se reinician las mediciones)
+Close the cable physics panel	Cerrar el panel de física de cables
+Close the debug panel (F12)	Cerrar el panel de depuración (F12)
+Close window	Cerrar ventana
+Close without exporting (Esc)	Cerrar sin exportar (Esc)
+Close without renaming (Esc)	Cerrar sin renombrar (Esc)
+Close without saving (Esc)	Cerrar sin guardar (Esc)
+Collapse / expand the group	Contraer / expandir el grupo
+Collapse structure	Contraer estructura
+Collapse structure (Ctrl+Up)	Contraer estructura (Ctrl+Arriba)
+Collapsed channel - Alt+U expands all	Canal contraído - Alt+U expande todos
+Colorful waveforms	Formas de onda de colores
+Combine formats of the same plugin	Juntar formatos del mismo plugin
+Command-line rendering	Render desde la línea de comandos
+Comments	Comentarios
+Compact	Compacto
+Configure extra folders	Configurar carpetas extra
+Confirm	Confirmar
+Confirmation	Confirmación
+Constraint passes per substep (more = less stretchy)	Pasadas de restricción por subpaso (más = menos elástico)
+Container	Contenedor
+Content	Contenido
+Contents not captured yet	Contenido aún no capturado
+Continuous Controller number	Número de controlador continuo
+Contrast	Contraste
+Control	Control
+Controller of the first parameter (the next ones follow)	Controlador del primer parámetro (los siguientes van después)
+Controls with a start value	Controles con un valor inicial
+Copied to B	Copiado a B
+Copy	Copiar
+Copy to B	Copiar a B
+Copy used samples into the project folder	Copiar las muestras usadas a la carpeta del proyecto
+Copy used samples to the project folder	Copiar las muestras usadas a la carpeta del proyecto
+Copy value	Copiar valor
+Could not import 	No se pudo importar 
+Could not open 	No se pudo abrir 
+Could not write 	No se pudo escribir 
+Count-in	Cuenta previa
+Count-in length	Largo de la cuenta previa
+Count-in off	Sin cuenta previa
+Create	Crear
+Create automation clip	Crear clip de automatización
+Create automation clips at the playback position	Crear clips de automatización en la posición de reproducción
+Create new project folder	Crear carpeta de proyecto nueva
+Create one channel per track	Crear un canal por pista
+Create the new project	Crear el proyecto nuevo
+Crunch	Crujido
+Current pattern	Patrón actual
+Current project	Proyecto actual
+Cursors scaling	Escala de cursores
+Custom	Personalizado
+Custom layout saved	Distribución personalizada guardada
+Cut	Cortar
+Cut self	Cortarse a sí mismo
+Cutoff	Corte
+DRY	SECO
+Dark	Oscuro
+Data	Datos
+Data folder	Carpeta de datos
+Data folder name	Nombre de la carpeta de datos
+Data folder: {}	Carpeta de datos: {}
+Date	Fecha
+Debug	Depuración
+Debugging log	Registro de depuración
+Default	Predeterminado
+Default template	Plantilla predeterminada
+Define 1 inch / 2.54 cm or set display's PPI	Definir 1 pulgada / 2,54 cm o fijar los PPI de la pantalla
+Del	Supr
+Delete	Borrar
+Delete "{}"?	¿Borrar "{}"?
+Delete (D): click or swipe to delete notes	Borrar (D): clic o barrido para borrar notas
+Delete channel	Borrar canal
+Delete mixer track	Borrar pista del mezclador
+Delete pattern	Borrar patrón
+Delete preset	Borrar preset
+Delete preset...	Borrar preset...
+Delete space	Borrar espacio
+Delete the preset 	Borrar el preset 
+Delete these {} files the project does not use from its data folder, then save it?\n	¿Borrar de su carpeta de datos estos {} archivos que el proyecto no usa y luego guardarlo?\n
+Delete...	Borrar...
+Deleted preset {}	Se borró el preset {}
+Denominator	Denominador
+Denominator: click to choose	Denominador: clic para elegir
+Desktop	Escritorio
+Desktop (alternate)	Escritorio (alterno)
+Desktop (default)	Escritorio (predeterminado)
+Device ({})	Dispositivo ({})
+Device default	Predeterminado del dispositivo
+Device whose MIDI clock drives playback	Dispositivo cuyo reloj MIDI maneja la reproducción
+Disable computer keyboard priority by default	Desactivar de fábrica la prioridad del teclado de la computadora
+Disarm on stop	Desarmar al detener
+Disarm recording	Desarmar grabación
+Discard	Descartar
+Discard lengths	Descartar largos
+Display	Pantalla
+Display PPI: drag, or turn the mouse wheel	PPI de la pantalla: arrastra o gira la rueda del mouse
+Display preset name in preset selector	Mostrar el nombre del preset en el selector
+Dither	Dither
+Documents	Documentos
+Don't ask again	No volver a preguntar
+Don't limit windows to screen	No limitar las ventanas a la pantalla
+Don't move or copy	No mover ni copiar
+Don't save	No guardar
+Don't show	No mostrar
+Don't show this in the future	No mostrar esto más
+Don't show this window when starting a new project	No mostrar esta ventana al empezar un proyecto nuevo
+Done	Listo
+Done: the toolbar keeps this layout	Listo: la barra conserva esta distribución
+Double-click on audio clips	Doble clic en clips de audio
+Double-click: open the plugin's window	Doble clic: abrir la ventana del plugin
+Down	Abajo
+Download and install	Descargar e instalar
+Downloading the update	Descargando la actualización
+Downloads	Descargas
+Drag panels to and from the toolbar	Arrastrar paneles hacia y desde la barra
+Drag to move	Arrastra para mover
+Drag to resize	Arrastra para cambiar el tamaño
+Drag to resize channel buttons	Arrastra para cambiar el tamaño de los botones de canal
+Drag to scroll	Arrastra para desplazar
+Drag to scroll - right-drag resizes the previews	Arrastra para desplazar - con clic derecho cambias el tamaño de las vistas previas
+Drag to scroll - right-drag: left/right scrolls, up/down zooms	Arrastra para desplazar - con clic derecho: izquierda/derecha desplaza, arriba/abajo acerca
+Drag: move the play start - right-drag: select a time range	Arrastra: mueve el inicio de reproducción - con clic derecho: elige un rango de tiempo
+Draw	Dibujar
+Draw (P)	Dibujar (P)
+Draw (left: freehand, right: line)	Dibujar (izquierdo: a mano, derecho: línea)
+Driver	Controlador
+Drop	Soltar
+Drums	Batería
+Dry	Seco
+Dump to piano roll	Volcar al piano roll
+Dumped {} notes to the piano roll	Se volcaron {} notas al piano roll
+Duplicate	Duplicar
+Duplicate as my theme	Duplicar como mi tema
+Duration	Duración
+EDIT	EDITAR
+EQ band 1 (low shelf)	Banda 1 del EQ (shelf grave)
+EQ band 2 (peaking)	Banda 2 del EQ (campana)
+EQ band 3 (high shelf)	Banda 3 del EQ (shelf agudo)
+Echo delay / fat mode	Retardo de eco / modo grueso
+Echoes	Ecos
+Edit	Editar
+Edit automation	Editar automatización
+Edit automation clip...	Editar clip de automatización...
+Edit automation in a window	Editar automatización en una ventana
+Edit automation in piano roll	Editar automatización en el piano roll
+Edit list...	Editar lista...
+Edit mapping curve	Editar curva de mapeo
+Editing	Edición
+Effect	Efecto
+Effect on / off	Efecto encendido / apagado
+Effect slot	Ranura de efecto
+Effect slot color	Color de la ranura de efecto
+Effects	Efectos
+Effects only (Tab: the next kind)	Solo efectos (Tab: el siguiente tipo)
+Empty	Vacío
+Enable	Activar
+Enable automation smoothing	Activar suavizado de automatización
+Enable groups (Shift+Alt+G)	Activar grupos (Shift+Alt+G)
+Enable indexing	Activar índice
+Enable input from this device	Activar la entrada de este dispositivo
+Enable main pitch	Activar tono principal
+Enabled: click to switch this device off	Activado: clic para apagar este dispositivo
+End	Fin
+End level: drag up or down	Nivel final: arrastra arriba o abajo
+End: strum the note ends	Fin: rasguea los finales de las notas
+End: the values reached at the end of the pattern	Fin: los valores al final del patrón
+English	English
+Enter	Enter
+Enter accepts, Esc cancels	Enter acepta, Esc cancela
+Enter starts a new line; a click elsewhere accepts, Esc cancels	Enter empieza una línea nueva; un clic afuera acepta, Esc cancela
+Enter value...	Escribir valor...
+Equalizer	Ecualizador
+Erase	Borrar
+Erase events	Borrar eventos
+Even	Par
+Event editor	Editor de eventos
+Event editor edit	Edición del editor de eventos
+Event editor menu	Menú del editor de eventos
+Event editor: click to bring it in front	Editor de eventos: clic para traerlo al frente
+Event editor: drag to select a stretch of time	Editor de eventos: arrastra para elegir un tramo de tiempo
+Event editor: left drag draws, right drag draws a line	Editor de eventos: arrastre izquierdo dibuja, derecho dibuja una línea
+Event panel: choose which note property to edit	Panel de eventos: elige qué propiedad de la nota editar
+Event panel: drag to resize, double-click to hide or show	Panel de eventos: arrastra para cambiar el tamaño, doble clic para ocultar o mostrar
+Event panel: drag to set this property of notes	Panel de eventos: arrastra para fijar esta propiedad de las notas
+Events	Eventos
+Events - LFO	Eventos - LFO
+Events - level scaling	Eventos - escala de nivel
+Events - {}	Eventos - {}
+Every slot of this track is in use	Todas las ranuras de esta pista están en uso
+Exclusive	Exclusivo
+Exclusive (ALSA directly, past the sound server)	Exclusivo (ALSA directo, sin el servidor de sonido)
+Exclusive (Beethoven DAW alone, smaller buffers)	Exclusivo (solo Beethoven DAW, búferes más chicos)
+Exit Beethoven DAW	Salir de Beethoven DAW
+Expand folders	Expandir carpetas
+Experimental: host installed native plugins	Experimental: alojar plugins nativos instalados
+Experimental: real native plugins instead of Beethoven recreations	Experimental: plugins nativos reales en vez de recreaciones de Beethoven
+Export	Exportar
+Export MIDI file	Exportar archivo MIDI
+Export as MIDI file...	Exportar como archivo MIDI...
+Export audio	Exportar audio
+Export audio... (Ctrl+R)	Exportar audio... (Ctrl+R)
+Export to	Exportar a
+Export zipped project	Exportar proyecto comprimido
+Export zipped project...	Exportar proyecto comprimido...
+Exported {}	Se exportó {}
+External clock sync	Sincronía con reloj externo
+External input	Entrada externa
+External sync	Sincronía externa
+External sync offset (milliseconds)	Desfase de la sincronía externa (milisegundos)
+External tools	Herramientas externas
+Extra cores only when needed	Núcleos extra solo cuando hagan falta
+Extras	Extras
+FILE	ARCHIVO
+FL Studio factory content folder: {}	Carpeta de contenido de fábrica de FL Studio: {}
+FLAC bit depth	Profundidad de bits FLAC
+FLAC compression level (higher: smaller files, slower)	Nivel de compresión FLAC (más alto: archivos más chicos, más lento)
+FLAC: lossless compressed audio	FLAC: audio comprimido sin pérdida
+FX slot {} options	Opciones de la ranura FX {}
+Factory	De fábrica
+Fader drag	Arrastre de fader
+Fast	Rápido
+Fast fade for choke groups	Fundido rápido para grupos de corte
+Fast sample preview	Vista previa rápida de muestras
+Faster	Más rápido
+Fastest a point may move	Lo más rápido que se puede mover un punto
+Favorite	Favorito
+Favorites	Favoritos
+Favourite: listed first in the plugin menus	Favorito: aparece primero en los menús de plugins
+Favourites	Favoritos
+Fewer	Menos
+File	Archivo
+File name	Nombre del archivo
+File/Data	Archivo/Datos
+Files & folders	Archivos y carpetas
+Fill	Relleno
+Fill type	Tipo de relleno
+Filter cutoff	Corte del filtro
+Filter resonance	Resonancia del filtro
+Find	Buscar
+Find missing samples	Buscar muestras faltantes
+Find new plugins (a background scan)	Buscar plugins nuevos (en segundo plano)
+Find next	Buscar siguiente
+Find previous	Buscar anterior
+Find: show only the plugins whose name, patch or place has this text (Esc clears)	Buscar: muestra solo los plugins cuyo nombre, patch o lugar tenga este texto (Esc lo borra)
+Find: type to keep the plugins whose name, vendor or file contain the text (Esc clears)	Buscar: escribe para dejar los plugins cuyo nombre, fabricante o archivo tengan el texto (Esc lo borra)
+Fine pitch	Tono fino
+Fine tune	Afinación fina
+First ctrl	Primer control
+Fix text	Arreglar texto
+Flexible space	Espacio flexible
+Flip	Voltear
+Flip horizontally	Voltear horizontal
+Flip vertically	Voltear vertical
+Flip...	Voltear...
+Fold	Plegar
+Folder	Carpeta
+Fonts: Cuprum (SIL Open Font License). Icons: Tabler Icons (MIT).	Fuentes: Cuprum (SIL Open Font License). Íconos: Tabler Icons (MIT).
+Force refreshes	Forzar refrescos
+Formats	Formatos
+Free software under the GNU GPL, version 3 or later, with no warranty.	Software libre bajo la GNU GPL, versión 3 o posterior, sin garantía.
+Freeze	Congelar
+Freeze: stop updating the readings	Congelar: deja de actualizar las lecturas
+Full sample preview	Vista previa completa de muestras
+Fuzz	Fuzz
+GATE	COMPUERTA
+Gapless	Sin cortes
+Gate	Compuerta
+General	General
+Generator	Generador
+Generators	Generadores
+Genre	Género
+Genre: {}	Género: {}
+Ghost channels	Canales fantasma
+Ghost channels {}	Canales fantasma {}
+Global snap	Ajuste global
+Glue	Pegar
+Glue same notes	Unir notas iguales
+Glue same notes: touching notes of one key become one	Unir notas iguales: las notas que se tocan en una tecla quedan en una
+Go to this step	Ir a este paso
+Gravity	Gravedad
+Group	Grupo
+Group arpeggiated notes	Agrupar notas arpegiadas
+Group name: type, Enter creates the group, Esc cancels	Nombre del grupo: escribe, Enter crea el grupo, Esc cancela
+Group notes	Agrupar notas
+Group the pieces of each note	Agrupar las partes de cada nota
+HELP	AYUDA
+HQ for plugins	HQ para plugins
+Half speed	Media velocidad
+Half speed off	Media velocidad apagada
+Half speed on: the song plays at half its tempo	Media velocidad encendida: la canción suena a la mitad de su tempo
+Half-beat	Medio pulso
+Half-step	Semitono
+Headless	Sin ventana
+Held notes	Notas sostenidas
+Help index / About...	Índice de ayuda / Acerca de...
+Helper	Ayudante
+Hidden from the plugin menus: click to list	Oculto en los menús de plugins: clic para mostrarlo
+Hide plugin window strip by default	Ocultar de fábrica la tira de la ventana del plugin
+Hide the project's information	Ocultar la información del proyecto
+Hide this section (it still applies)	Ocultar esta sección (sigue aplicándose)
+Hide while dragging (when detached)	Ocultar al arrastrar (cuando está suelto)
+High quality / slowest	Alta calidad / más lento
+High visibility	Alta visibilidad
+Highest	Lo más alto
+Highlight	Resaltado
+Hint first	Primero la ayuda
+Hint panel	Panel de ayuda
+Hints and warnings	Ayudas y avisos
+History	Historial
+History: {}	Historial: {}
+Home	Inicio
+Horizontal scrolling speed	Velocidad de desplazamiento horizontal
+Hosted plugins render in their high quality (offline) mode	Los plugins alojados se renderizan en su modo de alta calidad (sin conexión)
+How far a cable sags below its sockets at rest (sets each cable's length)	Cuánto cuelga un cable bajo sus conectores en reposo (fija el largo de cada cable)
+How hard the stiffness pushes back	Cuánta fuerza hace la rigidez
+How many mixer tracks to insert: type a number, Enter inserts, Esc cancels	Cuántas pistas del mezclador insertar: escribe un número, Enter las inserta, Esc cancela
+How straight a cable wants to stay (0 = a limp chain)	Qué tan recto quiere quedarse un cable (0 = una cadena floja)
+How to treat a note or button link (click for the next)	Cómo tratar el enlace de una nota o botón (clic para el siguiente)
+Hue	Tono
+Import MIDI data	Importar datos MIDI
+Import MIDI file	Importar archivo MIDI
+Import MIDI file...	Importar archivo MIDI...
+Import every track, or only this one	Importar todas las pistas, o solo esta
+Import preset	Importar preset
+Import preset...	Importar preset...
+Import the file with these settings (Enter)	Importar el archivo con estos ajustes (Enter)
+Import this MIDI channel's notes, or leave them out	Importar las notas de este canal MIDI, o dejarlas fuera
+Import time signatures	Importar métricas
+Import zero velocity notes	Importar notas de velocidad cero
+Imported preset	Preset importado
+Include the master	Incluir el maestro
+Info	Info
+Information	Información
+Information...	Información...
+Input	Entrada
+Input / output	Entrada / salida
+Input device	Dispositivo de entrada
+Input goes to the selected channel	La entrada va al canal elegido
+Input latency  {}	Latencia de entrada  {}
+Insert	Insertar
+Insert current controller value	Insertar el valor actual del controlador
+Insert effects	Efectos de inserción
+Insert flam before original drum	Insertar flam antes del golpe original
+Insert mixer track	Insertar pista del mezclador
+Insert space	Insertar espacio
+Install and restart	Instalar y reiniciar
+Installed	Instalados
+Installed MIDI input devices	Dispositivos de entrada MIDI instalados
+Installed MIDI output devices	Dispositivos de salida MIDI instalados
+Instrument rack	Rack de instrumentos
+Instrument rack (F6)	Rack de instrumentos (F6)
+Instrument rack - drag to move	Rack de instrumentos - arrastra para mover
+Instrument track	Pista de instrumento
+Instrument track: linked to a channel (Track mode in the menu)	Pista de instrumento: enlazada a un canal (modo Pista en el menú)
+Instruments	Instrumentos
+Instruments and effects (Tab: the next kind)	Instrumentos y efectos (Tab: el siguiente tipo)
+Instruments only (Tab: the next kind)	Solo instrumentos (Tab: el siguiente tipo)
+Interactive step sequencer / piano roll overview	Secuenciador de pasos interactivo / vista del piano roll
+Interp.	Interp.
+Interpolate (left: straight, right: smooth)	Interpolar (izquierdo: recto, derecho: suave)
+Interpolation for sampler channels and sample rate conversion (wider: cleaner, slower)	Interpolación de los canales sampler y la conversión de frecuencia (más ancho: más limpio, más lento)
+Interval	Intervalo
+Into the audio editor	Al editor de audio
+It comes with ABSOLUTELY NO WARRANTY. Licence: https://www.gnu.org/licenses/	Viene SIN NINGUNA GARANTÍA. Licencia: https://www.gnu.org/licenses/
+It is free software: you can redistribute it and/or modify it under the terms	Es software libre: puedes redistribuirlo y/o modificarlo según los términos
+It updates itself from the {} releases.	Se actualiza solo desde las versiones {}.
+Iterations	Iteraciones
+Its name in the browser (empty: the folder's name): click, type, Enter	Su nombre en el explorador (vacío: el de la carpeta): clic, escribe, Enter
+JACK (the JACK server's rate and buffer length)	JACK (la frecuencia y el búfer del servidor JACK)
+Just move your MIDI controller	Solo mueve tu controlador MIDI
+Keep the last	Conservar el último
+Keep the spacing of the note starts	Conservar el espacio entre los inicios de nota
+Keep this curve	Conservar esta curva
+Key	Tonalidad
+Key / scale	Tonalidad / escala
+Key / scale restriction	Restricción de tonalidad / escala
+Key tracking	Seguimiento de tecla
+Key: the lowest key's name	Tecla: el nombre de la tecla más grave
+Key: the scale's first note	Tonalidad: la primera nota de la escala
+Keyboard	Teclado
+Keys	Teclas
+Kick	Bombo
+Kick #2	Bombo #2
+LFO applied	LFO aplicado
+Language	Idioma
+Later	Después
+Layer	Capa
+Layouts	Distribuciones
+Lead	Solista
+Leave duration	Conservar duración
+Leave end time	Conservar fin
+Left	Izquierda
+Legacy scaling	Escala antigua
+Length	Largo
+Length between a cable's points (smaller = smoother, more work)	Largo entre los puntos de un cable (más chico = más suave, más trabajo)
+Length: {}	Largo: {}
+Less	Menos
+Level offsets	Desfases de nivel
+Level scale	Escala de nivel
+Levels	Niveles
+Levels: randomize the notes' levels	Niveles: niveles al azar para las notas
+Licence	Licencia
+Licence: GNU General Public License, version 3 (the ASIO SDK it includes is version 3 only).	Licencia: GNU General Public License, versión 3 (el SDK de ASIO que incluye es solo versión 3).
+Licence: GNU General Public License, version 3 or later.	Licencia: GNU General Public License, versión 3 o posterior.
+Lightness	Luminosidad
+Limit	Límite
+Limit the number of open plugin editors	Limitar cuántos editores de plugins hay abiertos
+Limit...	Limitar...
+Line	Línea
+Link all parameters	Enlazar todos los parámetros
+Link removed	Se quitó el enlace
+Listed in the plugin menus: click to hide	Aparece en los menús de plugins: clic para ocultarlo
+Listed when a plugin is found in several formats	Aparece cuando un plugin está en varios formatos
+Live	En vivo
+Load a chopping pattern	Cargar un patrón de corte
+Load a pattern file	Cargar un archivo de patrón
+Load a quantize template	Cargar una plantilla de cuantizado
+Load into selected channel	Cargar en el canal elegido
+Load plugin tags	Cargar etiquetas de plugins
+Load theme...	Cargar tema...
+Loading project	Cargando proyecto
+Location	Ubicación
+Locked to its clips: Draw and Paint place this source (TOOLS: Unlock all tracks)	Fijado a sus clips: Dibujar y Pintar ponen esta fuente (HERRAMIENTAS: Desbloquear todas las pistas)
+Logo	Logo
+Logo - drag onto the palette to take it off	Logo - arrástralo a la paleta para quitarlo
+Look and feel	Apariencia
+Looking for missing samples	Buscando muestras faltantes
+Looking for plugins...	Buscando plugins...
+Loop mode	Modo de bucle
+Loop points	Puntos de bucle
+Loop record	Grabar en bucle
+Loop starter	Iniciador de bucle
+Louder kick	Bombo más fuerte
+Low quality / fastest	Baja calidad / más rápido
+MIDI channel number	Número de canal MIDI
+MIDI controller	Controlador MIDI
+MIDI file	Archivo MIDI
+MIDI import window	Ventana de importación MIDI
+MIDI input / output devices	Dispositivos MIDI de entrada / salida
+MIDI input in use by another program: {}	Otro programa usa la entrada MIDI: {}
+MIDI input port number (--- = any device)	Número de puerto de entrada MIDI (--- = cualquier dispositivo)
+MIDI input: {}	Entrada MIDI: {}
+MIDI learn...	Aprender MIDI...
+MP3 bitrate	Tasa de bits MP3
+MP3 music genres	Géneros musicales MP3
+MP3: lossy compressed audio	MP3: audio comprimido con pérdida
+Main	Principal
+Main GUI scaling	Escala general de la interfaz
+Main pitch	Tono principal
+Main snap / quantization / step edit step (Backspace: snap on / off)	Ajuste principal / cuantizado / paso de edición (Retroceso: ajuste sí / no)
+Main snap: {}	Ajuste principal: {}
+Main swing	Swing principal
+Main volume	Volumen principal
+Major	Mayor
+Major 6	Mayor 6
+Make the link	Crear el enlace
+Manage	Administrar
+Manage messages	Administrar mensajes
+Manage plugins	Administrar plugins
+Manage plugins...	Administrar plugins...
+Manage plugins... (Settings > Plugins)	Administrar plugins... (Ajustes > Plugins)
+Manage shortcuts	Administrar atajos
+Mapping formula	Fórmula de mapeo
+Mapping formula (click for the next)	Fórmula de mapeo (clic para la siguiente)
+Marker count	Cantidad de marcas
+Marker count: click to choose	Cantidad de marcas: clic para elegir
+Marker settings	Ajustes de marcas
+Markers	Marcas
+Master	Maestro
+Master effects	Efectos del maestro
+Master pitch (Hz)	Afinación general (Hz)
+Master sync offset (milliseconds)	Desfase de la sincronía maestra (milisegundos)
+Master, slot {}, container	Maestro, ranura {}, contenedor
+Max	Máx
+Max speed	Velocidad máxima
+Maximize / restore window	Maximizar / restaurar ventana
+Maximum	Máximo
+Maximum undo levels	Niveles máximos de deshacer
+Me	Yo
+Medium	Medio
+Menu bar	Barra de menús
+Menu first	Primero el menú
+Menu first, caption left	Primero el menú, título a la izquierda
+Menu: open, levels, move, remove	Menú: abrir, niveles, mover, quitar
+Merge	Combinar
+Messages: all shown	Mensajes: se muestran todos
+Messages: notices skipped, questions still ask	Mensajes: se saltan los avisos, las preguntas sí se hacen
+Meters	Medidores
+Metronome (Ctrl+M) - right-click for the sound and volume	Metrónomo (Ctrl+M) - clic derecho para el sonido y el volumen
+Metronome track	Pista del metrónomo
+Mid	Medio
+Midi external clock sync offset (milliseconds; wheel or drag, right-click: reset)	Desfase de sincronía con reloj MIDI externo (milisegundos; rueda o arrastre, clic derecho: restablecer)
+Midi master clock sync offset (milliseconds; wheel or drag, right-click: reset)	Desfase del reloj MIDI maestro (milisegundos; rueda o arrastre, clic derecho: restablecer)
+Minimize	Minimizar
+Minimize window	Minimizar ventana
+Minimum	Mínimo
+Minor pentatonic	Pentatónica menor
+Minute : Second : Centisecond	Minuto : Segundo : Centésima
+Mirror the notes in pitch	Reflejar las notas en altura
+Mirror the notes in time	Reflejar las notas en el tiempo
+Miscellaneous	Varios
+Mix at buffer boundaries	Mezclar en los bordes del búfer
+Mixer	Mezclador
+Mixer (F9)	Mezclador (F9)
+Mixer - Master	Mezclador - Maestro
+Mixer - {}	Mezclador - {}
+Mixer layout	Distribución del mezclador
+Mixer options	Opciones del mezclador
+Mixer routing	Ruteo del mezclador
+Mixer track	Pista del mezclador
+Mixer track color	Color de la pista del mezclador
+Mixer track name	Nombre de la pista del mezclador
+Mixer track number	Número de la pista del mezclador
+Mixer track polarity	Polaridad de la pista del mezclador
+Mixer track reset	Restablecer pista del mezclador
+Mixer track volume	Volumen de la pista del mezclador
+Mod A	Mod A
+Mod A offset	Desfase de Mod A
+Mod B	Mod B
+Mod B offset	Desfase de Mod B
+Mode	Modo
+Mode buttons	Botones de modo
+Mode: for Windows devices (an ASIO driver plays on its own terms)	Modo: para dispositivos de Windows (un controlador ASIO funciona a su manera)
+Modified	Modificado
+Monitor debug	Depuración del monitor
+Monitor debug panel: drag a slider, right-click resets it	Panel de depuración del monitor: arrastra un deslizador, clic derecho lo restablece
+Mono	Mono
+Monophonic painting in piano roll	Pintado monofónico en el piano roll
+More	Más
+Move	Mover
+Move channel	Mover canal
+Move down	Bajar
+Move effect	Mover efecto
+Move mixer track	Mover pista del mezclador
+Move the MIDI controller for the first parameter	Mueve el controlador MIDI para el primer parámetro
+Move the MIDI controller for the track's volume	Mueve el controlador MIDI para el volumen de la pista
+Move undone recordings to the trash	Mandar a la papelera las grabaciones deshechas
+Move up	Subir
+Move {}.app to your Applications folder and open it from there: macOS runs it from a read-only copy where it is now, so it can't update itself.	Mueve {}.app a tu carpeta Aplicaciones y ábrelo desde ahí: macOS lo ejecuta desde una copia de solo lectura donde está ahora, así que no puede actualizarse.
+Multi MIDI learn: change the knobs to link, then move a controller for each, in the same order	Aprender MIDI múltiple: cambia las perillas a enlazar y luego mueve un controlador para cada una, en el mismo orden
+Multi MIDI learn: off	Aprender MIDI múltiple: apagado
+Multi-button mouse	Mouse de varios botones
+Multi-touch control	Control multitáctil
+Multi-touch keyboard	Teclado multitáctil
+Multilink to controllers (Ctrl+J)	Enlace múltiple a controladores (Ctrl+J)
+Multiplier: {}%	Multiplicador: {}%
+Multiply	Multiplicar
+Multithreaded instrument processing	Procesar instrumentos en varios hilos
+Multithreaded mixer processing	Procesar el mezclador en varios hilos
+Music	Música
+Mute	Silenciar
+Mute (T): click or swipe to mute / unmute notes	Silenciar (T): clic o barrido para silenciar / activar notas
+Mute / solo	Silenciar / solo
+Mute / solo  (ctrl)0..9	Silenciar / solo  (ctrl)0..9
+Mute / solo  (shift/ctrl+)0..9	Silenciar / solo  (shift/ctrl+)0..9
+Mute all audio during first taps (during playback)	Silenciar todo el audio durante los primeros toques (al reproducir)
+Mute now, for a few bars (during playback)	Silenciar ahora, unos compases (al reproducir)
+Mute track (right-click / Ctrl+click: solo; with Alt: the whole group)	Silenciar pista (clic derecho / Ctrl+clic: solo; con Alt: todo el grupo)
+My projects	Mis proyectos
+My theme	Mi tema
+NOTE	NOTA
+Name	Nombre
+Name and location	Nombre y ubicación
+Name channels after their sample or plugin	Nombrar los canales por su muestra o plugin
+Name effect slots after their plugin	Nombrar las ranuras de efecto por su plugin
+Name suggestions	Sugerencias de nombre
+Name the data folder as the project	Nombrar la carpeta de datos como el proyecto
+Names	Nombres
+Native	Nativo
+Navigation history	Historial de navegación
+New	Nuevo
+New folder	Carpeta nueva
+New mixer track	Pista del mezclador nueva
+New notes: {}	Notas nuevas: {}
+New pattern	Patrón nuevo
+New pattern (find first / next empty)	Patrón nuevo (busca el primero / siguiente vacío)
+New pattern (find first empty)	Patrón nuevo (busca el primero vacío)
+New preset	Preset nuevo
+New project	Proyecto nuevo
+Next	Siguiente
+No	No
+No ASIO driver is installed. For lower latency, install one (ASIO4ALL is free), then reopen Settings.	No hay controlador ASIO instalado. Para menos latencia instala uno (ASIO4ALL es gratis) y vuelve a abrir Ajustes.
+No audio track to unassign	No hay pista de audio que desasignar
+No channel settings here	No hay ajustes de canal aquí
+No channels to set up for MIDI export	No hay canales que preparar para exportar MIDI
+No controller: nothing linked	Sin controlador: nada enlazado
+No device selected	Ningún dispositivo elegido
+No events for this control in this pattern: draw some	No hay eventos de este control en este patrón: dibuja algunos
+No favorites yet: right-click a	Aún no hay favoritos: clic derecho en un
+No folder {}	No existe la carpeta {}
+No folders here	No hay carpetas aquí
+No matches	Sin coincidencias
+No matches yet (indexing folders)	Aún sin coincidencias (indexando carpetas)
+No missing samples found in {}	No se encontraron muestras faltantes en {}
+No more browser history	No hay más historial del explorador
+No parameter	Sin parámetro
+No parameter tweaked yet: move a plugin control or a knob first	Aún no se ha tocado ningún parámetro: mueve primero un control del plugin o una perilla
+No plugin here	No hay plugin aquí
+No plugin matches	Ningún plugin coincide
+No plugins are hosted	No hay plugins alojados
+No presets for {} yet (Save preset as... stores one)	Aún no hay presets de {} (Guardar preset como... guarda uno)
+No registration and no usage data. Release builds ask GitHub for updates	Sin registro y sin datos de uso. Las versiones oficiales piden las actualizaciones a GitHub
+No samples in the browser to send	No hay muestras en el explorador para mandar
+No text colour reads on these surfaces: try the Brightness or Contrast knob	Ningún color de texto se lee sobre estos fondos: prueba la perilla de Brillo o Contraste
+No unused files	No hay archivos sin usar
+No user folder	Sin carpeta de usuario
+None	Ninguno
+Nope	Nop
+Normal	Normal
+Note alone	Nota sola
+Note color	Color de nota
+Note end time	Fin de nota
+Note filter cutoff frequency	Frecuencia de corte del filtro por nota
+Note filter cutoff frequency strength	Fuerza del corte del filtro por nota
+Note filter resonance (Q)	Resonancia (Q) del filtro por nota
+Note filter resonance (Q) strength	Fuerza de la resonancia (Q) por nota
+Note fine pitch	Tono fino de la nota
+Note fine pitch strength	Fuerza del tono fino de la nota
+Note markers	Marcas de nota
+Note names	Nombres de nota
+Note on velocity link target	Destino del enlace de velocidad de nota
+Note pan	Paneo de la nota
+Note panning strength	Fuerza del paneo de la nota
+Note properties	Propiedades de la nota
+Note release	Liberación de la nota
+Note release strength	Fuerza de la liberación
+Note repeat	Repetir nota
+Note start time	Inicio de nota
+Note velocity	Velocidad de la nota
+Note velocity strength	Fuerza de la velocidad
+Notes	Notas
+Notes and automation	Notas y automatización
+Notes only	Solo notas
+Nothing is being recorded	No se está grabando nada
+Nothing to export: the arranger is empty and {} has no notes.	Nada que exportar: el arreglador está vacío y {} no tiene notas.
+Nothing to list here	Nada que mostrar aquí
+Nothing to redo	Nada que rehacer
+Nothing to render: {} has no notes.	Nada que renderizar: {} no tiene notas.
+Nothing to undo	Nada que deshacer
+Nothing to {}	Nada que {}
+Notifications	Notificaciones
+Nudge tempo to align time (Left / pitch bend)	Empujar el tempo para alinear el tiempo (Izquierda / pitch bend)
+Nudge tempo to align time (Right / pitch bend)	Empujar el tempo para alinear el tiempo (Derecha / pitch bend)
+Numerator	Numerador
+Numerator: click to choose	Numerador: clic para elegir
+OGG bitrate	Tasa de bits OGG
+OGG: Ogg Vorbis lossy compressed audio	OGG: audio Ogg Vorbis comprimido con pérdida
+ON	SÍ
+ON switch	Interruptor
+OPTIONS	OPCIONES
+Occasionally (every 10 minutes)	De vez en cuando (cada 10 minutos)
+Octave	Octava
+Octave down	Bajar octava
+Octave up	Subir octava
+Octave: {}	Octava: {}
+Odd	Impar
+Off	Apagado
+Off: click to switch this device on	Apagado: clic para encender este dispositivo
+Offset	Desfase
+Offset: {}%	Desfase: {}%
+Ok	Aceptar
+Ok with this ticked turns this message off (Manage messages)	Aceptar con esto marcado apaga este mensaje (Administrar mensajes)
+On	Encendido
+On a track change or a jump, how much of the move the cable feels as a yank (the rest moves it along)	Al cambiar de pista o saltar, cuánto del movimiento siente el cable como un tirón (el resto lo arrastra)
+On a track change, a sideways shove against the move	Al cambiar de pista, un empujón de lado contra el movimiento
+On a track change, an upward pop	Al cambiar de pista, un salto hacia arriba
+One channel per track, or one per MIDI channel	Un canal por pista, o uno por canal MIDI
+One row	Una fila
+One row, centered	Una fila, centrada
+Online help isn't available yet	La ayuda en línea todavía no está disponible
+Only audio and automation channels go on the arranger; drop a pattern instead	Solo los canales de audio y automatización van al arreglador; suelta un patrón en su lugar
+Only when recording	Solo al grabar
+Open	Abrir
+Open audio editor / New audio editor	Abrir editor de audio / Nuevo editor de audio
+Open detached plugins with the main window	Abrir los plugins sueltos con la ventana principal
+Open editor	Abrir editor
+Open in Explorer	Abrir en el Explorador
+Open in Finder	Abrir en Finder
+Open in file manager	Abrir en el administrador de archivos
+Open new plugin windows floating	Abrir flotando las ventanas de plugins nuevas
+Open the folder when done	Abrir la carpeta al terminar
+Opening {}	Abriendo {}
+Optimize for	Optimizar para
+Option	Opción
+Options	Opciones
+Other effect	Otro efecto
+Other instrument	Otro instrumento
+Others	Otros
+Output	Salida
+Output device	Dispositivo de salida
+Output device: {}	Dispositivo de salida: {}
+Output devices	Dispositivos de salida
+Output level (peak L / R)	Nivel de salida (pico I / D)
+Output monitor	Monitor de salida
+Override global mapping...	Reemplazar el mapeo global...
+Override temporary mapping...	Reemplazar el mapeo temporal...
+PAN	PANEO
+PAT	PAT
+PATTERNS	PATRONES
+PITCH	TONO
+PULSE	PULSO
+Pad #{}	Pad #{}
+Paint	Pintar
+Paint (B): drag to paint notes along the row	Pintar (B): arrastra para pintar notas a lo largo de la fila
+Paint (draw ignoring the snap)	Pintar (dibuja sin ajuste)
+Paint and add	Pintar y sumar
+Pan	Paneo
+Pan offset	Desfase de paneo
+Panning	Paneo
+Panning law	Ley de paneo
+Panning: {}	Paneo: {}
+Parameter {}	Parámetro {}
+Part 1	Parte 1
+Part 2	Parte 2
+Part {}	Parte {}
+Paste	Pegar
+Paste value	Pegar valor
+Path	Ruta
+Pattern	Patrón
+Pattern colour	Color del patrón
+Pattern direction: Normal, Flip or Alternate	Dirección del patrón: Normal, Volteado o Alterno
+Pattern length	Largo del patrón
+Pattern name	Nombre del patrón
+Pattern options	Opciones del patrón
+Pattern picker	Selector de patrones
+Pattern time signature	Métrica del patrón
+Pattern {}	Patrón {}
+Pattern: play the current pattern	Patrón: toca el patrón actual
+Pattern: write new notes over the pattern	Patrón: escribe notas nuevas sobre el patrón
+Patterns	Patrones
+Performance mode: {}	Modo actuación: {}
+Period	Periodo
+Period: the stretch of time each cut repeats over	Periodo: el tramo de tiempo en que se repite cada corte
+Phase	Fase
+Piano roll - 	Piano roll - 
+Piano roll - arpeggiator	Piano roll - arpegiador
+Piano roll - chopper	Piano roll - cortador
+Piano roll - claw machine	Piano roll - máquina de garra
+Piano roll - level scaling	Piano roll - escala de nivel
+Piano roll - limiter / transposer	Piano roll - limitador / transpositor
+Piano roll - quantizer	Piano roll - cuantizador
+Piano roll - randomizer	Piano roll - aleatorizador
+Piano roll - score flipper	Piano roll - volteador de partitura
+Piano roll - strumizer	Piano roll - rasgueador
+Piano roll - {}	Piano roll - {}
+Piano roll / Maximize Piano roll (F7)	Piano roll / Maximizar piano roll (F7)
+Piano roll add note	Piano roll: agregar nota
+Piano roll arpeggiate	Piano roll: arpegiar
+Piano roll chop	Piano roll: cortar
+Piano roll claw machine	Piano roll: máquina de garra
+Piano roll edit	Piano roll: editar
+Piano roll flip	Piano roll: voltear
+Piano roll level scaling	Piano roll: escala de nivel
+Piano roll limit	Piano roll: limitar
+Piano roll options	Opciones del piano roll
+Piano roll preview - click to open the Piano roll	Vista del piano roll - clic para abrirlo
+Piano roll quantize	Piano roll: cuantizar
+Piano roll randomize	Piano roll: aleatorizar
+Piano roll snap: {}	Ajuste del piano roll: {}
+Piano roll strum	Piano roll: rasguear
+Piano roll tools: quantize, chop, glue, strum, arpeggiate, randomize...	Herramientas del piano roll: cuantizar, cortar, unir, rasguear, arpegiar, aleatorizar...
+Piano roll view options	Opciones de vista del piano roll
+Piano roll: arpeggiated	Piano roll: arpegiado
+Piano roll: arpeggiated: nothing to change	Piano roll: arpegiado: nada que cambiar
+Piano roll: click to add a note, drag a note to move it or its end to resize, right-click to delete	Piano roll: clic para agregar una nota, arrastra una nota para moverla o su final para cambiar el largo, clic derecho para borrar
+Piano roll: nothing to arpeggiate	Piano roll: nada que arpegiar
+Piano roll: nothing to strum	Piano roll: nada que rasguear
+Piano roll: strummed	Piano roll: rasgueado
+Piano roll: strummed: nothing to change	Piano roll: rasgueado: nada que cambiar
+Pick a pattern	Elige un patrón
+Pick a template	Elige una plantilla
+Pick this colour	Elegir este color
+Pickers and tools	Selectores y herramientas
+Picture	Imagen
+Ping pong	Ping pong
+Pitch	Tono
+Pitch range	Rango de tono
+Play	Reproducir
+Play / pause (Space plays / stops)	Reproducir / pausa (Espacio reproduce / detiene)
+Play / pause pattern	Reproducir / pausar patrón
+Play the sample	Tocar la muestra
+Play truncated notes in clips	Tocar notas cortadas en los clips
+Play truncated notes on transport	Tocar notas cortadas con el transporte
+Playback (Y): drag to hear the notes under the line	Reproducción (Y): arrastra para oír las notas bajo la línea
+Playback tracking	Seguimiento de reproducción
+Playful	Juguetón
+Plugin library	Biblioteca de plugins
+Plugin library (Shift+F8)	Biblioteca de plugins (Shift+F8)
+Plugin manager	Administrador de plugins
+Plugin palette	Paleta de plugins
+Plugin palette (F8)	Paleta de plugins (F8)
+Plugin performance monitor	Monitor de rendimiento de plugins
+Plugin presets	Presets de plugins
+Plugins hosted now: {}	Plugins alojados ahora: {}
+Point spacing	Separación de puntos
+Points	Puntos
+Polished	Pulido
+Polyphony	Polifonía
+Pop-ups scaling	Escala de ventanas emergentes
+Population	Población
+Population: {}%	Población: {}%
+Port	Puerto
+Preferred format	Formato preferido
+Prepare for performance mode	Preparar para el modo actuación
+Preserve end	Conservar fin
+Preserve end: keep the note ends where they are	Conservar fin: deja los finales de nota donde están
+Preserve start times	Conservar inicios
+Preset:	Preset:
+Preset: Bright	Preset: Brillante
+Preset: {}	Preset: {}
+Press	Prensa
+Preview	Vista previa
+Previous	Anterior
+Priority	Prioridad
+Project	Proyecto
+Project author	Autor del proyecto
+Project comments	Comentarios del proyecto
+Project credits	Créditos del proyecto
+Project data	Datos del proyecto
+Project data size warning	Aviso de tamaño de los datos del proyecto
+Project genre	Género del proyecto
+Project info (F11)	Información del proyecto (F11)
+Project name	Nombre del proyecto
+Project not found	No se encontró el proyecto
+Project title: the window caption shows it instead of the file name	Título del proyecto: el título de la ventana lo muestra en vez del nombre del archivo
+Project web link	Enlace web del proyecto
+Project: {}	Proyecto: {}
+Proposal	Propuesta
+Pull downward	Jalar hacia abajo
+Put the default shortcuts in the form (Apply keeps them)	Poner los atajos de fábrica en el formulario (Aplicar los conserva)
+Put the file's time signatures into the pattern	Poner en el patrón las métricas del archivo
+Quality	Calidad
+Quantization	Cuantizado
+Quantize	Cuantizar
+Quantize duration	Cuantizar duración
+Quantize end time	Cuantizar fin
+Quantize...	Cuantizar...
+Quarter-step	Cuarto de paso
+Quick chop	Corte rápido
+Quick legato	Legato rápido
+Quick quantize	Cuantizado rápido
+Quick quantize start times	Cuantizar inicios rápido
+Quick record	Grabación rápida
+RANGE	RANGO
+REC IN {}	GRAB. EN {}
+Random	Al azar
+Random portamento	Portamento al azar
+Random portamento: some new notes get their portamento switch	Portamento al azar: algunas notas nuevas reciben su portamento
+Randomize...	Aleatorizar...
+Range	Rango
+Range direction: Normal, Flip or Alternate	Dirección del rango: Normal, Volteado o Alterno
+Range: click or drag, the nearer end follows	Rango: clic o arrastre, el extremo más cercano lo sigue
+Range: {}	Rango: {}
+Re-index changed folders on startup	Volver a indexar al arrancar las carpetas que cambiaron
+Read a note-on of velocity 0 as a note, not as a note-off	Leer un note-on de velocidad 0 como nota, no como note-off
+Read sample root note	Leer la nota raíz de la muestra
+Read sample tempo information	Leer el tempo de la muestra
+Reader	Lector
+Realign	Realinear
+Realign events	Realinear eventos
+Recent projects	Proyectos recientes
+Record arms at once now (right-click Record > Ask what to record to ask again)	Grabar ahora arma de inmediato (clic derecho en Grabar > Preguntar qué grabar para volver a preguntar)
+Record to: {}	Grabar en: {}
+Recording	Grabación
+Recording canceled	Grabación cancelada
+Recording canceled: 1 take undone	Grabación cancelada: se deshizo 1 toma
+Recording filter	Filtro de grabación
+Recording filter: Audio on (armed tracks record while Record is armed)	Filtro de grabación: Audio encendido (las pistas armadas graban mientras Grabar está armado)
+Recording options	Opciones de grabación
+Recording starts playback	Grabar arranca la reproducción
+Recordings go to the project's data folder's Recorded folder, else the user folder's:	Las grabaciones van a la carpeta Recorded de la carpeta de datos del proyecto, o a la de la carpeta de usuario:
+Redo	Rehacer
+Refresh device list	Actualizar la lista de dispositivos
+Release	Liberación
+Release velocity link target	Destino del enlace de velocidad de liberación
+Relocate events	Reubicar eventos
+Relocate events {}	Reubicar eventos {}
+Remember my choice	Recordar mi elección
+Remote control	Control remoto
+Remote control settings	Ajustes de control remoto
+Remove	Quitar
+Remove conflicts	Quitar conflictos
+Remove effect	Quitar efecto
+Remove from browser	Quitar del explorador
+Remove link	Quitar enlace
+Remove notes left shorter than a 24th of a beat	Quitar las notas más cortas que 1/24 de pulso
+Remove short notes	Quitar notas cortas
+Remove the silence before the first note	Quitar el silencio antes de la primera nota
+Remove this folder	Quitar esta carpeta
+Removed search folder {}	Se quitó la carpeta de búsqueda {}
+Removed {} from the browser	Se quitó {} del explorador
+Rename	Renombrar
+Rename and colour...	Renombrar y colorear...
+Rename data folder	Renombrar carpeta de datos
+Rename preset	Renombrar preset
+Rename preset...	Renombrar preset...
+Rename project	Renombrar proyecto
+Rename the data folder too	Renombrar también la carpeta de datos
+Rename the project (Enter)	Renombrar el proyecto (Enter)
+Rename, color and icon...	Renombrar, color e ícono...
+Rename...	Renombrar...
+Render and write the files (Enter)	Renderizar y escribir los archivos (Enter)
+Render failed: no file was written	Falló el render: no se escribió ningún archivo
+Render to wave file	Renderizar a archivo de audio
+Repair optional features	Reparar funciones opcionales
+Repeat	Repetir
+Repeat the pattern from the song's start (off: from each note's start)	Repetir el patrón desde el inicio de la canción (apagado: desde el inicio de cada nota)
+Replace	Reemplazar
+Replace a browser folder	Reemplazar una carpeta del explorador
+Replaced with {}	Reemplazado por {}
+Reread structure	Releer estructura
+Reread structure (Ctrl+R)	Releer estructura (Ctrl+R)
+Resampling	Remuestreo
+Resampling quality	Calidad de remuestreo
+Rescan all	Volver a buscar todo
+Rescan plugins (fast)	Volver a buscar plugins (rápido)
+Rescan plugins with errors	Volver a buscar plugins con errores
+Reset	Restablecer
+Reset all	Restablecer todo
+Reset all settings	Restablecer todos los ajustes
+Reset before processing	Restablecer antes de procesar
+Reset before processing: start from a new note's levels	Restablecer antes de procesar: empezar desde los niveles de una nota nueva
+Reset browser cache	Restablecer la caché del explorador
+Reset every cable factor to its default	Restablecer todos los factores de cable
+Reset every control	Restablecer todos los controles
+Reset every monitor setting to its default	Restablecer todos los ajustes del monitor
+Reset on transport	Restablecer con el transporte
+Reset on transport: Play and Stop clear the peaks	Restablecer con el transporte: Reproducir y Detener borran los picos
+Reset plugins on transport	Restablecer plugins con el transporte
+Reset the root note and fine tuning	Restablecer la nota raíz y la afinación fina
+Reset time spent on project	Restablecer el tiempo dedicado al proyecto
+Resonance	Resonancia
+Respect recording filter	Respetar el filtro de grabación
+Rest	Silencio
+Restore / maximize	Restaurar / maximizar
+Restore backup...	Restaurar respaldo...
+Restore previous state after solo	Volver al estado anterior después de solo
+Resynchronize to taps	Resincronizar con los toques
+Retro audio capture is off: TOOLS > Retro audio capture > Enabled	La captura retro de audio está apagada: HERRAMIENTAS > Captura retro de audio > Activada
+Retro audio capture off	Captura retro de audio apagada
+Retro audio capture on: keeps the last {} minute(s) of what plays	Captura retro de audio encendida: guarda los últimos {} minuto(s) de lo que suena
+Reverse polarity	Invertir polaridad
+Revert	Revertir
+Right	Derecha
+Right button clears steps	El botón derecho borra pasos
+Root note: {}	Nota raíz: {}
+Rotate left	Girar a la izquierda
+Rotate right	Girar a la derecha
+Route the new channels to mixer tracks 1, 2, 3...	Mandar los canales nuevos a las pistas del mezclador 1, 2, 3...
+Row	Fila
+Row - drag onto the other row to swap them	Fila - arrástrala sobre la otra para intercambiarlas
+Run the effects on the insert tracks	Correr los efectos en las pistas de inserción
+Run the effects on the master	Correr los efectos en el maestro
+SHIFT	SHIFT
+SKEW	INCLINAR
+SLIDE	DESLIZAR
+SONG	CANCIÓN
+SPEED	VELOCIDAD
+Sag	Comba
+Sample	Muestra
+Sample rate	Frecuencia de muestreo
+Sample rate (Hz)	Frecuencia de muestreo (Hz)
+Samples	Muestras
+Samples not zipped	Muestras sin comprimir
+Saturation	Saturación
+Saturation (left to right) and brightness (bottom to top)	Saturación (de izquierda a derecha) y brillo (de abajo hacia arriba)
+Save	Guardar
+Save as	Guardar como
+Save as template	Guardar como plantilla
+Save as template: no user folder	Guardar como plantilla: no hay carpeta de usuario
+Save as template: wait for the project to load or the export to end	Guardar como plantilla: espera a que cargue el proyecto o termine la exportación
+Save as... / Save new version (Shift+Ctrl+S)	Guardar como... / Guardar versión nueva (Shift+Ctrl+S)
+Save custom layout	Guardar distribución personalizada
+Save preset as	Guardar preset como
+Save preset as...	Guardar preset como...
+Save preset...	Guardar preset...
+Save the factors to cables.txt in the user data folder (loaded at start)	Guardar los factores en cables.txt en la carpeta de datos del usuario (se carga al arrancar)
+Save the settings to monitor.txt in the user data folder (loaded at start)	Guardar los ajustes en monitor.txt en la carpeta de datos del usuario (se carga al arrancar)
+Save to new project folder	Guardar en una carpeta de proyecto nueva
+Save to the project data folder if there is one	Guardar en la carpeta de datos del proyecto si existe
+Saved	Guardado
+Saved by: {}	Guardado por: {}
+Saved preset {}	Se guardó el preset {}
+Saved {}	Se guardó {}
+Saw cycle	Ciclo de sierra
+Scale and chord helpers	Ayudas de escala y acordes
+Scale levels...	Escalar niveles...
+Scale: the keys the new notes take	Escala: las teclas que usan las notas nuevas
+Scale: the notes move to its keys	Escala: las notas se mueven a sus teclas
+Scaling	Escala
+Scan	Buscar
+Scan for new plugins	Buscar plugins nuevos
+Scan for new plugins (scanning...)	Buscar plugins nuevos (buscando...)
+Scan for new plugins at startup	Buscar plugins nuevos al arrancar
+Scanning	Buscando
+Scanning for new plugins...	Buscando plugins nuevos...
+Scene	Escena
+Score log cleared	Se borró el registro de puntuaciones
+Scores	Puntuaciones
+Scroll	Desplazar
+Scroll the keyboard	Desplazar el teclado
+Scroll the lane down	Bajar el carril
+Scroll the lane up	Subir el carril
+Search	Buscar
+Search box on top	Buscador arriba
+Search by name, vendor, category or format (Esc clears)	Buscar por nombre, fabricante, categoría o formato (Esc lo borra)
+Search folders	Carpetas de búsqueda
+Search for folders	Buscar carpetas
+Search plugins	Buscar plugins
+Search the browser (Enter = find next, Esc = clear)	Buscar en el explorador (Enter = siguiente, Esc = borrar)
+Searched: click to skip this folder	Buscada: clic para saltar esta carpeta
+Seed	Semilla
+Select	Seleccionar
+Select (E): drag a box to select notes, Ctrl adds	Seleccionar (E): arrastra un recuadro para elegir notas, Ctrl suma
+Select (Up/Down)	Seleccionar (Arriba/Abajo)
+Select a project folder...	Elegir una carpeta de proyecto...
+Select a stretch of time	Elegir un tramo de tiempo
+Select all	Seleccionar todo
+Select audio input	Elegir entrada de audio
+Select channel	Elegir canal
+Select clip source (right-click for its menu)	Elegir fuente del clip (clic derecho para su menú)
+Select first channel with notes when the pattern changes	Elegir el primer canal con notas al cambiar de patrón
+Select folder	Elegir carpeta
+Select in arranger	Seleccionar en el arreglador
+Select linked controls automatically	Elegir solos los controles enlazados
+Select next	Elegir siguiente
+Select or create a project folder	Elegir o crear una carpeta de proyecto
+Select pattern	Elegir patrón
+Select previous	Elegir anterior
+Select to create a new project folder	Elige para crear una carpeta de proyecto nueva
+Select what is included when recording audio	Elegir qué se incluye al grabar audio
+Selected	Elegido
+Selection	Selección
+Semitones	Semitonos
+Send all notes off	Mandar todas las notas apagadas
+Send all notes off to this device on init and after render	Mandar todas las notas apagadas a este dispositivo al iniciar y después de renderizar
+Send master sync	Mandar sincronía maestra
+Send master synchronization to this device	Mandar la sincronía maestra a este dispositivo
+Send next to selected channel	Mandar el siguiente al canal elegido
+Send previous to selected channel	Mandar el anterior al canal elegido
+Send to selected channel	Mandar al canal elegido
+Sensitivity	Sensibilidad
+Sequence	Secuencia
+Sequence length	Largo de la secuencia
+Set as	Usar como
+Set as time division	Usar como división de tiempo
+Set as time signature	Usar como métrica
+Set background color...	Elegir color de fondo...
+Set dynamic wallpaper / HTML document...	Fondo dinámico / documento HTML...
+Set image wallpaper	Poner imagen de fondo
+Set image wallpaper...	Poner imagen de fondo...
+Set loop point	Poner punto de bucle
+Set mixer tracks for new channels	Fijar pistas del mezclador para los canales nuevos
+Set start values automatically	Poner valores iniciales solo
+Set the colour	Poner el color
+Set the project name	Poner el nombre del proyecto
+Set to default project root folder	Usar la carpeta raíz de proyectos predeterminada
+Set up your audio	Configura tu audio
+Set...	Fijar...
+Settings	Ajustes
+Shape	Forma
+Share of its speed a cable keeps each second (lower settles sooner)	Parte de su velocidad que un cable conserva cada segundo (menos se asienta antes)
+Shared	Compartido
+Shared (other programs play too)	Compartido (otros programas también suenan)
+Sharps - #	Sostenidos - #
+Shortcuts applied	Atajos aplicados
+Show ASIO panel	Mostrar panel ASIO
+Show ASIO panel: the ASIO driver's own settings, while one is open	Mostrar panel ASIO: los ajustes propios del controlador ASIO, mientras haya uno abierto
+Show all	Mostrar todo
+Show channel settings	Mostrar ajustes del canal
+Show clip properties	Mostrar propiedades del clip
+Show every time	Mostrar siempre
+Show help in a web browser	Mostrar la ayuda en un navegador web
+Show icons and text on tabs	Mostrar íconos y texto en las pestañas
+Show in Explorer	Mostrar en el Explorador
+Show in Finder	Mostrar en Finder
+Show in file manager	Mostrar en el administrador de archivos
+Show in folder	Mostrar en la carpeta
+Show info on opening	Mostrar info al abrir
+Show info on opening: {}	Mostrar info al abrir: {}
+Show none	No mostrar nada
+Show parent folders in search results	Mostrar las carpetas padre en los resultados
+Show plugin library	Mostrar la biblioteca de plugins
+Show recent changes at the top	Mostrar arriba los cambios recientes
+Show startup splash screen	Mostrar pantalla de inicio
+Show the file in the file manager when the export is done	Mostrar el archivo en el administrador de archivos al terminar la exportación
+Show the project's information	Mostrar la información del proyecto
+Show this section	Mostrar esta sección
+Show undo history in the browser when undoing changes	Mostrar el historial en el explorador al deshacer cambios
+Show when necessary	Mostrar cuando haga falta
+Show window	Mostrar ventana
+Silent startup	Arranque silencioso
+Simple	Simple
+Sine	Senoidal
+Sixth-beat	Sexto de pulso
+Size	Tamaño
+Skins	Pieles
+Skip	Saltar
+Skip this version	Saltar esta versión
+Skip to regular file browser	Ir al explorador de archivos normal
+Skipped: click to search this folder	Saltada: clic para buscar en esta carpeta
+Slice (C): drag a line to cut notes	Cortar (C): arrastra una línea para cortar notas
+Slide	Deslizar
+Slot name	Nombre de la ranura
+Slot {}	Ranura {}
+Slow	Lento
+Slower	Más lento
+Small scrollbars in editors	Barras de desplazamiento chicas en los editores
+Smallest	Lo más chico
+Smallest ({})	Lo más chico ({})
+Smoothing	Suavizado
+Smoothing envelope time (milliseconds)	Tiempo de la envolvente de suavizado (milisegundos)
+Snap	Ajuste
+Snap panel: click turns snapping on / off (Backspace)	Panel de ajuste: clic enciende / apaga el ajuste (Retroceso)
+Snap to grid: {} (right-click: stock note lengths)	Ajustar a la rejilla: {} (clic derecho: largos de nota comunes)
+Snap: where a note halfway between two keys goes	Ajuste: a dónde va una nota que queda entre dos teclas
+Snap: {}	Ajuste: {}
+Socket	Conector
+Socket: tempo	Conector: tempo
+Solo	Solo
+Song	Canción
+Song position	Posición en la canción
+Song position (bar:beat:tick)	Posición en la canción (compás:pulso:tick)
+Song position (bar:step:tick)	Posición en la canción (compás:paso:tick)
+Song position (minute:second:centisecond)	Posición en la canción (minuto:segundo:centésima)
+Song position (minute:second:frame)	Posición en la canción (minuto:segundo:cuadro)
+Song position (right-drag: time selection)	Posición en la canción (clic derecho y arrastra: elegir tiempo)
+Song position: the arranger is empty	Posición en la canción: el arreglador está vacío
+Song: play the arrangement	Canción: toca el arreglo
+Sort by this column	Ordenar por esta columna
+Sort by this column (again: the other way round)	Ordenar por esta columna (otra vez: al revés)
+Sort by {} (click again to reverse)	Ordenar por {} (clic otra vez para invertir)
+Source	Fuente
+Source code	Código fuente
+Space	Espacio
+Spacing (bars)	Espaciado (compases)
+Spacing in bars: click to choose	Espaciado en compases: clic para elegir
+Speed	Velocidad
+Speed kept	Velocidad conservada
+Split by instrument	Separar por instrumento
+Split mixer tracks	Separar pistas del mezclador
+Square	Cuadrada
+Square cycle	Ciclo cuadrado
+Stack	Pila
+Stack: {}	Pila: {}
+Star: list it first in the plugin menus	Estrella: aparece primero en los menús de plugins
+Start	Inicio
+Start a new project for the import, or add it to this one	Empezar un proyecto nuevo para lo importado, o sumarlo a este
+Start here	Empieza aquí
+Start level: drag up or down	Nivel inicial: arrastra arriba o abajo
+Start new project	Empezar proyecto nuevo
+Start on input	Empezar con la entrada
+Start time	Inicio
+Start: strum the note starts and velocities	Inicio: rasguea los inicios y las velocidades de las notas
+Startup project	Proyecto de arranque
+Status bar	Barra de estado
+Status: off	Estado: apagado
+Step	Paso
+Step - click or drag to paint (left / right)	Paso - clic o arrastre para pintar (izquierdo / derecho)
+Step count	Cantidad de pasos
+Step edit: {} does not play at the song position	Edición por pasos: {} no suena en la posición de la canción
+Step editing (Ctrl+E)	Edición por pasos (Ctrl+E)
+Step parameters	Parámetros de paso
+Step parameters (Ctrl+K)	Parámetros de paso (Ctrl+K)
+Step parameters: {} - click / drag to set (left or right button)	Parámetros de paso: {} - clic / arrastre para fijar (botón izquierdo o derecho)
+Step {} - click to toggle	Paso {} - clic para alternar
+Steps	Pasos
+Steps per beat	Pasos por pulso
+Stereo separation	Separación estéreo
+Stereo separation: 	Separación estéreo: 
+Stereo, or one channel	Estéreo, o un solo canal
+Stiffness	Rigidez
+Still me	Sigo siendo yo
+Stock note lengths	Largos de nota comunes
+Stop	Detener
+Stop (Space)	Detener (Espacio)
+Stop the preview	Detener la vista previa
+Straight line	Línea recta
+Streamlined	Simplificado
+Strength	Fuerza
+Stretch mode: off (Shift+M)	Modo estirar: apagado (Shift+M)
+Stretch mode: on (Shift+M)	Modo estirar: encendido (Shift+M)
+Stretch the rest of each period over the cut	Estirar el resto de cada periodo sobre el corte
+Stretch to compensate	Estirar para compensar
+Structure	Estructura
+Strum...	Rasguear...
+Subtle	Sutil
+Swap A / B	Intercambiar A / B
+Swap left & right channels	Intercambiar canales izquierdo y derecho
+Swap mouse buttons for drawing	Intercambiar botones del mouse al dibujar
+Sweep	Barrido
+Switch kick	Patada al cambiar
+Switch lift	Salto al cambiar
+Switch tug	Tirón al cambiar
+Sync	Sincronía
+Synth	Sintetizador
+System	Sistema
+System / miscellaneous	Sistema / varios
+TAGS	ETIQUETAS
+TAP	TOCAR
+TIME	TIEMPO
+TOOLS	HERR.
+TRACK	PISTA
+Tablet (alternate)	Tableta (alterna)
+Tablet (default)	Tableta (predeterminada)
+Tags	Etiquetas
+Tail	Cola
+Tap me, or press any key on your MIDI keyboard	Tócame, o toca cualquier tecla de tu teclado MIDI
+Tap tempo	Marcar el tempo
+Tap tempo (Ctrl+F5)	Marcar el tempo (Ctrl+F5)
+Target channel (wheel: channels with notes; right-click: settings)	Canal destino (rueda: canales con notas; clic derecho: ajustes)
+Target mixer track	Pista destino del mezclador
+Target mixer track: {}  (double-click)	Pista destino del mezclador: {}  (doble clic)
+Template	Plantilla
+Tempo	Tempo
+Tempo (BPM)	Tempo (BPM)
+Tempo (drag up/down: the whole number, or the decimal place the drag starts on)	Tempo (arrastra arriba/abajo: el número entero, o el decimal donde empieza el arrastre)
+Tension	Tensión
+Tension: drag up or down	Tensión: arrastra arriba o abajo
+Tension: {}%	Tensión: {}%
+Test	Prueba
+Test FX	Probar FX
+Test: build Drum Kit	Prueba: armar kit de batería
+Test: channel settings	Prueba: ajustes del canal
+Test: fader drag	Prueba: arrastre de fader
+Text	Texto
+Text colour changed so the text reads (Ctrl+Z undoes)	Se cambió el color del texto para que se lea (Ctrl+Z lo deshace)
+Text is hard to read on some surfaces with these colours.	Con estos colores el texto cuesta leerse sobre algunos fondos.
+The app bundle declares .flp files; the system's Open with settings decide	El paquete de la app declara los archivos .flp; los ajustes Abrir con del sistema deciden
+The arranger is empty	El arreglador está vacío
+The audio logger has heard nothing yet	El registro de audio aún no ha oído nada
+The colour before: click to go back to it	El color de antes: clic para volver a él
+The container is full (15 plugins)	El contenedor está lleno (15 plugins)
+The data folder 	La carpeta de datos 
+The data folder's new name	El nombre nuevo de la carpeta de datos
+The file goes from your themes folder.	El archivo sale de tu carpeta de temas.
+The files' name (each format adds its extension)	El nombre de los archivos (cada formato agrega su extensión)
+The files' sample rate (the project renders at the device's)	La frecuencia de los archivos (el proyecto se renderiza a la del dispositivo)
+The folder shown: type a path and press Enter to go there	La carpeta que se muestra: escribe una ruta y pulsa Enter para ir ahí
+The folder: click, type another one or empty it (removes it from the browser), Enter	La carpeta: clic, escribe otra o déjala vacía (la quita del explorador), Enter
+The input device is chosen on the Audio page.	El dispositivo de entrada se elige en la página Audio.
+The instrument the new channels play	El instrumento que tocan los canales nuevos
+The music studio of Beethoven Craft	El estudio de música de Beethoven Craft
+The pattern already has a time signature defined at the start. Do you want replace it?	El patrón ya tiene una métrica al principio. ¿Quieres reemplazarla?
+The pattern has no notes	El patrón no tiene notas
+The pattern isn't empty:	El patrón no está vacío:
+The piano roll's channel has no notes in this pattern.	El canal del piano roll no tiene notas en este patrón.
+The plugin did not take the value	El plugin no aceptó el valor
+The project's author	El autor del proyecto
+The project's genre	El género del proyecto
+The project's new name	El nombre nuevo del proyecto
+The project's title	El título del proyecto
+The selected channel is about to be deleted.	Se va a borrar el canal elegido.
+The selected channel is not a sampler	El canal elegido no es un sampler
+The sound after the end: cut it, let it ring out, or wrap it to the start (a seamless loop)	El sonido después del final: cortarlo, dejarlo sonar, o envolverlo al principio (un bucle sin cortes)
+The system's Open with settings decide which program opens .flp files	Los ajustes Abrir con del sistema deciden qué programa abre los archivos .flp
+The toolbar presets, Save preset as... and Delete preset	Los presets de la barra, Guardar preset como... y Borrar preset
+The type of file listed	El tipo de archivo que se muestra
+The whole song, or only the time selection	Toda la canción, o solo el tramo elegido
+The {} selected channels are about to be deleted.	Se van a borrar los {} canales elegidos.
+Theme	Tema
+Themes	Temas
+There are no notes to export.	No hay notas que exportar.
+There is no backup of 	No hay respaldo de 
+There is no time selection	No hay tramo elegido
+Thick lines	Líneas gruesas
+Thick lines: from 200 % scaling	Líneas gruesas: desde 200 % de escala
+Thicken	Engrosar
+Third-beat	Tercio de pulso
+This build doesn't update itself.	Esta versión no se actualiza sola.
+This build has no updater.	Esta versión no tiene actualizador.
+This copy of Beethoven DAW is not inside its {}.app, so it can't update itself.	Esta copia de Beethoven DAW no está dentro de su {}.app, así que no puede actualizarse.
+This copy of Beethoven DAW is not running from its AppImage, so it can't update itself.	Esta copia de Beethoven DAW no corre desde su AppImage, así que no puede actualizarse.
+This copy of Beethoven DAW was built from its source code, so it doesn't update itself: update it with git pull, then cargo run -p beethoven_daw --release (see the README).	Esta copia de Beethoven DAW se compiló desde su código, así que no se actualiza sola: actualízala con git pull y luego cargo run -p beethoven_daw --release (ver el README).
+This effect is not loaded (its plugin was not found)	Este efecto no está cargado (no se encontró su plugin)
+This option	Esta opción
+This parameter cannot be automated	Este parámetro no se puede automatizar
+This plugin has no parameters to browse	Este plugin no tiene parámetros que ver
+This plugin has no parameters to link	Este plugin no tiene parámetros que enlazar
+This plugin is not loaded (it was not found)	Este plugin no está cargado (no se encontró)
+Threaded project sample loading	Cargar las muestras del proyecto en varios hilos
+Threads:	Hilos:
+Three	Tres
+Time	Tiempo
+Time display	Formato de tiempo
+Time dist	Distancia de tiempo
+Time marker (click: song position, drag moves, right-click: menu)	Marca de tiempo (clic: posición, arrastre: mover, clic derecho: menú)
+Time mul	Multiplicador de tiempo
+Time multiplicator: {}	Multiplicador de tiempo: {}
+Time settings	Ajustes de tiempo
+Time signature change	Cambio de métrica
+Time signature conflict	Choque de métricas
+Timebase (PPQ)	Base de tiempo (PPQ)
+Timebase (PPQ): click to choose	Base de tiempo (PPQ): clic para elegir
+Title	Título
+To {}	A {}
+Toggle browser	Mostrar/ocultar explorador
+Toggle plugin picker	Mostrar/ocultar selector de plugins
+Toggle project picker	Mostrar/ocultar selector de proyectos
+Toolbar presets	Presets de la barra
+Toolbars scaling	Escala de las barras
+Tools	Herramientas
+Touch controller	Controlador táctil
+Touch controller (Alt+F7)	Controlador táctil (Alt+F7)
+Touch controller: {}	Controlador táctil: {}
+Track	Pista
+Track (double-click: rename, right-click: menu, Shift+wheel: move)	Pista (doble clic: renombrar, clic derecho: menú, Shift+rueda: mover)
+Track audio input	Entrada de audio de la pista
+Track inspector	Inspector de pista
+Track latency  {}	Latencia de la pista  {}
+Track {}	Pista {}
+Tracking	Seguimiento
+Transparent menus	Menús transparentes
+Transparent windows	Ventanas transparentes
+Transport	Transporte
+Transpose: click or drag, the key becomes C5	Transportar: clic o arrastre, la tecla pasa a ser C5
+Trash every	Descartar cada
+Trash every: the part of each period cut out	Descartar cada: la parte de cada periodo que se corta
+Trial	Prueba
+Triangle	Triángulo
+Triangular	Triangular
+Triangular dither on 16 and 24-bit files	Dither triangular en archivos de 16 y 24 bits
+Trigger ahead	Disparar antes
+Trigger ahead: the strum ends on the chord's start	Disparar antes: el rasgueo termina en el inicio del acorde
+Triple buffer	Búfer triple
+Troubleshooting	Solución de problemas
+Turn into automation clip	Convertir en clip de automatización
+Twelve	Doce
+Two	Dos
+Two things	Dos cosas
+Type	Tipo
+Type a data folder name (without \ / : * ? " < > |).	Escribe un nombre para la carpeta de datos (sin \ / : * ? " < > |).
+Type a name for the file.	Escribe un nombre para el archivo.
+Type a name for the theme	Escribe un nombre para el tema
+Type a project name (without \ / : * ? " < > |).	Escribe un nombre de proyecto (sin \ / : * ? " < > |).
+Type in normalized value (0-1) or %	Escribe un valor normalizado (0-1) o %
+Type to filter	Escribe para filtrar
+Type, Enter accepts, Esc cancels	Escribe, Enter acepta, Esc cancela
+Typing keyboard to piano keyboard (Ctrl+T)	Teclado de la computadora como piano (Ctrl+T)
+Ultrasmooth	Ultrasuave
+Unassigned	Sin asignar
+Unassigned {}	Sin asignar {}
+Unassigned {} audio tracks	{} pistas de audio sin asignar
+Under	Debajo
+Undo	Deshacer
+Undo (Ctrl+Z)	Deshacer (Ctrl+Z)
+Undo / Undo history (Ctrl+Z)	Deshacer / Historial (Ctrl+Z)
+Undo history	Historial de deshacer
+Undo knob tweaks	Deshacer movimientos de perillas
+Unfold	Desplegar
+Unique / feedback port number (right-click: reset)	Número de puerto único / de retorno (clic derecho: restablecer)
+Unsorted	Sin ordenar
+Untitled	Sin título
+Unzip	Descomprimir
+Unzipping project	Descomprimiendo proyecto
+Up	Arriba
+Up to the folder above (Alt+Up)	Subir a la carpeta de arriba (Alt+Arriba)
+Update	Actualizar
+Update MIDI scripts	Actualizar scripts MIDI
+Update available	Hay una actualización
+Update languages	Actualizar idiomas
+Updates	Actualizaciones
+Use existing channel	Usar el canal existente
+Use the high-performance power plan	Usar el plan de energía de alto rendimiento
+Use the project name	Usar el nombre del proyecto
+Use this name	Usar este nombre
+Use this skin's own colours, on either skin (right-click to duplicate)	Usar los colores propios de esta piel, en cualquier piel (clic derecho para duplicar)
+Use this skin: its shapes and own colours	Usar esta piel: sus formas y sus colores
+Use this theme's colours (right-click to duplicate)	Usar los colores de este tema (clic derecho para duplicar)
+Use your theme (right-click to rename, duplicate, delete or show it in its folder)	Usar tu tema (clic derecho para renombrar, duplicar, borrar o mostrarlo en su carpeta)
+User	Usuario
+User data folder	Carpeta de datos del usuario
+User folder: {}	Carpeta de usuario: {}
+Utility buttons	Botones de utilidades
+VIEW	VER
+Value	Valor
+Value for 	Valor de 
+Value for {}	Valor de {}
+Variation	Variación
+Variation: {}	Variación: {}
+Velocity	Velocidad
+Velocity tracking	Seguimiento de velocidad
+Vendor	Fabricante
+Verse	Estrofa
+Version {}	Versión {}
+Vertical scrolling speed	Velocidad de desplazamiento vertical
+View	Vista
+View extra volume / stereo properties	Ver propiedades extra de volumen / estéreo
+View waveforms (Alt+W)	Ver formas de onda (Alt+W)
+Volume	Volumen
+Volume multiplier	Multiplicador de volumen
+WAV bit depth	Profundidad de bits WAV
+WAV: uncompressed audio	WAV: audio sin comprimir
+WET	HÚMEDO
+Wallpaper: {}	Fondo: {}
+Waves	Ondas
+Web link	Enlace web
+Website	Sitio web
+Wet	Húmedo
+What happens to the note lengths	Qué pasa con el largo de las notas
+What to render: the arrangement, or one pass of the current pattern	Qué renderizar: el arreglo, o una pasada del patrón actual
+What would you like to record?	¿Qué quieres grabar?
+Where the pattern restarts: Time, Block or Chord	Dónde vuelve a empezar el patrón: Tiempo, Bloque o Acorde
+Which channels to import?	¿Qué canales importar?
+Which tracks to import?	¿Qué pistas importar?
+Whole	Entero
+Wide	Ancho
+Widen the window or lower Toolbars scaling	Agranda la ventana o baja la escala de las barras
+Width	Ancho
+Window buttons	Botones de ventana
+Windows opens .flp files with another program: choose Beethoven DAW under Open with ▸ Choose another app	Windows abre los archivos .flp con otro programa: elige Beethoven DAW en Abrir con ▸ Elegir otra app
+Working time reset	Se reinició el tiempo de trabajo
+Wrap to top / bottom	Dar la vuelta arriba / abajo
+Wrap: keys above the range go to its bottom, keys below to its top	Dar la vuelta: las teclas arriba del rango van a su parte baja, las de abajo a su parte alta
+Write each note's start as a marker into WAV files (Pattern)	Escribir el inicio de cada nota como marca en los archivos WAV (Patrón)
+Write the loop (the time selection, else the whole file) into WAV files	Escribir el bucle (el tramo elegido, si no todo el archivo) en los archivos WAV
+Write the markers into WAV files	Escribir las marcas en los archivos WAV
+Write the master's own file with the split tracks	Escribir el archivo propio del maestro junto con las pistas separadas
+Write the sequence to the channel's steps (Enter)	Escribir la secuencia en los pasos del canal (Enter)
+Write the tempo into WAV files	Escribir el tempo en los archivos WAV
+Yes	Sí
+You	Tú
+You have the newest version of Beethoven DAW, {}.	Tienes la versión más nueva de Beethoven DAW, {}.
+Your first song	Tu primera canción
+Zip file	Archivo zip
+Zipping project	Comprimiendo proyecto
+Zoom	Zoom
+Zoom (Z): drag a box to zoom, right-click zooms out / back	Zoom (Z): arrastra un recuadro para acercar, clic derecho aleja / vuelve
+Zoom (Z; click: in, drag: on the stretch, right-click: out)	Zoom (Z; clic: acerca, arrastre: al tramo, clic derecho: aleja)
+Zoom in	Acercar
+Zoom on selection	Acercar a la selección
+Zoom out	Alejar
+[untitled]	[sin título]
+\n  and {} more	\n  y {} más
+\n\nInstalling closes Beethoven DAW (asking about unsaved changes first) and opens the new version.	\n\nInstalar cierra Beethoven DAW (preguntando antes por los cambios sin guardar) y abre la versión nueva.
+\n\nWhat's new:	\n\nNovedades:
+\nand {} more	\ny {} más
+of the GNU General Public License, version 3 or (at your option) any later version.	de la GNU General Public License, versión 3 o (a tu elección) cualquier versión posterior.
+the default device	el dispositivo predeterminado
+the system's default	el del sistema
+unknown error	error desconocido
+wait until the project has loaded	espera a que cargue el proyecto
+your theme	tu tema
+zipped project	proyecto comprimido
+{} has no help page	{} no tiene página de ayuda
+© 2026 ItsAlphaNeon and contributors · Modified by mixter-ha99, 2026	© 2026 ItsAlphaNeon y colaboradores · Modificado por mixter-ha99, 2026
