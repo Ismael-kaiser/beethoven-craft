@@ -12,6 +12,8 @@ cp daw/target/release/beethoven_daw "$T/Contents/MacOS/beethoven-daw"
 cp empaque/Info.plist "$T/Contents/"
 cp empaque/icono.icns empaque/proyecto.icns "$T/Contents/Resources/"
 cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE AVISOS.md "$T/Contents/Resources/"
+mkdir -p "$T/Contents/Resources/recursos" && cp recursos/*.txt "$T/Contents/Resources/recursos/"
+cp daw/THIRD-PARTY-NOTICES.txt "$T/Contents/Resources/DAW-THIRD-PARTY-NOTICES.txt"
 codesign --force --sign - "$T"
 # Se cambia de golpe: la app vieja puede estar abierta.
 [ -e "$A" ] && mv "$A" ".app-vieja-$$"

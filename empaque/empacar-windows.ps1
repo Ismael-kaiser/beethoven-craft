@@ -19,6 +19,10 @@ New-Item -ItemType Directory -Force $T | Out-Null
 Copy-Item target\release\toma-uno.exe "$T\beethoven-craft.exe"
 Copy-Item daw\target\release\beethoven_daw.exe "$T\beethoven-daw.exe"
 Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, AVISOS.md, README.md $T
+# Licencias de lo que viene adentro.
+New-Item -ItemType Directory -Force "$T\recursos" | Out-Null
+Copy-Item recursos\*.txt "$T\recursos"
+Copy-Item daw\THIRD-PARTY-NOTICES.txt "$T\DAW-THIRD-PARTY-NOTICES.txt"
 if ($Ffmpeg -ne "") {
     Copy-Item (Join-Path $Ffmpeg "ffmpeg.exe"), (Join-Path $Ffmpeg "ffprobe.exe") $T
     $Lic = Join-Path $Ffmpeg "..\LICENSE.txt"
