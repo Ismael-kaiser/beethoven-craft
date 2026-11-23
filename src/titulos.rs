@@ -2,6 +2,7 @@
 use crate::curvas::{Curva, Familia, Sentido};
 use crate::modelo::{AnimTexto, BucleTexto, MovTexto, PorTexto, Titulo};
 use effectcraft_raster::Image;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
@@ -320,17 +321,16 @@ pub fn dibujar_en(t: &Titulo, w: usize, h: usize, seg: f64, dur: f64) -> Image {
             ant = Some(c);
         }
     }
-    let mut poner = |cob: &dyn Fn(usize, usize) -> f32, col: [f32; 4]| {
-        for y in 0..h {
-            for x in 0..w {
+    let mut poner = |cob: &(dyn Fn(usize, usize) -> f32 + Sync), col: [f32; 4]| {
+        img.data.par_chunks_mut(w.max(1)).enumerate().for_each(|(y, fila)| {
+            for (x, d) in fila.iter_mut().enumerate() {
                 let a = cob(x, y) * col[3];
                 if a > 0.0 {
-                    let d = &mut img.data[y * w + x];
                     let k = 1.0 - a;
                     *d = [col[0] * a + d[0] * k, col[1] * a + d[1] * k, col[2] * a + d[2] * k, a + d[3] * k];
                 }
             }
-        }
+        });
     };
     let _ = en_palabra;
     let fondo = if anim.is_some() { [t.fondo[0], t.fondo[1], t.fondo[2], t.fondo[3] * visto] } else { t.fondo };

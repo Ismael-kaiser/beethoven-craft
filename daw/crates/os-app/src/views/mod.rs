@@ -19,6 +19,7 @@ pub mod mondebug;
 pub mod settings;
 pub mod mixer;
 pub mod piano;
+pub mod page;
 pub mod patterns;
 pub mod perf;
 pub mod plugin_palette;
@@ -90,7 +91,8 @@ pub const WORK_Y: f32 = 83.0;
 /// Top of the workspace and the browser now: the window's top while the toolbar is hidden (spec: ui/toolbar-menu.md
 /// §5), else the top band's bottom (`band_h`).
 pub fn work_y(s: &State) -> f32 {
-    if s.toolbar.hidden { 0.0 } else { band_h(s) }
+    let band = if s.toolbar.hidden { 0.0 } else { band_h(s) };
+    if crate::tabs::on() { band + crate::tabs::H } else { band }
 }
 
 /// Display scale of the main window's top band (the toolbar rows, `WORK_Y` tall in its own px for two rows) for a
@@ -237,6 +239,7 @@ pub fn paint(ui: &mut Ui, s: &State, f: &FrameInfo) -> usize {
             Win::PianoDlg => ui.part(Seg::Win(win), a, |ui| piano_dlg::paint(ui, s, f)),
             Win::Events => ui.part(Seg::Win(win), a, |ui| events::paint(ui, s, f)),
             Win::Container => ui.part(Seg::Win(win), a, |ui| container::paint(ui, s, f)),
+            Win::Page => ui.part(Seg::Win(win), a, |ui| page::paint(ui, s, f)),
             Win::PluginPalette => ui.part(Seg::Win(win), a, |ui| plugin_palette::paint(ui, s, f)),
             _ => {}
         }
@@ -246,6 +249,9 @@ pub fn paint(ui: &mut Ui, s: &State, f: &FrameInfo) -> usize {
         }
         ui.c.pop_clip();
         ui.win = None;
+    }
+    if crate::tabs::on() {
+        page::strip(ui, s, Rect::new(0.0, top - crate::tabs::H, w, crate::tabs::H));
     }
     if !s.toolbar.hidden {
         // At Toolbars scaling (spec: ui/ui-scaling.md §1): the band works in its own px, `k` of the window's each, so

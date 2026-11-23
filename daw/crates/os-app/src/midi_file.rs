@@ -1343,3 +1343,13 @@ mod tests {
         assert_eq!(again.tempos, imp.tempos);
     }
 }
+
+/// The current pattern, every channel a track (the Score tab).
+pub fn pattern_smf(s: &crate::app::State) -> Smf {
+    project_file(&s.session.project, false, s.pattern(), s.tempo())
+}
+
+/// The song as arranged (the Score tab).
+pub fn project_smf(s: &crate::app::State) -> Smf {
+    project_file(&s.session.project, true, s.pattern(), s.tempo())
+}

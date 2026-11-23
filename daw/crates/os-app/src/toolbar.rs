@@ -29,7 +29,7 @@ pub const FLEX_EDIT_W: f32 = 16.0;
 /// The preset file's extension.
 pub const EXT: &str = "lstoolbar";
 /// The settings key of the layout.
-const KEY: &str = "toolbar_layout";
+const KEY: &str = "toolbar_layout_2";
 
 /// What the toolbar can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -255,6 +255,14 @@ impl Layout {
         PRESETS[0].layout()
     }
 
+    /// Beethoven DAW's own: menus and what plays above, tools and switches below; the tabs take the window buttons' place.
+    pub fn own() -> Layout {
+        Layout {
+            rows: vec![vec![Caption, Menu, Flex, Transport, Time, SongPos, Flex, Monitor, Cpu], vec![Space, Pattern, Snap, Modes, Flex, Recording, Flex, Pitch, Volume, Utilities, Space]],
+            logo: false,
+        }
+    }
+
     /// The panels' band height, its bottom edge excepted: 81 px for two rows, 40 for one.
     pub fn height(&self) -> f32 {
         ROW_H * self.rows.len().max(1) as f32 - 1.0
@@ -316,7 +324,7 @@ impl Layout {
 
     /// The layout kept in `settings.txt`; the classic one when there is none or it cannot be read.
     pub fn load() -> Layout {
-        crate::settings_file::get(KEY).and_then(|v| Layout::parse(&v)).unwrap_or_else(Layout::classic)
+        crate::settings_file::get(KEY).and_then(|v| Layout::parse(&v)).unwrap_or_else(|| if crate::tabs::on() { Layout::own() } else { Layout::classic() })
     }
 
     /// Keeps the layout for the next start.

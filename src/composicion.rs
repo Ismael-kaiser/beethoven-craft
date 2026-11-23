@@ -540,6 +540,14 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
     // Una escala negativa voltea; cero no se dibuja.
     let firme = |v: f64| if v.abs() < 0.0001 { 0.0001 } else { v };
     let (ex, ey) = (firme(ex), firme(ey));
+    let op = (m.opacidad.en(tl).num() / 100.0).clamp(0.0, 1.0) as f32;
+    // Sin mover ni estirar, la imagen sirve tal cual: no se copia.
+    if ex == 1.0 && ey == 1.0 && giro == 0.0 && ox == cx && oy == cy && (b.img.width as usize, b.img.height as usize) == (w, h) {
+        if op < 1.0 {
+            b.img.data.par_iter_mut().for_each(|q| *q = q.map(|v| v * op));
+        }
+        return Some(b.img);
+    }
     let mut o = Image::new(w as u32, h as u32);
     if ex == 1.0 && ey == 1.0 && giro == 0.0 && cx == cx.round() && cy == cy.round() && (ox - cx).fract() == 0.0 && (oy - cy).fract() == 0.0 {
         let (dx, dy) = ((ox - cx) as i64, (oy - cy) as i64);
@@ -569,11 +577,78 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
             }
         });
     }
-    let op = (m.opacidad.en(tl).num() / 100.0).clamp(0.0, 1.0) as f32;
     if op < 1.0 {
         o.data.par_iter_mut().for_each(|q| *q = q.map(|v| v * op));
     }
     Some(o)
+}
+
+/// Un texto o figura que se ve igual todo el tiempo.
+fn quieto(c: &ClipVideo, t: f64) -> bool {
+    let fijo = match &c.contenido {
+        Contenido::Titulo(x) => x.anim.is_none(),
+        Contenido::Forma(_) => true,
+        _ => false,
+    };
+    fijo && c.fx.iter().all(|f| !f.activo)
+        && c.nodos.as_ref().is_none_or(|g| !g.activo)
+        && c.mov.props().iter().all(|p| p.claves.is_empty())
+        && c.entrada.as_ref().is_none_or(|x| t >= c.inicio + x.dur)
+        && c.salida.as_ref().is_none_or(|x| t <= c.fin() - x.dur)
+}
+
+/// Un recuadro de imagen: (x, y) y lo que va ahí.
+struct Recuadro {
+    x: usize,
+    y: usize,
+    img: Image,
+}
+
+/// El dibujo de un clip quieto, recortado a lo que tiene, guardado para el siguiente cuadro.
+fn guardado(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Arc<Recuadro> {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    static G: OnceLock<std::sync::Mutex<Vec<(u64, Arc<Recuadro>)>>> = OnceLock::new();
+    let mut k = DefaultHasher::new();
+    (w, h, p.ancho, p.alto, serde_json::to_string(&(&c.contenido, &c.mov)).unwrap_or_default()).hash(&mut k);
+    let k = k.finish();
+    let g = G.get_or_init(Default::default);
+    if let Some(q) = g.lock().unwrap().iter().find(|x| x.0 == k) {
+        return q.1.clone();
+    }
+    let img = dibujar_clip(c, t, p, w, h, f).unwrap_or_else(|| Image::new(w as u32, h as u32));
+    let q = Arc::new(match img.alpha_bounds() {
+        Some((x0, y0, x1, y1)) => {
+            let mut r = Image::new(x1 - x0, y1 - y0);
+            let rw = r.width as usize;
+            for (y, fila) in r.data.chunks_mut(rw).enumerate() {
+                let i = (y0 as usize + y) * w + x0 as usize;
+                fila.copy_from_slice(&img.data[i..i + rw]);
+            }
+            Recuadro { x: x0 as usize, y: y0 as usize, img: r }
+        }
+        None => Recuadro { x: 0, y: 0, img: Image::new(0, 0) },
+    });
+    let mut g = g.lock().unwrap();
+    if g.len() >= 24 {
+        g.remove(0);
+    }
+    g.push((k, q.clone()));
+    q
+}
+
+/// Encima, en modo normal, solo donde hay algo.
+fn encimar(l: &mut Image, q: &Recuadro) {
+    let (w, rw) = (l.width as usize, q.img.width as usize);
+    if rw == 0 {
+        return;
+    }
+    let alto = q.img.height as usize;
+    l.data[q.y * w..(q.y + alto) * w].par_chunks_mut(w).zip(q.img.data.par_chunks(rw)).for_each(|(d, s)| {
+        for (d, s) in d[q.x..q.x + rw].iter_mut().zip(s) {
+            let k = 1.0 - s[3];
+            *d = [s[0] + d[0] * k, s[1] + d[1] * k, s[2] + d[2] * k, s[3] + d[3] * k];
+        }
+    });
 }
 
 /// Compone el cuadro del segundo `t`. Opaco, RGBA de 8 bits.
@@ -623,6 +698,13 @@ pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) ->
             }
             continue;
         }
+        let modo = FUSIONES.get(c.mov.fusion as usize).map_or(BlendMode::Normal, |x| x.1);
+        // Textos y figuras quietos se dibujan una vez y se encima solo su recuadro.
+        if let (Some(l), BlendMode::Normal, true) = (lienzo.as_mut(), modo, quieto(c, t)) {
+            let q = guardado(c, t, p, w, h, f);
+            encimar(l, &q);
+            continue;
+        }
         let vacio = || Image::new(w as u32, h as u32);
         let mut img = dibujar_clip(c, t, p, w, h, f).unwrap_or_else(vacio);
         if let Some(tr) = c.entrada.as_ref().filter(|x| t < c.inicio + x.dur) {
@@ -633,8 +715,15 @@ pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) ->
         if let Some(tr) = c.salida.as_ref().filter(|x| t > c.fin() - x.dur) {
             img = transicion(tr, &img, &vacio(), ((t - (c.fin() - tr.dur)) / tr.dur.max(0.01)) as f32, escala);
         }
-        let modo = FUSIONES.get(c.mov.fusion as usize).map_or(BlendMode::Normal, |x| x.1);
-        lienzo.get_or_insert_with(|| Image::filled(w as u32, h as u32, negro)).blend_from(&img, modo, 1.0, 0);
+        match lienzo.as_mut() {
+            Some(l) => l.blend_from(&img, modo, 1.0, 0),
+            None if modo == BlendMode::Normal => {
+                // Lo de hasta abajo va sobre negro: basta con hacerlo opaco.
+                img.data.par_iter_mut().for_each(|q| q[3] = 1.0);
+                lienzo = Some(img);
+            }
+            None => lienzo.get_or_insert_with(|| Image::filled(w as u32, h as u32, negro)).blend_from(&img, modo, 1.0, 0),
+        }
     }
     match lienzo {
         Some(i) => i.to_rgba8_over([0.0; 3]),

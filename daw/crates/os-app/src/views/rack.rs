@@ -702,10 +702,30 @@ fn title_bar(ui: &mut Ui, s: &State, win: Rect, c: Cols, f: &FrameInfo) {
     icons::draw(ui.c, Icon::Close, close.inset(1.5), if hov { ui.t.tx(0xffffff) } else { t.glyph });
 }
 
+/// A step as a round pad: a ring when off, filled when on; the first pads of each beat a little larger.
+fn pad(ui: &mut Ui, r: Rect, on: bool, past_len: bool, hov: bool, playing: bool, odd: bool) {
+    let t = ui.t;
+    let (cx, cy) = (r.cx(), r.cy());
+    let k = (r.w.min(r.h) / 2.0 - 0.5).max(3.0);
+    if on {
+        ui.c.fill_circle(cx, cy, k, t.step_on.with_alpha(if past_len { 90 } else { 255 }));
+        ui.c.fill_circle(cx, cy - k * 0.25, k * 0.45, t.note_sel_top.with_alpha(60));
+    } else {
+        let face = if odd { t.step_b } else { t.step_a };
+        ui.c.fill_circle(cx, cy, k * 0.86, if hov { face.shade(0.15) } else { face.with_alpha(if past_len { 90 } else { 255 }) });
+    }
+    if playing || hov {
+        ui.c.stroke_circle(cx, cy, k, if playing { 2.0 } else { 1.0 }, t.accent);
+    }
+}
+
 /// One step button (§3): bordered, lighter at the top, a dark dash below the top edge (red at the play position).
 /// `odd`: in an odd colour group (red; a group is a beat of the project's signature, §23).
 fn step_button(ui: &mut Ui, r: Rect, odd: bool, on: bool, past_len: bool, hov: bool, playing: bool) {
     let t = ui.t;
+    if crate::tabs::on() {
+        return pad(ui, r, on, past_len, hov, playing, odd);
+    }
     if super::beethoven(ui) {
         return lk::step(ui.c, t, r, on, odd, past_len, hov, playing);
     }

@@ -12,6 +12,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 
+/// El codificador de la máquina no sirvió: se usa el de ffmpeg.
+static SIN_ACELERADOR: AtomicBool = AtomicBool::new(false);
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Modo {
     Video,
@@ -46,12 +49,17 @@ impl Opciones {
     fn video(&self) -> Vec<String> {
         let s = |x: &[&str]| x.iter().map(|y| y.to_string()).collect::<Vec<_>>();
         match self.codec {
+            // El codificador de la Mac va mucho más rápido y deja libre el procesador para componer.
+            Codec::H264 if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => {
+                s(&["-c:v", "h264_videotoolbox", "-profile:v", "high", "-q:v", ["45", "60", "75"][self.calidad.min(2)], "-pix_fmt", "yuv420p"])
+            }
             Codec::H264 => s(&["-c:v", "libx264", "-preset", "veryfast", "-crf", ["24", "18", "14"][self.calidad.min(2)], "-pix_fmt", "yuv420p"]),
             // En Mac, el codificador de la máquina; en Windows y Linux, x265.
-            Codec::H265 if cfg!(target_os = "macos") => {
+            Codec::H265 if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => {
                 s(&["-c:v", "hevc_videotoolbox", "-q:v", ["45", "60", "75"][self.calidad.min(2)], "-tag:v", "hvc1", "-pix_fmt", "yuv420p"])
             }
             Codec::H265 => s(&["-c:v", "libx265", "-preset", "fast", "-crf", ["28", "23", "19"][self.calidad.min(2)], "-tag:v", "hvc1", "-pix_fmt", "yuv420p"]),
+            Codec::ProRes if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => s(&["-c:v", "prores_videotoolbox", "-profile:v", ["1", "2", "3"][self.calidad.min(2)], "-pix_fmt", "p210le"]),
             Codec::ProRes => s(&["-c:v", "prores_ks", "-profile:v", ["1", "2", "3"][self.calidad.min(2)], "-pix_fmt", "yuv422p10le"]),
         }
     }
@@ -106,11 +114,19 @@ pub fn exportar_con(
     // Se escribe a un archivo aparte y se renombra al final: si algo falla no queda un archivo a medias.
     let nombre = salida.file_name().and_then(|n| n.to_str()).ok_or("Nombre inválido")?;
     let tmp = salida.with_file_name(format!(".toma-uno-{nombre}"));
-    let r = if modo == Modo::Video && (!p.video_simple() || !op.simple()) {
-        componer(p, almacen, &tmp, op, ini, dur, avance, cancelar)
-    } else {
-        escribir(p, almacen, &tmp, modo, op, ini, dur, avance, cancelar)
+    let hacer = || {
+        if modo == Modo::Video && (!p.video_simple() || !op.simple()) {
+            componer(p, almacen, &tmp, op, ini, dur, avance, cancelar)
+        } else {
+            escribir(p, almacen, &tmp, modo, op, ini, dur, avance, cancelar)
+        }
     };
+    let mut r = hacer();
+    // Si falló con el codificador de la máquina, otra vez con el de ffmpeg.
+    if r.is_err() && modo == Modo::Video && cfg!(target_os = "macos") && !cancelar.load(Relaxed) && !SIN_ACELERADOR.swap(true, Relaxed) {
+        avance.store(0, Relaxed);
+        r = hacer();
+    }
     match r {
         Ok(()) => std::fs::rename(&tmp, salida).map_err(|e| e.to_string()),
         Err(e) => {
@@ -288,6 +304,24 @@ fn en_paralelo(
     });
 }
 
+/// El único clip, si va completo, sin cambios y ya está en el formato que se pide.
+fn copiable<'a>(p: &'a Proyecto, op: &Opciones, dur: f64) -> Option<&'a crate::modelo::ClipVideo> {
+    let [v] = p.video.as_slice() else { return None };
+    let entero = v.inicio < 1e-3 && v.desde < 1e-3 && v.fin() >= dur - 0.05 && (v.ancho, v.alto) == (p.ancho, p.alto) && (v.fps - p.fps).abs() < 0.01;
+    if !entero || op.codec == Codec::ProRes || op.calidad == 0 {
+        return None;
+    }
+    let s = medios::comando(medios::herramienta("ffprobe"))
+        .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,pix_fmt,start_time", "-of", "csv=p=0"])
+        .arg(&v.ruta)
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&s.stdout).trim().to_string();
+    let x: Vec<&str> = s.split(',').collect();
+    let codec = if op.codec == Codec::H264 { "h264" } else { "hevc" };
+    (x.len() >= 3 && x[0] == codec && x[1] == "yuv420p" && x[2].parse::<f64>().is_ok_and(|t| t.abs() < 0.05)).then_some(v)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn escribir(
     p: &Proyecto,
@@ -306,7 +340,13 @@ fn escribir(
     let d = format!("{dur:.6}");
     if modo == Modo::Video {
         let (w, h, fps) = (p.ancho / 2 * 2, p.alto / 2 * 2, medios::fps_fraccion(p.fps));
+        if let Some(v) = copiable(p, op, dur) {
+            // Nada cambió en la imagen: se pasa tal cual, sin volver a codificar.
+            c.arg("-i").arg(&v.ruta).args(["-map", "1:v:0", "-map", "0:a", "-c:v", "copy"]).args(op.audio()).args(["-movflags", "+faststart"]);
+        } else {
         let mut g = format!("color=black:s={w}x{h}:r={fps}:d={d},format=yuv420p[b0]");
+        // Un solo clip que cubre todo no necesita el fondo negro.
+        let solo = matches!(p.video.as_slice(), [v] if v.inicio < 1e-3 && v.fin() >= dur - 1e-3);
         for (i, v) in p.video.iter().enumerate() {
             let (n, fin) = (i + 1, v.inicio + v.dur);
             // El clip se mueve antes de `fps`: así se redondea una sola vez, a la rejilla de la salida.
@@ -318,8 +358,12 @@ fn escribir(
                 v.inicio, v.inicio, v.inicio
             );
         }
+        if solo {
+            g = format!("[1:v:0]setpts=PTS-STARTPTS,fps={fps}:start_time=0,scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[b1]");
+        }
         c.args(["-filter_complex", &g, "-map", &format!("[b{}]", p.video.len()), "-map", "0:a"]);
         c.args(op.video()).args(op.audio()).args(["-movflags", "+faststart"]);
+        }
     } else {
         match tmp.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
             "wav" => c.args(["-c:a", "pcm_s24le"]),

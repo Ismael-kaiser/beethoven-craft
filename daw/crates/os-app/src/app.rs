@@ -58,6 +58,8 @@ pub enum Win {
     /// The plugin palette: the searchable list of the installed plugins a pick adds from (Beethoven DAW's design: spec
     /// ui/plugin-menu.md §6).
     PluginPalette,
+    /// A page that is a tab of its own (`crate::tabs`): Score, Ideas, Export.
+    Page,
     /// A docked hosted-plugin window (a native child window; rack row), stacked with the drawn windows.
     Hosted(usize),
 }
@@ -138,6 +140,11 @@ pub enum Cursor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
+    /// The workspace's tabs (`crate::tabs`) and the pages that are tabs of their own (`crate::page`).
+    Tab(crate::tabs::Tab),
+    TabClose(crate::tabs::Tab),
+    TabNew,
+    Page(crate::page::Hit),
     /// Settings window (spec: ui/settings.md).
     Settings(views::settings::SAct),
     /// A control that is drawn but not functional yet (`Ui::off`): hovering and clicking only say so.
@@ -1215,6 +1222,8 @@ pub struct State {
     pub toolbar: views::toolbar::Opts,
     /// The toolbar's layout, its editor and the user's presets (spec: ui/toolbar-menu.md §8).
     pub bar: crate::toolbar::Bar,
+    pub tabs: crate::tabs::Tabs,
+    pub page: crate::page::Page,
     pub message: Option<String>,
     pub toggles: Vec<&'static str>,
     /// Settings > MIDI's devices and status (`crate::midi_play`; spec: ui/midi-settings.md).
@@ -1353,6 +1362,9 @@ impl State {
 
     /// Where the window is painted: the workspace when maximized, a title bar when minimized.
     pub fn win_rect(&self, w: Win) -> Rect {
+        if w == Win::Page {
+            return self.work_rect();
+        }
         // Detached: its whole native window (`App::on_surface`).
         if let (Some(_), Some((dw, dh))) = (w.slot(), self.detached_size(w)) {
             return Rect::new(0.0, 0.0, dw, dh);
@@ -1595,7 +1607,7 @@ impl App {
                 plugdb: Default::default(),
                 z: vec![Win::Playlist, Win::ChannelRack],
                 no_focus: false,
-                show_browser: true,
+                show_browser: !crate::tabs::on(),
                 rack_pos: crate::arrange::RACK_POS,
                 rack_size: views::rack::DEFAULT_SIZE,
                 rack_scroll_x: 0.0,
@@ -1667,6 +1679,8 @@ impl App {
                 clock: crate::clock::Clock::load(),
                 toolbar: views::toolbar::Opts::load(),
                 bar: crate::toolbar::Bar::load(),
+                tabs: Default::default(),
+                page: Default::default(),
                 midi: Default::default(),
                 link_box: None,
                 multilink: Default::default(),
@@ -2337,6 +2351,11 @@ impl App {
             Then::MidiImport(piano) => {
                 if let Some(p) = file {
                     self.midi_file_chosen(p, piano);
+                }
+            }
+            Then::ScoreExport => {
+                if let Some(p) = file {
+                    self.score_export_chosen(p);
                 }
             }
             Then::MidiExport(piano) => {
@@ -4465,6 +4484,9 @@ impl App {
         }
         self.state.screen = canvas.size();
         self.state.ui_scale = canvas.scale;
+        if crate::tabs::sync(&mut self.state) && damage.is_some() {
+            self.invalidate();
+        }
         self.state.motion.get_mut().begin_frame(None);
         // The main window or the workspace shrank: the windows keep their part in it (`win_clamp::keep_all`). Moved
         // during a partial paint, the next frame is painted whole.
@@ -7529,6 +7551,10 @@ impl App {
     /// The wheel's work; returns the window when only that window's view moved (else everything is repainted).
     fn wheel_act(&mut self, dx: f32, dy: f32, shift: bool, ctrl: bool) -> Option<Win> {
         let (x, y) = self.mouse;
+        if self.state.shown(Win::Page) && matches!(self.top_hit(x, y), Some(h) if h.win == Some(Win::Page)) {
+            self.page_wheel(dy, ctrl);
+            return None;
+        }
         let area = self.top_hit(x, y).map(|h| h.action.clone());
         if matches!(area, Some(Action::BrowserList | Action::BrowserRow(_) | Action::BrowserTab(_))) {
             self.browser_wheel(dy + dx);
@@ -8688,6 +8714,25 @@ impl App {
             }
             Action::Perf(p) => self.perf_act(p),
             Action::Tapper(a) => self.tapper_act(a),
+            Action::Tab(t) => {
+                crate::tabs::show(&mut self.state, t);
+                self.invalidate();
+            }
+            Action::TabClose(t) => {
+                let s = &mut self.state;
+                s.tabs.close(t);
+                let cur = s.tabs.cur;
+                crate::tabs::show(s, cur);
+                self.invalidate();
+            }
+            Action::TabNew => {
+                let s = &mut self.state;
+                if let Some(t) = crate::tabs::Tab::ALL.into_iter().find(|t| !s.tabs.open.contains(t)) {
+                    crate::tabs::show(s, t);
+                }
+                self.invalidate();
+            }
+            Action::Page(h) => self.page_act(h),
             Action::Touch(a) => self.touch_act(a),
             Action::Strum(a) => self.strum_act(a),
             Action::Container(a) => self.container_act(a),
