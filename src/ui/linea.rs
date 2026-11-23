@@ -95,6 +95,7 @@ pub enum Que {
     Audio,
 }
 
+pub const AYUDA_VACIO: &str = "No tiene imagen: los efectos, estilos y colores que le pongas se aplican a todo lo que está debajo, también a los textos";
 pub const CAB: f32 = 212.0;
 const REGLA: f32 = 30.0;
 const ORILLA: f32 = 7.0;
@@ -380,6 +381,10 @@ impl App {
                 if que == Que::Todo && ui.button(crate::idioma::t("Pista de video")).clicked() {
                     acciones.push(Accion::CapaNueva);
                 }
+                if que == Que::Todo && ui.button(crate::idioma::t("Clip vacío (efectos para todo)")).on_hover_text(crate::idioma::t(AYUDA_VACIO)).clicked() {
+                    let (t, dur) = self.hueco_vacio();
+                    acciones.push(Accion::ClipVacio(t, dur));
+                }
                 ui.separator();
                 if ui.button(crate::idioma::t("Importar video o audio…")).clicked() {
                     acciones.push(Accion::Importar);
@@ -405,6 +410,15 @@ impl App {
                 match &*s {
                     Soltar::Titulo(i) => self.poner_titulo(*i, t, None),
                     Soltar::Medio(r) => self.poner_medio(&r.clone(), t, 0, None, false),
+                    // Un efecto suelto en el vacío vale para todo lo de abajo.
+                    Soltar::FxVideo(f) => {
+                        let id = self.clip_vacio(t, 5.0);
+                        self.agregar_fx_video(id, f);
+                    }
+                    Soltar::Estilo(i) => {
+                        let id = self.clip_vacio(t, 5.0);
+                        self.poner_estilo(Some(id), *i);
+                    }
                     _ => self.avisar(crate::idioma::t("Suéltalo sobre un clip o una pista"), false),
                 }
             }
@@ -526,6 +540,9 @@ impl App {
             Accion::PistaAudio => {
                 let n = self.p.pistas.len() + 1;
                 self.canal = Canal::Pista(self.p.nueva_pista(&crate::idioma::tf("Audio {}", &[&n])));
+            }
+            Accion::ClipVacio(t, dur) => {
+                self.clip_vacio(t, dur);
             }
             Accion::CapaNueva => {
                 let n = self.p.capas.len();
@@ -825,6 +842,20 @@ impl App {
             pr.rect_filled(carril, 0, Color32::from_white_alpha(5));
         }
         pr.hline(carril.x_range(), carril.bottom() - 0.5, Stroke::new(1.0, c(0x1a1a1a)));
+        rcar.context_menu(|ui| {
+            let t = ui.input(|i| i.pointer.press_origin()).map_or(self.ahora(), |m| a_t(m.x).max(0.0));
+            let k = Id::new("menu-carril-t");
+            let t = ui.data_mut(|d| *d.get_temp_mut_or(k, t));
+            if ui.button(crate::idioma::t("Clip vacío aquí (efectos para lo de abajo)")).on_hover_text(crate::idioma::t(AYUDA_VACIO)).clicked() {
+                ac.push(Accion::ClipVacio(t, 5.0));
+            }
+            if ui.button(crate::idioma::t("Clip vacío para todo el video")).clicked() {
+                ac.push(Accion::ClipVacio(0.0, self.p.fin().max(5.0)));
+            }
+        });
+        if !rcar.context_menu_opened() {
+            ui.data_mut(|d| d.remove::<f64>(Id::new("menu-carril-t")));
+        }
         let mut soltado_en: Option<u64> = None;
         for i in 0..self.p.video.len() {
             if self.p.video[i].capa != capa {
@@ -840,6 +871,7 @@ impl App {
                 Contenido::Imagen => (c(0x24504a), c(0x357a70)),
                 Contenido::Titulo(_) => (c(0x55264a), c(0x8a3f78)),
                 Contenido::Ajuste => (c(0x2c3f5c), c(0x43608c)),
+                Contenido::Forma(_) => (c(0x56331f), c(0x8a5432)),
                 Contenido::Color(_) => (c(0x3c3c46), c(0x5c5c6c)),
             };
             pr.rect_filled(rc, 5, fondo);
@@ -872,7 +904,7 @@ impl App {
                 }
             }
             let m = &v.mov;
-            for q in [&m.x, &m.y, &m.escala, &m.giro, &m.opacidad].into_iter().chain(v.fx.iter().flat_map(|f| f.p.values())) {
+            for q in m.props().into_iter().chain(v.fx.iter().flat_map(|f| f.p.values())) {
                 for k in q.claves.iter().filter(|k| k.0 >= 0.0 && k.0 <= v.dur) {
                     let o = pos2(a_x(v.inicio + k.0), cuerpo.bottom() - 6.0);
                     pr.add(Shape::convex_polygon(
@@ -886,7 +918,8 @@ impl App {
             let mut nombre = match &v.contenido {
                 Contenido::Titulo(t) => t.texto.lines().next().unwrap_or("Título").to_string(),
                 Contenido::Color(_) => "Color".into(),
-                Contenido::Ajuste => crate::idioma::t("Capa de ajuste").into(),
+                Contenido::Ajuste => crate::idioma::t("Clip vacío: efectos para lo de abajo").into(),
+                Contenido::Forma(f) => crate::idioma::t(TipoForma::TODOS.iter().find(|x| x.0 == f.tipo).map_or("Figura", |x| x.1)).into(),
                 _ => nombre_de(&v.ruta),
             };
             let nfx = v.fx.iter().filter(|f| f.activo).count();
@@ -919,7 +952,7 @@ impl App {
                 if ui.button(crate::idioma::t("Duplicar en otra pista")).clicked() {
                     ac.push(Accion::DuplicarVideo(v.id));
                 }
-                if matches!(v.contenido, Contenido::Titulo(_) | Contenido::Imagen | Contenido::Color(_)) {
+                if matches!(v.contenido, Contenido::Titulo(_) | Contenido::Imagen | Contenido::Color(_) | Contenido::Forma(_) | Contenido::Ajuste | Contenido::Archivo) {
                     if v.animado {
                         if ui.button(crate::idioma::t("Abrir en la ventana de animación")).clicked() {
                             ac.push(Accion::Animar(v.id));
@@ -1270,6 +1303,7 @@ pub enum Accion {
     Separar(u64),
     Editar(u64),
     CapaNueva,
+    ClipVacio(f64, f64),
     BorrarCapa(usize),
     VerControles(u64),
     DuplicarVideo(u64),

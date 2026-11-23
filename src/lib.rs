@@ -1,10 +1,12 @@
 // Beethoven Craft. Creado por mixter-ha99. Copyright (C) 2026. SPDX-License-Identifier: GPL-3.0-or-later
 pub mod archivo;
+pub mod atajos;
 pub mod audio;
 pub mod composicion;
 pub mod curvas;
 pub mod animaciones;
 pub mod edicion;
+pub mod formas;
 pub mod idioma;
 pub mod efectos;
 pub mod estilos;

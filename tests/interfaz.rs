@@ -539,3 +539,125 @@ fn animar_un_titulo() {
     assert!(x.en(a.dur / 2.0).num() > -50.0);
     foto(&mut h, "animacion");
 }
+
+/// Clip vacío desde el menú y desde los efectos; lo nuevo entra debajo de él.
+#[test]
+fn clip_vacio_en_pantalla() {
+    use toma_uno::modelo::Contenido;
+    let (mut h, _) = con_clips();
+    h.get_by_label("AGREGAR").click();
+    h.run_steps(3);
+    h.get_by_label_contains("Clip vacío (efectos para todo)").click();
+    h.run_steps(3);
+    let v = h.state().p.video.iter().find(|c| c.contenido == Contenido::Ajuste).unwrap().clone();
+    assert_eq!((v.inicio, v.capa), (0.0, 1));
+    assert!((v.fin() - 7.0).abs() < 1e-6, "cubre todo el video");
+    // Un texto nuevo entra debajo, para que le toque el efecto.
+    h.state_mut().poner_titulo(0, 1.0, None);
+    h.run_steps(3);
+    let capa = |h: &Harness<App>, f: fn(&Contenido) -> bool| h.state().p.video.iter().find(|c| f(&c.contenido)).unwrap().capa;
+    assert!(capa(&h, |c| matches!(c, Contenido::Titulo(_))) < capa(&h, |c| *c == Contenido::Ajuste));
+    // «Aplicar a todo» usa ese mismo clip.
+    pestana(&mut h, "Efectos");
+    h.run_steps(3);
+    h.get_by_label("Estilos listos").click();
+    h.run_steps(3);
+    h.get_by_label("Aplicar a todo el video").click();
+    h.run_steps(3);
+    foto(&mut h, "a-todo");
+    assert!(h.state().lib.a_todo);
+}
+
+#[test]
+fn pestana_animacion() {
+    use toma_uno::animaciones::{Pista, Propiedad};
+    use toma_uno::modelo::*;
+    let mut h = arnes();
+    h.state_mut().poner_titulo(0, 0.0, None);
+    let id = h.state().p.video[0].id;
+    h.state_mut().animar(id);
+    h.run_steps(4);
+    // Está más abajo en la lista: se busca.
+    let r = h.get_by_label("Énfasis en el cursor").rect();
+    h.hover_at(r.center());
+    h.state_mut().anim.buscar = "flotar".into();
+    h.run_steps(3);
+    h.get_by_label("Flotar").click();
+    h.run_steps(3);
+    let c = |h: &Harness<App>| h.state().p.video.iter().find(|c| c.id == id).unwrap().clone();
+    assert!(c(&h).mov.y.claves.len() > 3);
+    // Elegir, copiar y pegar cuadros clave.
+    h.state_mut().anim.claves = vec![(id, Pista::Mov(Propiedad::Y), 0.0)];
+    h.run_steps(2);
+    h.get_by_label("Copiar").click();
+    h.run_steps(2);
+    h.state_mut().ir(4.2);
+    h.run_steps(2);
+    let n = c(&h).mov.y.claves.len();
+    h.get_by_label("Pegar").click();
+    h.run_steps(2);
+    assert_eq!(c(&h).mov.y.claves.len(), n + 1);
+    h.get_by_label("Curva Rebote").click();
+    h.run_steps(2);
+    assert!(format!("{:?}", c(&h).mov.y.curva_en(4.2)).contains("Bounce"));
+    h.state_mut().hacer_atajo("borrar");
+    assert_eq!(c(&h).mov.y.claves.len(), n, "borra el cuadro clave, no el clip");
+    // Grabar: cambiar un valor sin animar pone cuadros clave.
+    h.get_by_label("Grabar claves").click();
+    h.run_steps(2);
+    assert!(h.state().anim.auto);
+    h.state_mut().ir(1.0);
+    h.run_steps(2);
+    foto(&mut h, "anim-pistas");
+    h.get_by_label("Gráfica").click();
+    h.run_steps(3);
+    foto(&mut h, "anim-grafica");
+    h.get_by_label("Elementos").click();
+    h.run_steps(3);
+    h.get_by_label("Figura").click();
+    h.run_steps(3);
+    h.get_by_label("Estrella").click();
+    h.run_steps(4);
+    assert!(h.state().p.video.iter().any(|c| matches!(c.contenido, Contenido::Forma(f) if f.tipo == TipoForma::Estrella)));
+    foto(&mut h, "anim-elementos");
+    h.state_mut().clip = Some(id);
+    h.run_steps(2);
+    // «Texto» también agrega uno desde Elementos: la pastilla es la de arriba.
+    let r = h.get_all_by_label("Texto").map(|x| x.rect()).min_by(|a, b| a.top().total_cmp(&b.top())).unwrap();
+    clic(&mut h, r.center().x, r.center().y);
+    h.run_steps(2);
+    h.get_by_label("Cascada").click();
+    h.run_steps(3);
+    foto(&mut h, "anim-texto");
+}
+
+#[test]
+fn cambiar_atajos() {
+    use eframe::egui::{Key, Modifiers};
+    use toma_uno::atajos;
+    let mut h = arnes();
+    h.state_mut().hacer_atajo("atajos");
+    h.run_steps(10);
+    foto(&mut h, "atajos");
+    // Escrito aquí con la primera acción visible para no depender del desplazamiento.
+    h.get_by_label("Agregar teclas a Guardar").click();
+    h.run_steps(4);
+    foto(&mut h, "atajos-espera");
+    h.key_press_modifiers(Modifiers::COMMAND, Key::F7);
+    h.run_steps(3);
+    assert!(atajos::de("guardar").iter().any(|k| atajos::escribir(k) == "Cmd+F7"), "{:?}", atajos::de("guardar"));
+    // Dárselas a otra acción se las quita a la primera.
+    h.run_steps(8);
+    h.get_by_label("Agregar teclas a Importar video o audio…").click();
+    h.run_steps(2);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::F7);
+    h.run_steps(3);
+    assert!(!atajos::de("guardar").iter().any(|k| atajos::escribir(k) == "Cmd+F7"));
+    foto(&mut h, "atajos-cambiado");
+    h.get_by_label("Regresar todos a los de fábrica").click();
+    h.run_steps(2);
+    assert!(!atajos::cambiado("guardar") && !atajos::cambiado("importar"));
+    h.get_by_label("Listo").click();
+    h.run_steps(3);
+    assert!(!h.state().atajos.abierto);
+}

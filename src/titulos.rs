@@ -1,5 +1,6 @@
 //! Títulos: texto con borde, sombra y fondo.
-use crate::modelo::Titulo;
+use crate::curvas::{Curva, Familia, Sentido};
+use crate::modelo::{AnimTexto, BucleTexto, MovTexto, PorTexto, Titulo};
 use effectcraft_raster::Image;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -89,6 +90,7 @@ pub fn plantilla(n: usize) -> (&'static str, Titulo, f64) {
         fondo: [0.0; 4],
         sombra: 0.6,
         alinear: 0,
+        anim: None,
     };
     match n {
         0 => ("Título al centro", base, 0.0),
@@ -128,7 +130,105 @@ fn difuminar(v: &mut [f32], w: usize, h: usize, r: usize) {
     }
 }
 
+/// Dónde y cómo se dibuja un pedazo del texto en un momento.
+#[derive(Clone, Copy)]
+struct Pose {
+    /// Desplazamiento en altos de letra.
+    x: f32,
+    y: f32,
+    ex: f32,
+    ey: f32,
+    giro: f32,
+    alfa: f32,
+}
+
+const QUIETO: Pose = Pose { x: 0.0, y: 0.0, ex: 1.0, ey: 1.0, giro: 0.0, alfa: 1.0 };
+
+/// Pose a `k` (0 fuera, 1 en su lugar). Al salir se usa al revés.
+fn pose(m: MovTexto, k: f32) -> Pose {
+    let cv = |f, s| Curva::Familia(f, s).aplicar(k as f64) as f32;
+    let suave = cv(Familia::Cubic, Sentido::Salir);
+    let q = QUIETO;
+    match m {
+        MovTexto::Ninguno => q,
+        MovTexto::Maquina => Pose { alfa: if k >= 1.0 { 1.0 } else { 0.0 }, ..q },
+        MovTexto::Aparecer | MovTexto::Azar => Pose { alfa: k, ..q },
+        MovTexto::Subir => Pose { y: (1.0 - suave) * 0.9, alfa: k, ..q },
+        MovTexto::Bajar => Pose { y: (suave - 1.0) * 0.9, alfa: k, ..q },
+        MovTexto::Lado => Pose { x: (suave - 1.0) * 1.6, alfa: k, ..q },
+        MovTexto::Crecer => {
+            let e = cv(Familia::Back, Sentido::Salir).max(0.0);
+            Pose { ex: e, ey: e, alfa: (k * 3.0).min(1.0), ..q }
+        }
+        MovTexto::Encoger => {
+            let e = 1.0 + (1.0 - suave) * 2.2;
+            Pose { ex: e, ey: e, alfa: k, ..q }
+        }
+        MovTexto::Girar => Pose { giro: (1.0 - suave) * -std::f32::consts::PI, ex: suave, ey: suave, alfa: k, ..q },
+        MovTexto::Voltear => Pose { ex: (1.0 - (1.0 - suave) * 1.0).abs().max(0.02), alfa: (k * 2.0).min(1.0), ..q },
+        MovTexto::Rebotar => Pose { y: (cv(Familia::Bounce, Sentido::Salir) - 1.0) * 2.2, alfa: (k * 4.0).min(1.0), ..q },
+    }
+}
+
+/// Revuelve 0..n siempre igual.
+fn revuelto(i: usize, n: usize) -> usize {
+    if n < 2 {
+        return 0;
+    }
+    let mut v: Vec<usize> = (0..n).collect();
+    let mut s = 0x9E37u32;
+    for j in (1..n).rev() {
+        s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        v.swap(j, (s >> 8) as usize % (j + 1));
+    }
+    v[i]
+}
+
+/// Pose del pedazo `i` de `n` en el segundo `t` de un clip de `dur` segundos.
+fn pose_de(a: &AnimTexto, i: usize, n: usize, t: f64, dur: f64) -> Pose {
+    let d = a.dur.max(0.01);
+    let avance = |m: MovTexto, t: f64| {
+        let j = if m == MovTexto::Azar { revuelto(i, n) } else { i };
+        ((t - j as f64 * a.paso) / d).clamp(0.0, 1.0) as f32
+    };
+    let mut q = QUIETO;
+    if a.entrada != MovTexto::Ninguno {
+        q = pose(a.entrada, avance(a.entrada, t));
+    }
+    if a.salida != MovTexto::Ninguno {
+        // La salida termina justo al acabar el clip.
+        let largo = d + a.paso * n.saturating_sub(1) as f64;
+        let k = 1.0 - avance(a.salida, t - (dur - largo));
+        if k < 1.0 {
+            let s = pose(a.salida, k);
+            q = Pose { x: q.x + s.x, y: q.y + s.y, ex: q.ex * s.ex, ey: q.ey * s.ey, giro: q.giro + s.giro, alfa: q.alfa * s.alfa };
+        }
+    }
+    let f = a.fuerza as f32;
+    let (tf, fi) = (t as f32, i as f32);
+    match a.bucle {
+        BucleTexto::Ninguno | BucleTexto::Arcoiris => {}
+        BucleTexto::Ola => q.y += 0.18 * f * (tf * 5.0 - fi * 0.6).sin(),
+        BucleTexto::Temblor => {
+            q.x += 0.04 * f * (tf * 61.0 + fi * 9.0).sin();
+            q.y += 0.04 * f * (tf * 73.0 + fi * 5.0).cos();
+        }
+        BucleTexto::Latido => {
+            let e = 1.0 + 0.16 * f * ((tf * 6.3 - fi * 0.25).sin().max(0.0)).powi(3);
+            q.ex *= e;
+            q.ey *= e;
+        }
+        BucleTexto::Vaiven => q.giro += 0.16 * f * (tf * 4.0 - fi * 0.5).sin(),
+    }
+    q
+}
+
 pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {
+    dibujar_en(t, w, h, 0.0, f64::MAX)
+}
+
+/// El texto en el segundo `seg` de su clip, que dura `dur`.
+pub fn dibujar_en(t: &Titulo, w: usize, h: usize, seg: f64, dur: f64) -> Image {
     let mut img = Image::new(w as u32, h as u32);
     let Some(f) = fuente(&t.letra).or_else(|| fuente("Cuprum")) else { return img };
     let px = (t.tam / 100.0 * h as f32).max(2.0);
@@ -158,7 +258,19 @@ pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {
     let arriba = (h as f32 - total) / 2.0;
     let asc = f.horizontal_line_metrics(px).map_or(px * 0.8, |m| m.ascent);
     let mut cob = vec![0f32; w * h];
+    // Cuántos pedazos hay y cuál es cada letra.
+    let anim = t.anim.filter(|a| a.entrada != MovTexto::Ninguno || a.salida != MovTexto::Ninguno || a.bucle != BucleTexto::Ninguno);
+    let total_piezas = anim.map_or(0, |a| match a.por {
+        PorTexto::Letra => t.texto.chars().filter(|c| !c.is_whitespace()).count(),
+        PorTexto::Palabra => t.texto.split_whitespace().count(),
+        PorTexto::Renglon => lineas.len(),
+    });
+    let (mut letra, mut palabra, mut en_palabra) = (0usize, 0usize, false);
+    // El fondo de un texto animado entra y sale con él.
+    let mut visto = 0f32;
     for (i, l) in lineas.iter().enumerate() {
+        // Centro de cada palabra o renglón, para que gire y crezca completo.
+        en_palabra = false;
         let mut x = match t.alinear {
             -1 => izq,
             1 => izq + mayor - anchos[i],
@@ -169,6 +281,29 @@ pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {
         for c in l.chars() {
             if let Some(a) = ant {
                 x += f.horizontal_kern(a, c, px).unwrap_or(0.0);
+            }
+            if c.is_whitespace() {
+                en_palabra = false;
+            } else if !en_palabra {
+                en_palabra = true;
+                palabra += 1;
+            }
+            if let Some(a) = anim.filter(|_| !c.is_whitespace()) {
+                let pieza = match a.por {
+                    PorTexto::Letra => letra,
+                    PorTexto::Palabra => palabra - 1,
+                    PorTexto::Renglon => i,
+                };
+                letra += 1;
+                let q = pose_de(&a, pieza, total_piezas, seg, dur);
+                visto = visto.max(q.alfa);
+                if q.alfa > 0.0 && q.ex > 0.0 && q.ey > 0.0 {
+                    let (m, b) = f.rasterize(c, px);
+                    letra_movida(&mut cob, w, h, &b, m.width, m.height, [x + m.xmin as f32, base - m.height as f32 - m.ymin as f32], [x + m.advance_width / 2.0, base - px * 0.35], q, px);
+                }
+                x += f.metrics(c, px).advance_width;
+                ant = Some(c);
+                continue;
             }
             let (m, b) = f.rasterize(c, px);
             let (gx, gy) = ((x + m.xmin as f32).round() as i64, (base - m.height as f32 - m.ymin as f32).round() as i64);
@@ -197,10 +332,12 @@ pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {
             }
         }
     };
-    if t.fondo[3] > 0.0 {
+    let _ = en_palabra;
+    let fondo = if anim.is_some() { [t.fondo[0], t.fondo[1], t.fondo[2], t.fondo[3] * visto] } else { t.fondo };
+    if fondo[3] > 0.0 {
         let p = px * 0.35;
         let (x0, x1, y0, y1) = (izq - p, izq + mayor + p, arriba - p * 0.6, arriba + total + p * 0.6);
-        poner(&|x, y| f32::from(x as f32 >= x0 && (x as f32) < x1 && y as f32 >= y0 && (y as f32) < y1), t.fondo);
+        poner(&|x, y| f32::from(x as f32 >= x0 && (x as f32) < x1 && y as f32 >= y0 && (y as f32) < y1), fondo);
     }
     if t.sombra > 0.0 {
         let mut s = cob.clone();
@@ -231,5 +368,55 @@ pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {
         poner(&|x, y| o[y * w + x], t.color_borde);
     }
     poner(&|x, y| cob[y * w + x], t.color);
+    if anim.is_some_and(|a| a.bucle == BucleTexto::Arcoiris) {
+        for y in 0..h {
+            for x in 0..w {
+                let a = cob[y * w + x] * t.color[3];
+                if a > 0.0 {
+                    let hue = x as f32 / w as f32 * 2.0 - seg as f32 * 0.5;
+                    let c = |d: f32| ((hue + d).rem_euclid(1.0) * 6.0 - 3.0).abs().clamp(1.0, 2.0) - 1.0;
+                    let col = [c(0.0) * 0.8 + 0.2, c(2.0 / 3.0) * 0.8 + 0.2, c(1.0 / 3.0) * 0.8 + 0.2];
+                    let d = &mut img.data[y * w + x];
+                    (0..3).for_each(|k| d[k] = col[k] * a + d[k] * (1.0 - a));
+                }
+            }
+        }
+    }
     img
+}
+
+/// Estampa una letra movida, girada o estirada alrededor de `centro`.
+#[allow(clippy::too_many_arguments)]
+fn letra_movida(cob: &mut [f32], w: usize, h: usize, b: &[u8], bw: usize, bh: usize, esq: [f32; 2], centro: [f32; 2], q: Pose, px: f32) {
+    if bw == 0 || bh == 0 {
+        return;
+    }
+    let (s, c) = q.giro.sin_cos();
+    let (ox, oy) = (centro[0] + q.x * px, centro[1] + q.y * px);
+    let (rx, ry) = (centro[0] - esq[0], centro[1] - esq[1]);
+    // Caja que la contiene ya transformada.
+    let r = [(0.0, 0.0), (bw as f32, 0.0), (0.0, bh as f32), (bw as f32, bh as f32)].map(|(x, y)| {
+        let (dx, dy) = ((x - rx) * q.ex, (y - ry) * q.ey);
+        (ox + dx * c - dy * s, oy + dx * s + dy * c)
+    });
+    let min = |k: fn(&(f32, f32)) -> f32| r.iter().map(k).fold(f32::MAX, f32::min);
+    let max = |k: fn(&(f32, f32)) -> f32| r.iter().map(k).fold(f32::MIN, f32::max);
+    let (x0, x1) = ((min(|p| p.0).floor() - 1.0).max(0.0) as usize, (max(|p| p.0).ceil() + 1.0).clamp(0.0, w as f32) as usize);
+    let (y0, y1) = ((min(|p| p.1).floor() - 1.0).max(0.0) as usize, (max(|p| p.1).ceil() + 1.0).clamp(0.0, h as f32) as usize);
+    let tex = |x: i32, y: i32| if x < 0 || y < 0 || x >= bw as i32 || y >= bh as i32 { 0.0 } else { b[y as usize * bw + x as usize] as f32 / 255.0 };
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (dx, dy) = (x as f32 + 0.5 - ox, y as f32 + 0.5 - oy);
+            let u = (dx * c + dy * s) / q.ex + rx - 0.5;
+            let v = (-dx * s + dy * c) / q.ey + ry - 0.5;
+            let (i, j) = (u.floor(), v.floor());
+            let (fu, fv) = (u - i, v - j);
+            let (i, j) = (i as i32, j as i32);
+            let k = (tex(i, j) * (1.0 - fu) + tex(i + 1, j) * fu) * (1.0 - fv) + (tex(i, j + 1) * (1.0 - fu) + tex(i + 1, j + 1) * fu) * fv;
+            if k > 0.0 {
+                let d = &mut cob[y * w + x];
+                *d = d.max(k * q.alfa);
+            }
+        }
+    }
 }

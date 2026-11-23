@@ -119,7 +119,7 @@ impl Proyecto {
             if d.abs() > 1e-9 && entro.abs() > 1e-9 {
                 let corre = entro / c.mov.velocidad.max(0.01);
                 let m = &mut c.mov;
-                for p in [&mut m.x, &mut m.y, &mut m.escala, &mut m.giro, &mut m.opacidad].into_iter().chain(c.fx.iter_mut().flat_map(|f| f.p.values_mut())) {
+                for p in m.props_mut().into_iter().chain(c.fx.iter_mut().flat_map(|f| f.p.values_mut())) {
                     p.correr(-corre);
                 }
             }

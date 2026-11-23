@@ -245,6 +245,136 @@ pub struct Titulo {
     pub sombra: f32,
     /// -1 izquierda, 0 centro, 1 derecha.
     pub alinear: i32,
+    /// Animación por letra, palabra o renglón.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anim: Option<AnimTexto>,
+}
+
+/// Cómo entra o sale cada pedazo de un texto.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovTexto {
+    #[default]
+    Ninguno,
+    Maquina,
+    Aparecer,
+    Subir,
+    Bajar,
+    Lado,
+    Crecer,
+    Encoger,
+    Girar,
+    Voltear,
+    Rebotar,
+    Azar,
+}
+
+impl MovTexto {
+    pub const TODOS: [(MovTexto, &'static str); 12] = [
+        (MovTexto::Ninguno, "Nada"),
+        (MovTexto::Maquina, "Máquina de escribir"),
+        (MovTexto::Aparecer, "Aparecer"),
+        (MovTexto::Subir, "Subir"),
+        (MovTexto::Bajar, "Bajar"),
+        (MovTexto::Lado, "Deslizar de lado"),
+        (MovTexto::Crecer, "Crecer"),
+        (MovTexto::Encoger, "Llegar desde grande"),
+        (MovTexto::Girar, "Girar"),
+        (MovTexto::Voltear, "Voltear"),
+        (MovTexto::Rebotar, "Rebotar"),
+        (MovTexto::Azar, "Aparecer en desorden"),
+    ];
+}
+
+/// Movimiento que se repite mientras el texto está en pantalla.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BucleTexto {
+    #[default]
+    Ninguno,
+    Ola,
+    Temblor,
+    Latido,
+    Vaiven,
+    Arcoiris,
+}
+
+impl BucleTexto {
+    pub const TODOS: [(BucleTexto, &'static str); 6] = [
+        (BucleTexto::Ninguno, "Nada"),
+        (BucleTexto::Ola, "Ola"),
+        (BucleTexto::Temblor, "Temblor"),
+        (BucleTexto::Latido, "Latido"),
+        (BucleTexto::Vaiven, "Vaivén"),
+        (BucleTexto::Arcoiris, "Arcoíris"),
+    ];
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PorTexto {
+    #[default]
+    Letra,
+    Palabra,
+    Renglon,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AnimTexto {
+    pub entrada: MovTexto,
+    pub salida: MovTexto,
+    pub bucle: BucleTexto,
+    pub por: PorTexto,
+    /// Segundos que tarda cada pedazo.
+    pub dur: f64,
+    /// Segundos entre un pedazo y el siguiente.
+    pub paso: f64,
+    /// Fuerza del bucle (1 = normal).
+    pub fuerza: f64,
+}
+
+impl Default for AnimTexto {
+    fn default() -> Self {
+        AnimTexto { entrada: MovTexto::Subir, salida: MovTexto::Ninguno, bucle: BucleTexto::Ninguno, por: PorTexto::Letra, dur: 0.45, paso: 0.05, fuerza: 1.0 }
+    }
+}
+
+/// Figura para animar.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Forma {
+    pub tipo: TipoForma,
+    pub color: [f32; 4],
+    /// Ancho y alto, en por ciento del alto del video.
+    pub tam: [f32; 2],
+    /// Grueso de la línea en por ciento del alto; 0 = rellena.
+    pub linea: f32,
+    /// Esquinas redondas (rectángulo) o puntas (estrella), de 0 a 100.
+    pub extra: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TipoForma {
+    #[default]
+    Rectangulo,
+    Circulo,
+    Triangulo,
+    Estrella,
+    Corazon,
+    Flecha,
+}
+
+impl TipoForma {
+    pub const TODOS: [(TipoForma, &'static str); 6] = [
+        (TipoForma::Rectangulo, "Rectángulo"),
+        (TipoForma::Circulo, "Círculo"),
+        (TipoForma::Triangulo, "Triángulo"),
+        (TipoForma::Estrella, "Estrella"),
+        (TipoForma::Corazon, "Corazón"),
+        (TipoForma::Flecha, "Flecha"),
+    ];
+}
+
+impl Default for Forma {
+    fn default() -> Self {
+        Forma { tipo: TipoForma::Rectangulo, color: [1.0, 0.878, 0.4, 1.0], tam: [40.0, 40.0], linea: 0.0, extra: 0.0 }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -254,8 +384,9 @@ pub enum Contenido {
     Imagen,
     Titulo(Titulo),
     Color([f32; 4]),
-    /// Capa de ajuste: sus efectos se aplican a todo lo de abajo.
+    /// Clip vacío: sus efectos se aplican a todo lo de abajo.
     Ajuste,
+    Forma(Forma),
 }
 
 /// Posición, tamaño y mezcla de un clip de video.
@@ -265,12 +396,33 @@ pub struct Movimiento {
     pub x: Prop,
     pub y: Prop,
     pub escala: Prop,
+    /// Estirado a lo ancho y a lo alto, además de la escala.
+    #[serde(default = "cien")]
+    pub ancho: Prop,
+    #[serde(default = "cien")]
+    pub alto: Prop,
     pub giro: Prop,
     pub opacidad: Prop,
+    /// Punto de apoyo del giro y la escala, desde el centro, en por ciento del clip.
+    #[serde(default)]
+    pub ancla: [f64; 2],
     /// Recorte en por ciento: izquierda, arriba, derecha, abajo.
     pub recorte: [f32; 4],
     pub fusion: u32,
     pub velocidad: f64,
+}
+
+fn cien() -> Prop {
+    Prop::num(100.0)
+}
+
+impl Movimiento {
+    pub fn props(&self) -> [&Prop; 7] {
+        [&self.x, &self.y, &self.escala, &self.ancho, &self.alto, &self.giro, &self.opacidad]
+    }
+    pub fn props_mut(&mut self) -> [&mut Prop; 7] {
+        [&mut self.x, &mut self.y, &mut self.escala, &mut self.ancho, &mut self.alto, &mut self.giro, &mut self.opacidad]
+    }
 }
 
 impl Default for Movimiento {
@@ -279,6 +431,9 @@ impl Default for Movimiento {
             x: Prop::num(0.0),
             y: Prop::num(0.0),
             escala: Prop::num(100.0),
+            ancho: cien(),
+            alto: cien(),
+            ancla: [0.0; 2],
             giro: Prop::num(0.0),
             opacidad: Prop::num(100.0),
             recorte: [0.0; 4],
@@ -670,7 +825,7 @@ impl Proyecto {
             c.dur = corte;
             // Las animaciones siguen donde iban.
             let m = &mut b.mov;
-            for p in [&mut m.x, &mut m.y, &mut m.escala, &mut m.giro, &mut m.opacidad] {
+            for p in m.props_mut() {
                 p.claves.iter_mut().for_each(|k| k.0 -= corte);
             }
             for p in b.fx.iter_mut().flat_map(|f| f.p.values_mut()) {

@@ -85,17 +85,18 @@ fn archivo_ajustes() -> PathBuf {
     carpeta().join("Ajustes.json")
 }
 
-/// Lee los ajustes guardados (por ahora, el idioma) y los pone en marcha.
+/// Lee los ajustes guardados (idioma y atajos de teclado) y los pone en marcha.
 pub fn cargar_ajustes() {
     let v: serde_json::Value = std::fs::read(archivo_ajustes()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     if let Some(i) = v["idioma"].as_str().and_then(Idioma::de_codigo) {
         idioma::poner(i);
     }
+    crate::atajos::de_json(&v["atajos"]);
 }
 
-fn guardar_ajustes() {
+pub fn guardar_ajustes() {
     let _ = std::fs::create_dir_all(carpeta());
-    let v = serde_json::json!({ "idioma": idioma::actual().codigo() });
+    let v = serde_json::json!({ "idioma": idioma::actual().codigo(), "atajos": crate::atajos::a_json() });
     if let Ok(b) = serde_json::to_vec_pretty(&v) {
         let _ = std::fs::write(archivo_ajustes(), b);
     }
@@ -215,6 +216,12 @@ impl App {
             ui.add_space(4.0);
             ui.label(RichText::new(t("Vale para Beethoven Movie y Beethoven DAW.")).size(12.5).color(TEXT_FAINT));
             ui.add_space(10.0);
+            ui.label(RichText::new(t("Teclado")).color(TEXT_DIM));
+            if ui.button(t("Atajos de teclado…")).clicked() {
+                self.atajos.abierto = true;
+                cerrar = true;
+            }
+            ui.add_space(10.0);
             if ui.button(t("Listo")).clicked() {
                 cerrar = true;
             }
@@ -303,7 +310,7 @@ impl App {
                 self.pedir(Confirmar::Abrir);
             }
             ui.add_space(8.0);
-            if opcion(ui, &tabler::SETTINGS, t("Configuración"), t("Idioma de la app"), false).clicked() {
+            if opcion(ui, &tabler::SETTINGS, t("Configuración"), t("Idioma y atajos de teclado"), false).clicked() {
                 self.inicio.config = true;
             }
             if self.ruta.is_some() || self.sin_guardar() {

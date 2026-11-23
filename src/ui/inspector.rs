@@ -119,7 +119,8 @@ impl App {
                     Contenido::Imagen => "Imagen",
                     Contenido::Titulo(_) => "Título",
                     Contenido::Color(_) => "Fondo de color",
-                    Contenido::Ajuste => "Capa de ajuste",
+                    Contenido::Ajuste => "Clip vacío",
+                    Contenido::Forma(_) => "Figura",
                 };
                 ui.label(RichText::new(crate::idioma::t(&n)).size(17.0));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -155,6 +156,25 @@ impl App {
                     });
                     ui.separator();
                 }
+                if let Contenido::Forma(f) = &mut c.contenido {
+                    ui.horizontal(|ui| {
+                        ComboBox::from_id_salt("forma").selected_text(crate::idioma::t(TipoForma::TODOS.iter().find(|x| x.0 == f.tipo).map_or("", |x| x.1))).show_ui(ui, |ui| {
+                            for (v, n) in TipoForma::TODOS {
+                                ui.selectable_value(&mut f.tipo, v, crate::idioma::t(n));
+                            }
+                        });
+                        color(ui, &mut f.color);
+                    });
+                    ui.add(Slider::new(&mut f.tam[0], 0.5..=200.0).text(crate::idioma::t("Ancho")));
+                    ui.add(Slider::new(&mut f.tam[1], 0.5..=200.0).text(crate::idioma::t("Alto")));
+                    ui.add(Slider::new(&mut f.linea, 0.0..=20.0).text(crate::idioma::t("Contorno (0 = rellena)")));
+                    if f.tipo == TipoForma::Rectangulo {
+                        ui.add(Slider::new(&mut f.extra, 0.0..=100.0).text(crate::idioma::t("Esquinas redondas")));
+                    } else if f.tipo == TipoForma::Estrella {
+                        ui.add(Slider::new(&mut f.extra, 0.0..=100.0).text(crate::idioma::t("Puntas")));
+                    }
+                    ui.separator();
+                }
                 if let Contenido::Color(q) = &mut c.contenido {
                     ui.horizontal(|ui| {
                         ui.label(crate::idioma::t("Color"));
@@ -167,8 +187,17 @@ impl App {
                     numero(ui, "Posición X", &mut m.x, t, -100.0, 100.0, 0.0, " %");
                     numero(ui, "Posición Y", &mut m.y, t, -100.0, 100.0, 0.0, " %");
                     numero(ui, "Escala", &mut m.escala, t, 0.0, 300.0, 100.0, " %");
+                    numero(ui, "Ancho", &mut m.ancho, t, -200.0, 300.0, 100.0, " %");
+                    numero(ui, "Alto", &mut m.alto, t, -200.0, 300.0, 100.0, " %");
                     numero(ui, "Giro", &mut m.giro, t, -180.0, 180.0, 0.0, "°");
                     numero(ui, "Opacidad", &mut m.opacidad, t, 0.0, 100.0, 100.0, " %");
+                    ui.horizontal(|ui| {
+                        ui.add_space(20.0);
+                        etiqueta(ui, "Punto de apoyo");
+                        for (v, n) in m.ancla.iter_mut().zip(["X ", "Y "]) {
+                            ui.add(DragValue::new(v).range(-100.0..=100.0).speed(0.3).prefix(n).suffix("%").max_decimals(1)).on_hover_text(crate::idioma::t("Alrededor de dónde gira y crece. 0 es el centro; -50 y 50 son las orillas."));
+                        }
+                    });
                     ui.horizontal(|ui| {
                         ui.add_space(20.0);
                         etiqueta(ui, "Fusión");

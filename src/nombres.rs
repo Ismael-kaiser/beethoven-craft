@@ -800,3 +800,23 @@ pub fn efecto(id: &str) -> &str {
 pub fn transicion(id: &str) -> &str {
     TRANSICIONES.iter().find(|e| e.2 == id).map_or(id, |e| e.1)
 }
+
+/// Nombre de un control de un efecto, en el idioma de la app.
+pub fn control(tipo: &str, id: &str) -> String {
+    let t = crate::idioma::t;
+    if let Some(d) = tipo.strip_prefix("fc:").and_then(craft_trans::effect::find_video) {
+        return d.params.iter().find(|p| p.id == id).map_or(id.into(), |p| t(parametro(p.label)).into());
+    }
+    if let Some(d) = crate::vpropios::buscar(tipo) {
+        use crate::vpropios::Ctl::*;
+        return d
+            .ctl
+            .iter()
+            .find_map(|c| match c {
+                N(k, n, ..) | C(k, n, _) if *k == id => Some(t(n).to_string()),
+                _ => None,
+            })
+            .unwrap_or(id.into());
+    }
+    effectcraft_effects::find(tipo).and_then(|s| s.params.iter().find(|p| p.id == id)).map_or(id.into(), |p| t(parametro(p.name)).into())
+}

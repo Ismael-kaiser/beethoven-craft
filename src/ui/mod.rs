@@ -1,5 +1,6 @@
 //! La ventana: barra, línea de tiempo, vista previa, consola y editor de audio.
 pub mod animacion;
+pub mod atajos;
 pub mod biblioteca;
 pub mod color;
 pub mod consola;
@@ -139,6 +140,7 @@ pub struct App {
     pub inicio: inicio::Estado,
     /// Pestaña de animación.
     pub anim: animacion::Estado,
+    pub atajos: atajos::Estado,
     aplicado: Option<Proyecto>,
     ultimo: Proyecto,
     deshacer: Vec<Proyecto>,
@@ -239,6 +241,7 @@ impl App {
         let mut a = App {
             inicio: inicio::Estado::default(),
             anim: animacion::Estado::default(),
+            atajos: Default::default(),
             aplicado: None,
             ultimo: p.clone(),
             guardado: p.clone(),
@@ -1163,127 +1166,112 @@ impl App {
     }
 
     fn teclas(&mut self, ctx: &Context) {
-        if ctx.egui_wants_keyboard_input() || self.preguntar.is_some() {
+        if ctx.egui_wants_keyboard_input() || self.preguntar.is_some() || self.atajos.abierto {
             return;
         }
-        use egui::{Key, Modifiers as M};
-        let k = |m: M, t: Key| ctx.input_mut(|i| i.consume_key(m, t));
-        if k(M::COMMAND | M::SHIFT, Key::Z) {
-            self.volver(false);
+        for id in ctx.input_mut(|i| crate::atajos::atender(&mut i.events)) {
+            self.hacer_atajo(id);
         }
-        if k(M::COMMAND, Key::Z) {
-            self.volver(true);
-        }
-        if k(M::COMMAND, Key::S) {
-            self.menu_guardar(false);
-        }
-        if k(M::COMMAND, Key::I) {
-            self.menu_importar();
-        }
-        if k(M::COMMAND, Key::M) {
-            self.exportar_op = Some(Default::default());
-        }
-        if k(M::COMMAND, Key::D) {
-            self.transicion_rapida();
-        }
-        if k(M::COMMAND, Key::K) {
-            self.dividir();
-        }
-        if k(M::COMMAND, Key::A) {
-            self.seleccion = self.p.tramos().iter().map(|x| x.id).collect();
-        }
-        if k(M::SHIFT, Key::Delete) || k(M::SHIFT, Key::Backspace) {
-            self.borrar_elegidos(true);
-        }
-        if k(M::NONE, Key::Delete) || k(M::NONE, Key::Backspace) {
-            self.borrar_elegidos(false);
-        }
-        if k(M::NONE, Key::Space) {
-            self.alternar();
-        }
-        for (h, _, t, _) in linea::HERRAMIENTAS {
-            if k(M::NONE, t) {
-                self.linea.herramienta = h;
-            }
-        }
-        if k(M::NONE, Key::S) {
-            self.dividir();
-        }
-        if k(M::NONE, Key::R) {
-            self.grabar();
-        }
-        if k(M::NONE, Key::M) {
-            let (t, n) = (self.ahora(), self.p.marcas.len() + 1);
-            self.p.marcas.push(Marca { t, nombre: crate::idioma::tf("Marca {}", &[&n]) });
-        }
-        if k(M::NONE, Key::I) {
-            self.p.tramo.0 = Some(self.ahora());
-        }
-        if k(M::NONE, Key::O) {
-            self.p.tramo.1 = Some(self.ahora());
-        }
-        if k(M::ALT, Key::X) {
-            self.p.tramo = (None, None);
-        }
-        if let (Some(a), Some(b)) = self.p.tramo {
-            if k(M::NONE, Key::Semicolon) {
-                self.p.quitar_rango(a, b, false);
-            }
-            if k(M::NONE, Key::Quote) {
-                self.p.quitar_rango(a, b, true);
-                self.p.tramo = (None, None);
-                self.ir(a);
-            }
-        }
-        if k(M::NONE, Key::Q) {
-            self.recortar_al_cursor(crate::edicion::Orilla::Izq);
-        }
-        if k(M::NONE, Key::W) {
-            self.recortar_al_cursor(crate::edicion::Orilla::Der);
-        }
-        if k(M::NONE, Key::D) {
-            let t = self.ahora();
-            self.clip = (0..self.p.capas.len()).rev().find_map(|i| self.p.video_en(i, t)).map(|c| c.id);
-        }
-        if k(M::NONE, Key::K) && self.tocando() {
-            self.alternar();
-        }
-        if k(M::NONE, Key::L) && !self.tocando() {
-            self.alternar();
-        }
-        if k(M::NONE, Key::J) {
-            self.ir(self.ahora() - 5.0);
-        }
-        if k(M::NONE, Key::ArrowUp) {
-            self.saltar_corte(-1);
-        }
-        if k(M::NONE, Key::ArrowDown) {
-            self.saltar_corte(1);
-        }
+    }
+
+    /// Lo que hace cada atajo de teclado (`crate::atajos::ACCIONES`).
+    pub fn hacer_atajo(&mut self, id: &str) {
         let paso = 1.0 / self.p.fps.max(1.0);
-        for (t, d) in [(Key::ArrowLeft, -1.0), (Key::ArrowRight, 1.0)] {
-            if k(M::SHIFT, t) {
-                self.ir(self.ahora() + d * 5.0 * paso);
+        let ahora = self.ahora();
+        let animando = self.espacio == Espacio::Animacion;
+        match id {
+            "guardar" => self.menu_guardar(false),
+            "guardar_como" => self.menu_guardar(true),
+            "abrir" => self.pedir(Confirmar::Abrir),
+            "importar" => self.menu_importar(),
+            "exportar" => self.exportar_op = Some(Default::default()),
+            "menu" => {
+                self.pausar();
+                self.inicio.mostrar();
             }
-            if k(M::NONE, t) {
-                self.ir(self.ahora() + d * paso);
+            "atajos" => self.atajos.abierto = true,
+            "tocar" => self.alternar(),
+            "pausa" if self.tocando() => self.alternar(),
+            "seguir" if !self.tocando() => self.alternar(),
+            "regresar5" => self.ir(ahora - 5.0),
+            "detener" => self.detener(),
+            "grabar" => self.grabar(),
+            "cuadro_atras" => self.ir(ahora - paso),
+            "cuadro_adelante" => self.ir(ahora + paso),
+            "cinco_atras" => self.ir(ahora - 5.0 * paso),
+            "cinco_adelante" => self.ir(ahora + 5.0 * paso),
+            "corte_antes" => self.saltar_corte(-1),
+            "corte_despues" => self.saltar_corte(1),
+            "inicio" => self.ir(0.0),
+            "fin" => self.ir(self.p.fin()),
+            "deshacer" => self.volver(true),
+            "rehacer" => self.volver(false),
+            "dividir" => self.dividir(),
+            "borrar" if animando && !self.anim.claves.is_empty() => self.borrar_claves(),
+            "borrar" => self.borrar_elegidos(false),
+            "borrar_cerrar" => self.borrar_elegidos(true),
+            "todo" => self.seleccion = self.p.tramos().iter().map(|x| x.id).collect(),
+            "elegir" => self.clip = (0..self.p.capas.len()).rev().find_map(|i| self.p.video_en(i, ahora)).map(|c| c.id),
+            "recortar_izq" => self.recortar_al_cursor(crate::edicion::Orilla::Izq),
+            "recortar_der" => self.recortar_al_cursor(crate::edicion::Orilla::Der),
+            "transicion" => self.transicion_rapida(),
+            "marca" => {
+                let n = self.p.marcas.len() + 1;
+                self.p.marcas.push(Marca { t: ahora, nombre: crate::idioma::tf("Marca {}", &[&n]) });
+            }
+            "entrada" => self.p.tramo.0 = Some(ahora),
+            "salida" => self.p.tramo.1 = Some(ahora),
+            "sin_tramo" => self.p.tramo = (None, None),
+            "levantar" => {
+                if let (Some(a), Some(b)) = self.p.tramo {
+                    self.p.quitar_rango(a, b, false);
+                }
+            }
+            "extraer" => {
+                if let (Some(a), Some(b)) = self.p.tramo {
+                    self.p.quitar_rango(a, b, true);
+                    self.p.tramo = (None, None);
+                    self.ir(a);
+                }
+            }
+            "vacio" => {
+                let (t, dur) = self.hueco_vacio();
+                self.clip_vacio(t, dur);
+            }
+            "titulo" => self.poner_titulo(0, ahora, None),
+            "acercar" => self.acercar(1.5, 300.0),
+            "alejar" => self.acercar(0.66, 300.0),
+            "ver_todo" => self.linea.encuadrar = true,
+            "iman" => self.linea.iman = !self.linea.iman,
+            "p_playlist" => self.abrir_pestana(Espacio::Playlist),
+            "p_video" => self.abrir_pestana(Espacio::Video),
+            "p_audio" => self.abrir_pestana(Espacio::Audio),
+            "p_efectos" => self.abrir_pestana(Espacio::Efectos),
+            "p_animacion" => self.abrir_pestana(Espacio::Animacion),
+            "animar" => {
+                if let Some(id) = self.clip.filter(|id| self.p.video.iter().any(|c| c.id == *id)) {
+                    self.animar(id);
+                }
+            }
+            "clave" => self.clave_de_todo(),
+            "clave_antes" => self.saltar_clave(-1),
+            "clave_despues" => self.saltar_clave(1),
+            "auto" => self.anim.auto = !self.anim.auto,
+            "copiar_claves" if animando => self.copiar_claves(),
+            "pegar_claves" if animando => self.pegar_claves(),
+            h => {
+                if let Some(x) = h.strip_prefix('h').and_then(|n| n.parse::<usize>().ok()).and_then(|n| linea::HERRAMIENTAS.get(n)) {
+                    self.linea.herramienta = x.0;
+                }
             }
         }
-        if k(M::NONE, Key::Home) {
-            self.ir(0.0);
+    }
+
+    fn abrir_pestana(&mut self, e: Espacio) {
+        if !self.pestanas.contains(&e) {
+            self.pestanas.push(e);
         }
-        if k(M::NONE, Key::End) {
-            self.ir(self.p.fin());
-        }
-        if k(M::NONE, Key::Plus) || k(M::NONE, Key::Equals) {
-            self.acercar(1.5, 300.0);
-        }
-        if k(M::NONE, Key::Minus) {
-            self.acercar(0.66, 300.0);
-        }
-        if k(M::NONE, Key::Backslash) {
-            self.linea.encuadrar = true;
-        }
+        self.espacio = e;
     }
 
     // ---- dibujo
@@ -1337,6 +1325,7 @@ impl App {
             self.ventanas_ui(&ctx);
         }
         self.cuadrar_seleccion();
+        self.ventana_atajos(&ctx);
         self.dialogos(&ctx);
         self.sincronizar();
         self.historial(&ctx);
@@ -1385,7 +1374,7 @@ impl App {
                 if ui.button(crate::idioma::t("Abrir proyecto…")).clicked() {
                     self.pedir(Confirmar::Abrir);
                 }
-                if ui.add(Button::new(crate::idioma::t("Guardar")).shortcut_text("⌘S")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Guardar")).shortcut_text(crate::atajos::menu("guardar"))).clicked() {
                     self.menu_guardar(false);
                 }
                 if ui.button(crate::idioma::t("Guardar como…")).clicked() {
@@ -1395,11 +1384,11 @@ impl App {
                     self.menu_guardar_todo();
                 }
                 ui.separator();
-                if ui.add(Button::new(crate::idioma::t("Importar video o audio…")).shortcut_text("⌘I")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Importar video o audio…")).shortcut_text(crate::atajos::menu("importar"))).clicked() {
                     self.menu_importar();
                 }
                 ui.separator();
-                if ui.add(Button::new(crate::idioma::t("Exportar video con mi audio…")).shortcut_text("⌘M")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Exportar video con mi audio…")).shortcut_text(crate::atajos::menu("exportar"))).clicked() {
                     self.exportar_op = Some(Default::default());
                 }
                 if ui.button(crate::idioma::t("Exportar solo el audio…")).clicked() {
@@ -1408,22 +1397,40 @@ impl App {
             });
             ui.menu_button(crate::idioma::t("EDITAR"), |ui| {
                 ui.set_min_width(220.0);
-                if ui.add(Button::new(crate::idioma::t("Deshacer")).shortcut_text("⌘Z")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Deshacer")).shortcut_text(crate::atajos::menu("deshacer"))).clicked() {
                     self.volver(true);
                 }
-                if ui.add(Button::new(crate::idioma::t("Rehacer")).shortcut_text("⇧⌘Z")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Rehacer")).shortcut_text(crate::atajos::menu("rehacer"))).clicked() {
                     self.volver(false);
                 }
                 ui.separator();
-                if ui.add(Button::new(crate::idioma::t("Dividir en el cursor")).shortcut_text("S")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Dividir en el cursor")).shortcut_text(crate::atajos::menu("dividir"))).clicked() {
                     self.dividir();
                 }
-                if ui.add(Button::new(crate::idioma::t("Borrar clip")).shortcut_text("⌫")).clicked() {
+                if ui.add(Button::new(crate::idioma::t("Borrar clip")).shortcut_text(crate::atajos::menu("borrar"))).clicked() {
                     self.borrar_clip();
+                }
+                ui.separator();
+                if ui.add(Button::new(crate::idioma::t("Atajos de teclado…")).shortcut_text(crate::atajos::menu("atajos"))).clicked() {
+                    self.atajos.abierto = true;
                 }
             });
             ui.menu_button(crate::idioma::t("AGREGAR"), |ui| {
                 ui.set_min_width(220.0);
+                if ui.add(Button::new(crate::idioma::t("Clip vacío (efectos para todo)")).shortcut_text(crate::atajos::menu("vacio"))).on_hover_text(crate::idioma::t(linea::AYUDA_VACIO)).clicked() {
+                    self.hacer_atajo("vacio");
+                }
+                if ui.add(Button::new(crate::idioma::t("Texto")).shortcut_text(crate::atajos::menu("titulo"))).clicked() {
+                    self.hacer_atajo("titulo");
+                }
+                ui.menu_button(crate::idioma::t("Figura"), |ui| {
+                    for (f, n) in TipoForma::TODOS {
+                        if ui.button(crate::idioma::t(n)).clicked() {
+                            self.poner_forma(f);
+                        }
+                    }
+                });
+                ui.separator();
                 if ui.button(crate::idioma::t("Pista de grabación (con efectos de voz)")).clicked() {
                     let id = self.p.nueva_pista_grabacion();
                     self.canal = Canal::Pista(id);
@@ -1573,6 +1580,9 @@ impl App {
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, crate::idioma::t("Arrastra aquí tu video, canción o imagen"), fuente(18.0), TEXT_FAINT);
             }
         }
+        if self.espacio == Espacio::Animacion {
+            self.trayectoria(ui, d);
+        }
         self.mover_en_vista(ui, d);
         ui.painter().rect_filled(barra, 0, WINDOW_TITLE);
         let mut u = ui.new_child(UiBuilder::new().max_rect(barra.shrink2(vec2(8.0, 3.0))).layout(Layout::left_to_right(Align::Center)));
@@ -1616,21 +1626,41 @@ impl App {
             _ => (pw, ph),
         };
         let e = c.mov.escala.en(t).num() as f32 / 100.0;
+        let est = vec2(c.mov.ancho.en(t).num() as f32 / 100.0, c.mov.alto.en(t).num() as f32 / 100.0);
+        let (aw, ah) = match &c.contenido {
+            Contenido::Forma(f) => ((f.tam[0] / 100.0 * ph as f32) as usize, (f.tam[1] / 100.0 * ph as f32) as usize),
+            _ => (aw, ah),
+        };
         let k = d.width() / pw.max(1) as f32;
         let centro = d.center() + vec2(c.mov.x.en(t).num() as f32 / 100.0 * d.width(), c.mov.y.en(t).num() as f32 / 100.0 * d.height());
         let medio = vec2(aw as f32, ah as f32) * k * e / 2.0;
         let giro = emath::Rot2::from_angle((c.mov.giro.en(t).num() as f32).to_radians());
-        let esq = [vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)].map(|v| centro + giro * (v * medio));
+        let esq = [vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)].map(|v| centro + giro * (v * medio * est));
         let p = ui.painter_at(d.expand(1.0));
         p.add(Shape::closed_line(esq.to_vec(), Stroke::new(1.0, MAIN.gamma_multiply(0.7))));
         let asa = Rect::from_center_size(d.clamp(esq[2]), Vec2::splat(14.0));
         p.rect_filled(asa.shrink(3.0), 2, MAIN);
+        // Asa de giro, arriba del clip.
+        let arriba = d.clamp(centro + giro * vec2(0.0, -medio.y * est.y - 22.0));
+        let asa_giro = Rect::from_center_size(arriba, Vec2::splat(16.0));
+        p.circle(arriba, 5.0, WINDOW_TITLE, Stroke::new(1.5, MAIN));
         let cuerpo = ui.interact(d, Id::new("vista-mover").with(ui.id()), Sense::drag());
         let resp = ui.interact(asa, Id::new("vista-escala").with(ui.id()), Sense::drag());
+        let rgiro = ui.interact(asa_giro, Id::new("vista-giro").with(ui.id()), Sense::drag()).on_hover_text(crate::idioma::t("Girar (Shift: de 15 en 15 grados)"));
         if resp.hovered() || resp.dragged() {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeNwSe);
         }
-        if let (true, Some(m)) = (resp.dragged(), resp.interact_pointer_pos()) {
+        if let (true, Some(m)) = (rgiro.dragged(), rgiro.interact_pointer_pos()) {
+            let v = m - centro;
+            let mut g = (v.x.atan2(-v.y)).to_degrees() as f64;
+            if ui.input(|i| i.modifiers.shift) {
+                g = (g / 15.0).round() * 15.0;
+            }
+            // La vuelta más cercana a la que ya llevaba.
+            let antes = c.mov.giro.en(t).num();
+            g += ((antes - g) / 360.0).round() * 360.0;
+            c.mov.giro.poner(t, Valor::Num(g));
+        } else if let (true, Some(m)) = (resp.dragged(), resp.interact_pointer_pos()) {
             let base = (vec2(aw as f32, ah as f32) * k / 2.0).length().max(1.0);
             c.mov.escala.poner(t, Valor::Num(((m - centro).length() / base * 100.0).clamp(1.0, 500.0) as f64));
         } else if cuerpo.dragged() {
@@ -1694,8 +1724,16 @@ impl App {
             Panel::left("herramientas").frame(Frame::new().fill(TOOLBAR).inner_margin(Margin::symmetric(4, 4))).resizable(false).exact_size(38.0).show(ui, |ui| {
                 ScrollArea::vertical().id_salt("herr").show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
-                    for (h, i, _, ayuda) in linea::HERRAMIENTAS {
-                        if boton_color(ui, i, self.linea.herramienta == h, ayuda, GLYPH, 28.0).clicked() {
+                    for (n, (h, i, _, ayuda)) in linea::HERRAMIENTAS.into_iter().enumerate() {
+                        // «Cuchilla (C): corta» con la tecla que tenga ahora.
+                        let ayuda = crate::idioma::t(ayuda);
+                        let tecla = crate::atajos::menu(&format!("h{n}"));
+                        let ayuda = match (ayuda.split_once(" ("), ayuda.split_once("):")) {
+                            (Some((a, _)), Some((_, b))) if tecla.is_empty() => format!("{a}:{b}"),
+                            (Some((a, _)), Some((_, b))) => format!("{a} ({tecla}):{b}"),
+                            _ => ayuda.to_string(),
+                        };
+                        if boton_color(ui, i, self.linea.herramienta == h, &ayuda, GLYPH, 28.0).clicked() {
                             self.linea.herramienta = h;
                         }
                     }

@@ -477,7 +477,8 @@ impl Fuente for Prestado {
 fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<ec::Buf> {
     let k = h as f64 / p.alto.max(1) as f64;
     let img = match &c.contenido {
-        Contenido::Titulo(x) => titulos::dibujar(x, w, h),
+        Contenido::Titulo(x) => titulos::dibujar_en(x, w, h, t - c.inicio, c.dur),
+        Contenido::Forma(x) => crate::formas::dibujar(x, w, h),
         Contenido::Color(q) => Image::filled(w as u32, h as u32, [q[0] * q[3], q[1] * q[3], q[2] * q[3], q[3]]),
         Contenido::Ajuste => return None,
         Contenido::Archivo | Contenido::Imagen => {
@@ -528,9 +529,16 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
     let cx = w as f64 / 2.0 + m.x.en(tl).num() / 100.0 * w as f64;
     let cy = h as f64 / 2.0 + m.y.en(tl).num() / 100.0 * h as f64;
     // Centro de la capa dentro del buffer (los efectos pueden haberlo agrandado).
-    let (ox, oy) = (bw / 2.0 + b.offset[0], bh / 2.0 + b.offset[1]);
+    // El punto de apoyo se queda quieto al girar y escalar.
+    let (ax, ay) = (m.ancla[0] / 100.0 * bw, m.ancla[1] / 100.0 * bh);
+    let (ox, oy) = (bw / 2.0 + b.offset[0] + ax, bh / 2.0 + b.offset[1] + ay);
+    let (cx, cy) = (cx + ax, cy + ay);
+    let (ex, ey) = (esc * (m.ancho.en(tl).num() / 100.0), esc * (m.alto.en(tl).num() / 100.0));
+    // Una escala negativa voltea; cero no se dibuja.
+    let firme = |v: f64| if v.abs() < 0.0001 { 0.0001 } else { v };
+    let (ex, ey) = (firme(ex), firme(ey));
     let mut o = Image::new(w as u32, h as u32);
-    if esc == 1.0 && giro == 0.0 && cx == cx.round() && cy == cy.round() && (ox - cx).fract() == 0.0 && (oy - cy).fract() == 0.0 {
+    if ex == 1.0 && ey == 1.0 && giro == 0.0 && cx == cx.round() && cy == cy.round() && (ox - cx).fract() == 0.0 && (oy - cy).fract() == 0.0 {
         let (dx, dy) = ((ox - cx) as i64, (oy - cy) as i64);
         o.data.par_chunks_mut(w).enumerate().for_each(|(y, fila)| {
             for (x, q) in fila.iter_mut().enumerate() {
@@ -539,7 +547,7 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
         });
     } else {
         // Al achicar mucho se promedian varias muestras para que no brille.
-        let n = ((1.0 / esc).ceil() as i32).clamp(1, 4);
+        let n = ((1.0 / ex.abs().min(ey.abs())).ceil() as i32).clamp(1, 4);
         let (s, cs) = giro.sin_cos();
         o.data.par_chunks_mut(w).enumerate().for_each(|(y, fila)| {
             for (x, q) in fila.iter_mut().enumerate() {
@@ -548,8 +556,8 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
                     for i in 0..n {
                         let px = x as f64 + (i as f64 + 0.5) / n as f64 - cx;
                         let py = y as f64 + (j as f64 + 0.5) / n as f64 - cy;
-                        let u = (px * cs + py * s) / esc + ox - 0.5;
-                        let v = (-px * s + py * cs) / esc + oy - 0.5;
+                        let u = (px * cs + py * s) / ex + ox - 0.5;
+                        let v = (-px * s + py * cs) / ey + oy - 0.5;
                         let z = b.img.sample_bilinear(u, v);
                         (0..4).for_each(|k| acc[k] += z[k]);
                     }
@@ -594,8 +602,18 @@ pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) ->
                 o.data.par_chunks_mut(w).enumerate().for_each(|(y, fila)| {
                     fila.iter_mut().enumerate().for_each(|(x, q)| *q = b.img.get(x as i64 + dx, y as i64 + dy));
                 });
+                // Con recorte, los efectos solo se ven dentro del recuadro.
+                let r = c.mov.recorte;
+                if r.iter().any(|v| *v > 0.0) {
+                    let (x0, y0) = ((w as f32 * r[0] / 100.0) as usize, (h as f32 * r[1] / 100.0) as usize);
+                    let (x1, y1) = ((w as f32 * (1.0 - r[2] / 100.0)) as usize, (h as f32 * (1.0 - r[3] / 100.0)) as usize);
+                    o.data.par_chunks_mut(w).enumerate().for_each(|(y, fila)| {
+                        fila.iter_mut().enumerate().filter(|(x, _)| *x < x0 || *x >= x1 || y < y0 || y >= y1).for_each(|(_, q)| *q = [0.0; 4]);
+                    });
+                }
                 let op = (c.mov.opacidad.en(tl).num() / 100.0).clamp(0.0, 1.0) as f32;
-                l.blend_from(&o, BlendMode::Normal, op, 0);
+                let modo = FUSIONES.get(c.mov.fusion as usize).map_or(BlendMode::Normal, |x| x.1);
+                l.blend_from(&o, modo, op, 0);
             }
             continue;
         }

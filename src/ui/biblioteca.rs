@@ -30,11 +30,13 @@ pub enum Seccion {
 pub struct Estado {
     pub seccion: Seccion,
     buscar: String,
+    /// Los efectos del catálogo van a un clip vacío para todo el video.
+    pub a_todo: bool,
 }
 
 impl Default for Estado {
     fn default() -> Self {
-        Estado { seccion: Seccion::Medios, buscar: String::new() }
+        Estado { seccion: Seccion::Medios, buscar: String::new(), a_todo: false }
     }
 }
 
@@ -205,13 +207,9 @@ impl App {
         }
         let _ = poner;
         ui.add_space(6.0);
-        if ui.add_sized([ancho, 28.0], Button::new(crate::idioma::t("Capa de ajuste"))).on_hover_text(crate::idioma::t("Sus efectos se aplican a todo lo que está debajo")).clicked() {
-            let t = self.ahora();
-            let capa = self.capa_libre(t, 5.0);
-            let mut c = self.p.nuevo_video("Ajuste".into(), Contenido::Ajuste, t, 5.0);
-            c.capa = capa;
-            self.clip = Some(c.id);
-            self.p.video.push(c);
+        if ui.add_sized([ancho, 28.0], Button::new(crate::idioma::t("Clip vacío (efectos para todo)"))).on_hover_text(crate::idioma::t(linea::AYUDA_VACIO)).clicked() {
+            let (t, dur) = self.hueco_vacio();
+            self.clip_vacio(t, dur);
         }
         if ui.add_sized([ancho, 28.0], Button::new(crate::idioma::t("Importar subtítulos SRT"))).clicked() {
             self.importar_srt();
@@ -275,12 +273,47 @@ impl App {
     }
 
     /// Primera capa sin clips en ese tramo, arriba de la de abajo; si no hay, crea una.
+    /// Dónde va un clip vacío nuevo: el tramo marcado, o todo el video.
+    pub fn hueco_vacio(&self) -> (f64, f64) {
+        match self.p.tramo {
+            (Some(a), Some(b)) if b > a => (a, b - a),
+            _ => (0.0, self.p.fin().max(5.0)),
+        }
+    }
+
+    /// Clip sin imagen encima de todo: sus efectos caen sobre lo que está debajo, textos incluidos.
+    pub fn clip_vacio(&mut self, t: f64, dur: f64) -> u64 {
+        // La pista más alta con algo en ese tramo; el clip va arriba de ella.
+        let encima = self.p.video.iter().filter(|c| c.inicio < t + dur && c.fin() > t).map(|c| c.capa + 1).max().unwrap_or(1).max(1);
+        while self.p.capas.len() <= encima {
+            let n = self.p.capas.len() + 1;
+            self.p.capas.push(Capa { nombre: format!("V{n}"), visible: true, bloqueada: false });
+        }
+        let mut c = self.p.nuevo_video("Ajuste".into(), Contenido::Ajuste, t, dur);
+        c.capa = encima;
+        let id = c.id;
+        self.p.video.push(c);
+        self.clip = Some(id);
+        self.panel_izq = PanelIzq::Controles;
+        id
+    }
+
     pub fn capa_libre(&mut self, t: f64, dur: f64) -> usize {
-        let libre = (1..self.p.capas.len()).find(|&i| !self.p.video.iter().any(|c| c.capa == i && c.inicio < t + dur && c.fin() > t));
+        let encima = |c: &&ClipVideo| c.inicio < t + dur && c.fin() > t;
+        // Debajo de los clips vacíos, para que sus efectos también le toquen a lo nuevo.
+        let tope = self.p.video.iter().filter(encima).filter(|c| c.contenido == Contenido::Ajuste).map(|c| c.capa).min().unwrap_or(usize::MAX);
+        let libre = (1..self.p.capas.len().min(tope)).find(|&i| !self.p.video.iter().filter(encima).any(|c| c.capa == i));
         libre.unwrap_or_else(|| {
             let n = self.p.capas.len();
-            self.p.capas.push(Capa { nombre: format!("V{}", n + 1), visible: true, bloqueada: false });
-            n
+            let nueva = Capa { nombre: format!("V{}", n + 1), visible: true, bloqueada: false };
+            if tope >= n {
+                self.p.capas.push(nueva);
+                return n;
+            }
+            let i = tope.max(1);
+            self.p.capas.insert(i, nueva);
+            self.p.video.iter_mut().filter(|c| c.capa >= i).for_each(|c| c.capa += 1);
+            i
         })
     }
 
@@ -380,6 +413,9 @@ impl App {
                 self.pedir_muestras();
             }
         });
+        if matches!(self.lib.seccion, Estilos | FxVideo) {
+            ui.checkbox(&mut self.lib.a_todo, crate::idioma::t("Aplicar a todo el video")).on_hover_text(crate::idioma::t("Pone el efecto en un clip vacío encima de todo: afecta videos, imágenes y textos"));
+        }
         ui.add_space(2.0);
         let q = self.lib.buscar.clone();
         let s = self.lib.seccion;
@@ -413,6 +449,23 @@ impl App {
             }
         });
         if let Some(s) = poner {
+            if self.lib.a_todo && matches!(s, Soltar::FxVideo(_) | Soltar::Estilo(_)) {
+                // El mismo clip vacío recibe los siguientes.
+                let fin = self.p.fin();
+                let ya = self.clip.filter(|id| self.p.video.iter().any(|c| c.id == *id && c.contenido == Contenido::Ajuste)).or_else(|| {
+                    self.p.video.iter().filter(|c| c.contenido == Contenido::Ajuste && c.inicio < 0.05 && c.fin() > fin - 0.05).max_by_key(|c| c.capa).map(|c| c.id)
+                });
+                let id = match ya {
+                    Some(id) => id,
+                    None => self.clip_vacio(0.0, fin.max(5.0)),
+                };
+                match s {
+                    Soltar::FxVideo(f) => self.agregar_fx_video(id, f),
+                    Soltar::Estilo(i) => self.poner_estilo(Some(id), i),
+                    _ => {}
+                }
+                return;
+            }
             self.poner_en_elegido(s);
         }
     }
