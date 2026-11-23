@@ -3,8 +3,8 @@
 use crate::modelo::{SR, db};
 use crate::propios;
 use audio_fx::effects::{
-    Effect, chorus, delay, dynamics as dy, eq, fast_dist, filter, flanger, maximus, phaser, reverb, soft_clipper, stereo_enhancer,
-    transient_processor as trans,
+    Effect, balance, chorus, delay, dynamics as dy, eq, fast_dist, filter, flanger, maximus, phaser, reverb, soft_clipper, stereo_enhancer,
+    stereo_shaper, transient_processor as trans, vocoder,
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +42,12 @@ pub enum TipoFx {
     Vinilo,
     Tartamudeo,
     SubGrave,
+    /// De Beethoven DAW.
+    Parametrico,
+    Distorsion,
+    Moldeador,
+    Vocoder,
+    Balance,
 }
 
 pub struct Param {
@@ -58,7 +64,7 @@ const fn p(nombre: &'static str, min: f32, max: f32, def: f32, unidad: &'static 
 }
 
 impl TipoFx {
-    pub const TODOS: [TipoFx; 32] = [
+    pub const TODOS: [TipoFx; 37] = [
         TipoFx::Ecualizador,
         TipoFx::Compresor,
         TipoFx::Compuerta,
@@ -91,6 +97,11 @@ impl TipoFx {
         TipoFx::Vinilo,
         TipoFx::Tartamudeo,
         TipoFx::SubGrave,
+        TipoFx::Parametrico,
+        TipoFx::Distorsion,
+        TipoFx::Moldeador,
+        TipoFx::Vocoder,
+        TipoFx::Balance,
     ];
 
     /// Grupo en la biblioteca.
@@ -102,9 +113,10 @@ impl TipoFx {
             TipoFx::Reverberacion | TipoFx::Eco | TipoFx::Amplitud | TipoFx::Autopaneo => "Espacio",
             TipoFx::Coro | TipoFx::Faser | TipoFx::Flanger | TipoFx::Tremolo | TipoFx::Vibrato | TipoFx::Tartamudeo => "Modulación",
             TipoFx::Saturador | TipoFx::RecorteSuave | TipoFx::Bits | TipoFx::Vinilo => "Distorsión",
+            TipoFx::Parametrico | TipoFx::Distorsion | TipoFx::Moldeador | TipoFx::Vocoder | TipoFx::Balance => "Beethoven DAW",
         }
     }
-    pub const GRUPOS: [&'static str; 6] = ["Voz", "Dinámica", "Tono y filtros", "Espacio", "Modulación", "Distorsión"];
+    pub const GRUPOS: [&'static str; 7] = ["Beethoven DAW", "Voz", "Dinámica", "Tono y filtros", "Espacio", "Modulación", "Distorsión"];
 
     pub fn nombre(self) -> &'static str {
         crate::idioma::t(self.nombre_es())
@@ -144,6 +156,11 @@ impl TipoFx {
             TipoFx::Vinilo => "Vinilo",
             TipoFx::Tartamudeo => "Tartamudeo",
             TipoFx::SubGrave => "Graves profundos",
+            TipoFx::Parametrico => "Ecualizador paramétrico",
+            TipoFx::Distorsion => "Distorsión rápida",
+            TipoFx::Moldeador => "Moldeador estéreo",
+            TipoFx::Vocoder => "Vocoder",
+            TipoFx::Balance => "Balance",
         }
     }
 
@@ -185,6 +202,11 @@ impl TipoFx {
             TipoFx::Vinilo => "Disco viejo: bamboleo, siseo y chasquidos",
             TipoFx::Tartamudeo => "Corta el sonido a tiempo con el tempo",
             TipoFx::SubGrave => "Agrega una octava abajo y armónicos para que se sientan los bajos",
+            TipoFx::Parametrico => "Siete bandas que se mueven con el ratón sobre la curva",
+            TipoFx::Distorsion => "Distorsión con dos carácteres, de tibia a rota",
+            TipoFx::Moldeador => "Mezcla, retrasa y gira la fase de cada lado del estéreo",
+            TipoFx::Vocoder => "Tu voz habla por un sintetizador",
+            TipoFx::Balance => "Balance entre izquierda y derecha, y volumen",
         }
     }
 
@@ -402,6 +424,63 @@ impl TipoFx {
                 const P: &[Param] = &[p("Tempo", 40.0, 240.0, 120.0, "bpm", false), p("Cortes por golpe", 1.0, 8.0, 4.0, "", false), p("Abierto", 5.0, 100.0, 50.0, "%", false), p("Suavidad", 0.5, 30.0, 4.0, "ms", true), p("Profundidad", 0.0, 100.0, 100.0, "%", false)];
                 P
             }
+            TipoFx::Parametrico => {
+                macro_rules! banda {
+                    ($hz:expr, $tipo:expr) => {
+                        [p("Tipo", 0.0, 7.0, $tipo, "banda", false), p("Frecuencia", 20.0, 20000.0, $hz, "Hz", true), p("Nivel", -18.0, 18.0, 0.0, "dB", false), p("Ancho", 1.0, 100.0, 39.0, "%", false)]
+                    };
+                }
+                const B: [[Param; 4]; 7] = [banda!(60.0, 5.0), banda!(150.0, 6.0), banda!(400.0, 6.0), banda!(1000.0, 6.0), banda!(2500.0, 6.0), banda!(6000.0, 6.0), banda!(12000.0, 7.0)];
+                const fn todas() -> [Param; 29] {
+                    let mut v = [const { p("Salida", -18.0, 18.0, 0.0, "dB", false) }; 29];
+                    let mut i = 0;
+                    while i < 28 {
+                        let x = &B[i / 4][i % 4];
+                        v[i] = p(x.nombre, x.min, x.max, x.def, x.unidad, x.log);
+                        i += 1;
+                    }
+                    v
+                }
+                static P: [Param; 29] = todas();
+                &P
+            }
+            TipoFx::Distorsion => {
+                const P: &[Param] = &[
+                    p("Entrada", -100.0, 100.0, 40.0, "%", false),
+                    p("Umbral", 1.0, 10.0, 5.0, "", false),
+                    p("Carácter", 0.0, 1.0, 0.0, "", false),
+                    p("Mezcla", 0.0, 100.0, 80.0, "%", false),
+                    p("Salida", 0.0, 100.0, 70.0, "%", false),
+                ];
+                P
+            }
+            TipoFx::Moldeador => {
+                const P: &[Param] = &[
+                    p("Derecha a izquierda", -100.0, 100.0, 0.0, "%", false),
+                    p("Izquierda", -100.0, 100.0, 100.0, "%", false),
+                    p("Derecha", -100.0, 100.0, 100.0, "%", false),
+                    p("Izquierda a derecha", -100.0, 100.0, 0.0, "%", false),
+                    p("Retraso", -100.0, 100.0, 0.0, "%", false),
+                    p("Fase", -100.0, 100.0, 0.0, "%", false),
+                ];
+                P
+            }
+            TipoFx::Vocoder => {
+                const P: &[Param] = &[
+                    p("Nota", 24.0, 72.0, 45.0, "midi", false),
+                    p("Acorde", 0.0, 4.0, 2.0, "acorde", false),
+                    p("Bandas", 8.0, 64.0, 32.0, "n", false),
+                    p("Ataque", 0.5, 50.0, 2.0, "ms", true),
+                    p("Liberación", 5.0, 400.0, 45.0, "ms", true),
+                    p("Aire", 0.0, 100.0, 20.0, "%", false),
+                    p("Mezcla", 0.0, 100.0, 100.0, "%", false),
+                ];
+                P
+            }
+            TipoFx::Balance => {
+                const P: &[Param] = &[p("Balance", -100.0, 100.0, 0.0, "%", false), p("Volumen", 0.0, 125.0, 100.0, "%", false)];
+                P
+            }
             TipoFx::SubGrave => {
                 const P: &[Param] = &[p("Hasta", 50.0, 250.0, 110.0, "Hz", true), p("Octava abajo", 0.0, 100.0, 45.0, "%", false), p("Armónicos", 0.0, 100.0, 35.0, "%", false)];
                 P
@@ -430,6 +509,13 @@ impl TipoFx {
             TipoFx::Amplitud => vec![70.0, 0.0],
             TipoFx::Eco => vec![350.0, 40.0, 40.0, 6000.0, 0.0],
             TipoFx::CambioTono => vec![3.0, 0.0, 100.0],
+            TipoFx::Parametrico => {
+                let mut v = self.defaults();
+                (v[2], v[10], v[26]) = (3.0, -4.0, 4.0);
+                v
+            }
+            TipoFx::Balance => vec![30.0, 100.0],
+            TipoFx::Moldeador => vec![0.0, 100.0, 100.0, 0.0, 20.0, 0.0],
             _ => self.defaults(),
         }
     }
@@ -446,6 +532,20 @@ impl TipoFx {
                 ("Voz suave", &[-22.0, 2.5, 10.0, 150.0, 3.0]),
                 ("Voz al frente", &[-28.0, 5.0, 4.0, 90.0, 7.0]),
                 ("Mejorar calidad (parejo)", &[-24.0, 1.8, 20.0, 250.0, 3.5]),
+            ],
+            TipoFx::Vocoder => &[
+                ("Robot clásico", &[45.0, 0.0, 24.0, 2.0, 40.0, 15.0, 100.0]),
+                ("Coro de máquinas", &[48.0, 2.0, 40.0, 5.0, 90.0, 25.0, 100.0]),
+                ("Oscuro", &[33.0, 3.0, 20.0, 4.0, 120.0, 10.0, 85.0]),
+            ],
+            TipoFx::Moldeador => &[
+                ("A mono", &[50.0, 50.0, 50.0, 50.0, 0.0, 0.0]),
+                ("Cambiar lados", &[100.0, 0.0, 0.0, 100.0, 0.0, 0.0]),
+                ("Solo los lados", &[-50.0, 50.0, 50.0, -50.0, 0.0, 0.0]),
+            ],
+            TipoFx::Distorsion => &[
+                ("Tibia", &[15.0, 8.0, 0.0, 50.0, 80.0]),
+                ("Rota", &[80.0, 2.0, 1.0, 100.0, 50.0]),
             ],
             TipoFx::Reverberacion => &[
                 ("Cuarto chico", &[30.0, 0.5, 20.0, 5.0, 200.0, 7000.0]),
@@ -517,6 +617,15 @@ pub fn crear(tipo: TipoFx, p: &[f32]) -> Box<dyn Procesador> {
         TipoFx::RecorteSuave => Box::new(Rec { c: soft_clipper::SoftClipper::new(), post: 1.0 }),
         TipoFx::Transitorios => Box::new(Tra { t: trans::TransientProcessor::with_settings(SR, &ajuste_trans(p)), post: 1.0 }),
         TipoFx::Amplitud => Box::new(Amp { a: stereo_enhancer::StereoEnhancer::with_settings(SR, &ajuste_amp(p)), post: 1.0 }),
+        TipoFx::Parametrico => Box::new(Par {
+            e: eq::equalizer::Equalizer::new(SR as f64, &ajuste_par(p).params(), Default::default()),
+            l: vec![],
+            r: vec![],
+        }),
+        TipoFx::Distorsion => Box::new(Dis { f: fast_dist::FastDist::new(), l: vec![], r: vec![] }),
+        TipoFx::Moldeador => Box::new(Mol(stereo_shaper::StereoShaper::new(SR))),
+        TipoFx::Vocoder => Box::new(Voc::nuevo(p)),
+        TipoFx::Balance => Box::new(Bal(balance::Balance::with_settings(SR, &ajuste_bal(p)))),
         TipoFx::Saturador => Box::new(Sat { f: fast_dist::FastDist::new(), mezcla: 0.5, post: 1.0, seco: vec![] }),
     };
     e.ajustar(p);
@@ -994,5 +1103,201 @@ impl Procesador for Amp {
     }
     fn limpiar(&mut self) {
         Effect::reset(&mut self.a);
+    }
+}
+
+// ---- De Beethoven DAW
+
+/// Nombres de los tipos de banda, en el orden del motor.
+pub const TIPOS_BANDA: [&str; 8] = ["Apagada", "Pasa graves", "Pasa banda", "Pasa agudos", "Quita banda", "Meseta grave", "Campana", "Meseta aguda"];
+pub const ACORDES: [&str; 5] = ["Una nota", "Quinta", "Mayor", "Menor", "Séptima"];
+
+pub fn ajuste_par(p: &[f32]) -> eq::Settings {
+    let mut s = eq::Settings::default();
+    for (k, b) in s.bands.iter_mut().enumerate() {
+        let q = &p[k * 4..k * 4 + 4];
+        let kind = (q[0].round() as i32).clamp(0, 7);
+        *b = eq::Band { db: if eq::has_level(kind) { q[2] as f64 } else { 0.0 }, freq: eq::freq_pos(q[1] as f64), width: (q[3] as f64 / 100.0).clamp(0.01, 1.0), kind, order: 0 };
+    }
+    s.main_db = p[28] as f64;
+    s
+}
+
+/// Curva del paramétrico en dB.
+pub fn curva_par(p: &[f32], hz: impl Iterator<Item = f64>) -> Vec<f64> {
+    let c = ajuste_par(p).curve(eq::design::Design::Ordinary(SR as f64));
+    hz.map(|h| c.db(h)).collect()
+}
+
+struct Par {
+    e: eq::equalizer::Equalizer,
+    l: Vec<f32>,
+    r: Vec<f32>,
+}
+
+impl Procesador for Par {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        separar(buf, &mut self.l, &mut self.r);
+        self.e.process(&mut self.l, &mut self.r);
+        juntar(buf, &self.l, &self.r, 1.0);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        let s = ajuste_par(p);
+        let nuevo = s.params();
+        for i in 0..nuevo.len() {
+            if self.e.params()[i] != nuevo[i] {
+                self.e.set_param(i, nuevo[i]);
+            }
+        }
+    }
+    fn limpiar(&mut self) {
+        self.e.reset();
+    }
+    fn latencia(&self) -> usize {
+        self.e.latency()
+    }
+}
+
+struct Dis {
+    f: fast_dist::FastDist,
+    l: Vec<f32>,
+    r: Vec<f32>,
+}
+
+impl Procesador for Dis {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        separar(buf, &mut self.l, &mut self.r);
+        self.f.process(&mut self.l, &mut self.r);
+        juntar(buf, &self.l, &self.r, 1.0);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        let mut v = fast_dist::DEFAULTS;
+        v[fast_dist::PRE] = (128.0 + p[0] * 0.64) as i32;
+        v[fast_dist::THRESHOLD] = p[1].round() as i32;
+        v[fast_dist::TYPE] = (p[2] >= 0.5) as i32;
+        v[fast_dist::MIX] = (p[3] * 1.28) as i32;
+        v[fast_dist::POST] = (p[4] * 1.28) as i32;
+        self.f.set(&fast_dist::Settings { v });
+    }
+    fn limpiar(&mut self) {}
+}
+
+struct Mol(stereo_shaper::StereoShaper);
+
+impl Procesador for Mol {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        Effect::process(&mut self.0, buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        use stereo_shaper as m;
+        let mut v = m::DEFAULTS;
+        for (k, i) in [m::RIGHT_INTO_LEFT, m::LEFT, m::RIGHT, m::LEFT_INTO_RIGHT, m::DELAY, m::PHASE].into_iter().enumerate() {
+            let (a, z) = m::RANGES[i];
+            // 100 % es el nivel de siempre en los cuatro caminos, y el extremo en retraso y fase.
+            let tope = if k < 4 { m::UNITY } else if p[k] < 0.0 { -a } else { z };
+            v[i] = ((p[k] / 100.0 * tope as f32) as i32).clamp(a, z);
+        }
+        self.0.set(&m::Settings { v });
+    }
+    fn limpiar(&mut self) {
+        self.0.flush();
+    }
+}
+
+fn ajuste_bal(p: &[f32]) -> balance::Settings {
+    let mut v = balance::DEFAULTS;
+    v[balance::BALANCE] = (p[0] * 1.28) as i32;
+    v[balance::VOLUME] = (p[1] * 2.56) as i32;
+    balance::Settings { v }
+}
+
+struct Bal(balance::Balance);
+
+impl Procesador for Bal {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        Effect::process(&mut self.0, buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        self.0.set(&ajuste_bal(p));
+    }
+    fn limpiar(&mut self) {
+        self.0.flush();
+    }
+}
+
+/// La voz modula un acorde de sierras que el efecto mismo toca.
+struct Voc {
+    v: vocoder::Vocoder,
+    p: Vec<f32>,
+    fases: [f64; 8],
+    l: Vec<f32>,
+    r: Vec<f32>,
+    pl: Vec<f32>,
+    pr: Vec<f32>,
+    sl: Vec<f32>,
+    sr: Vec<f32>,
+}
+
+impl Voc {
+    fn nuevo(p: &[f32]) -> Voc {
+        Voc { v: vocoder::Vocoder::new(SR, Self::params(p)), p: p.to_vec(), fases: std::array::from_fn(|i| i as f64 * 0.13), l: vec![], r: vec![], pl: vec![], pr: vec![], sl: vec![], sr: vec![] }
+    }
+
+    fn params(p: &[f32]) -> vocoder::Params {
+        vocoder::Params {
+            bands: p[2].round() as usize,
+            attack_ms: p[3] as f64,
+            release_ms: p[4] as f64,
+            noise: p[5] as f64 / 100.0 * 0.6,
+            // Las consonantes pasan solas por arriba.
+            mod_level: p[5] as f64 / 100.0 * 0.5,
+            ..Default::default()
+        }
+    }
+}
+
+impl Procesador for Voc {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        separar(buf, &mut self.l, &mut self.r);
+        let n = self.l.len();
+        for v in [&mut self.pl, &mut self.pr, &mut self.sl, &mut self.sr] {
+            v.clear();
+            v.resize(n, 0.0);
+        }
+        let notas: &[f64] = match self.p[1].round() as i32 {
+            0 => &[0.0],
+            1 => &[0.0, 7.0],
+            2 => &[0.0, 4.0, 7.0],
+            3 => &[0.0, 3.0, 7.0],
+            _ => &[0.0, 4.0, 7.0, 10.0],
+        };
+        for (k, st) in notas.iter().enumerate() {
+            let hz = 440.0 * 2f64.powf((self.p[0].round() as f64 + st - 69.0) / 12.0);
+            // Dos sierras por nota, apenas desafinadas, una a cada lado.
+            for (lado, des) in [(0usize, 0.9985), (1, 1.0015)] {
+                let paso = hz * des / SR as f64;
+                let f = &mut self.fases[k * 2 + lado];
+                let sal = if lado == 0 { &mut self.pl } else { &mut self.pr };
+                for x in sal.iter_mut() {
+                    *f = (*f + paso).fract();
+                    *x += ((*f * 2.0 - 1.0) * 0.35) as f32;
+                }
+            }
+        }
+        self.v.process((&self.l, &self.r), (&self.pl, &self.pr), (&mut self.sl, &mut self.sr));
+        let m = self.p[6] / 100.0;
+        for (i, f) in buf.chunks_exact_mut(2).enumerate() {
+            f[0] += (self.sl[i] - f[0]) * m;
+            f[1] += (self.sr[i] - f[1]) * m;
+        }
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        if Self::params(p) != Self::params(&self.p) {
+            self.v.set(Self::params(p));
+        }
+        self.p = p.to_vec();
+    }
+    fn limpiar(&mut self) {
+        self.v.reset();
     }
 }

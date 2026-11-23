@@ -142,9 +142,38 @@ fn todos_los_extremos_son_estables() {
             let p: Vec<f32> = t.params().iter().map(|p| if lado == 0 { p.min } else { p.max }).collect();
             let y = pasar(t, &p, &x);
             let m = y.iter().fold(0f32, |m, v| m.max(v.abs()));
-            assert!(y.iter().all(|v| v.is_finite()) && m < 50.0, "{} lado {lado}: {m}", t.nombre());
+            // Las siete bandas al tope en el mismo lugar suman 126 dB de verdad.
+            let tope = if t == TipoFx::Parametrico { 1e5 } else { 50.0 };
+            assert!(y.iter().all(|v| v.is_finite()) && m < tope, "{} lado {lado}: {m}", t.nombre());
         }
     }
+}
+
+/// Los que vienen de Beethoven DAW hacen lo que dicen.
+#[test]
+fn plugins_del_daw() {
+    let nivel = |y: &[f32], lado: usize| (y[y.len() / 2..].iter().skip(lado).step_by(2).map(|v| v * v).sum::<f32>() / (y.len() / 4) as f32).sqrt();
+    let x = seno(1000.0, 0.2, N);
+    let mut p = TipoFx::Parametrico.defaults();
+    let plano = pasar(TipoFx::Parametrico, &p, &x);
+    assert!((nivel(&plano, 0) / nivel(&x, 0) - 1.0).abs() < 0.03, "neutro no cambia");
+    p[3 * 4 + 2] = 12.0;
+    let g = 20.0 * (nivel(&pasar(TipoFx::Parametrico, &p, &x), 0) / nivel(&x, 0)).log10();
+    assert!((g - 12.0).abs() < 0.6, "campana de 12 dB en 1 kHz: {g}");
+    p[3 * 4] = 3.0;
+    p[3 * 4 + 1] = 8000.0;
+    let g = 20.0 * (nivel(&pasar(TipoFx::Parametrico, &p, &x), 0) / nivel(&x, 0)).log10();
+    assert!(g < -12.0, "pasa agudos en 8 kHz: {g}");
+    let y = pasar(TipoFx::Balance, &[100.0, 100.0], &x);
+    assert!(nivel(&y, 0) < 0.05 * nivel(&y, 1), "todo a la derecha");
+    // Solo el lado izquierdo suena; a mono suena en los dos.
+    let izq: Vec<f32> = x.iter().enumerate().map(|(i, v)| if i % 2 == 0 { *v } else { 0.0 }).collect();
+    let y = pasar(TipoFx::Moldeador, &[50.0, 50.0, 50.0, 50.0, 0.0, 0.0], &izq);
+    assert!((nivel(&y, 0) / nivel(&y, 1) - 1.0).abs() < 0.05 && nivel(&y, 1) > 0.02, "{} {}", nivel(&y, 0), nivel(&y, 1));
+    // Sin voz, el vocoder calla; con voz, suena su acorde.
+    let quieto = pasar(TipoFx::Vocoder, &TipoFx::Vocoder.defaults(), &vec![0.0; x.len()]);
+    let suena = pasar(TipoFx::Vocoder, &TipoFx::Vocoder.defaults(), &seno(220.0, 0.5, N));
+    assert!(nivel(&quieto, 0) < 1e-3 && nivel(&suena, 0) > 5e-3, "{} {}", nivel(&quieto, 0), nivel(&suena, 0));
 }
 
 // ---- mezcla

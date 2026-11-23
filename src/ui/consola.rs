@@ -174,10 +174,8 @@ impl App {
                 ui.separator();
             }
             ui.label(RichText::new(crate::idioma::t("Agregar")).size(12.0).color(TEXT_FAINT));
-            for t in TipoFx::TODOS {
-                if ui.button(crate::idioma::t(&t.nombre())).on_hover_text(t.ayuda()).clicked() {
-                    nuevo = Some(t);
-                }
+            if let Some(t) = menu_efectos(ui) {
+                nuevo = Some(t);
             }
         });
         if r.response.clicked() {
@@ -208,10 +206,8 @@ impl App {
                 ui.label(RichText::new(crate::idioma::tf("Efectos - {}", &[&titulo])).size(17.0));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.menu_button(RichText::new(crate::idioma::t("+ Agregar efecto")).color(MAIN), |ui| {
-                        for t in TipoFx::TODOS {
-                            if ui.button(crate::idioma::t(&t.nombre())).on_hover_text(t.ayuda()).clicked() {
-                                agregar = Some(t);
-                            }
+                        if let Some(t) = menu_efectos(ui) {
+                            agregar = Some(t);
                         }
                     });
                 });
@@ -296,9 +292,33 @@ impl App {
     }
 }
 
+/// Los efectos por grupo. Devuelve el elegido.
+fn menu_efectos(ui: &mut Ui) -> Option<TipoFx> {
+    let mut r = None;
+    ui.set_min_width(190.0);
+    for g in TipoFx::GRUPOS {
+        ui.menu_button(crate::idioma::t(g), |ui| {
+            ui.set_min_width(210.0);
+            for t in TipoFx::TODOS.into_iter().filter(|t| t.grupo() == g) {
+                if ui.button(t.nombre()).on_hover_text(t.ayuda()).clicked() {
+                    r = Some(t);
+                }
+            }
+        });
+    }
+    r
+}
+
 fn valor(v: f32, u: &str) -> String {
     match u {
         "esc" => crate::propios::ESCALAS[(v.round() as usize).min(4)].0.to_string(),
+        "acorde" => crate::idioma::t(efectos::ACORDES[(v.round() as usize).min(4)]).to_string(),
+        "banda" => crate::idioma::t(efectos::TIPOS_BANDA[(v.round() as usize).min(7)]).to_string(),
+        "n" => format!("{v:.0}"),
+        "midi" => {
+            let n = v.round() as i32;
+            format!("{}{}", valor((n % 12) as f32, "nota"), n / 12 - 1)
+        }
         "nota" => ["Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"][(v.round() as usize).min(11)].to_string(),
         "gr" => format!("{v:+.0}"),
         "bpm" => crate::idioma::tf("{} bpm", &[&format!("{:.0}", v)]),
@@ -316,6 +336,9 @@ fn controles(ui: &mut Ui, f: &mut Fx) {
     if f.tipo == TipoFx::Ecualizador {
         curva(ui, &f.p);
     }
+    if f.tipo == TipoFx::Parametrico {
+        return parametrico(ui, f);
+    }
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(2.0, 4.0);
         for (k, d) in f.tipo.params().iter().enumerate() {
@@ -324,7 +347,7 @@ fn controles(ui: &mut Ui, f: &mut Fx) {
                 ui.spacing_mut().item_spacing.y = 1.0;
                 ui.label(RichText::new(crate::idioma::t(&d.nombre)).size(12.0).color(TEXT_DIM));
                 let v = &mut f.p[k];
-                if d.unidad.is_empty() {
+                if d.unidad.is_empty() && d.max <= 1.0 {
                     ui.add_space(6.0);
                     if led(ui, *v >= 0.5, d.nombre).clicked() {
                         *v = if *v >= 0.5 { 0.0 } else { 1.0 };
@@ -337,6 +360,104 @@ fn controles(ui: &mut Ui, f: &mut Fx) {
             });
         }
     });
+}
+
+/// El ecualizador de siete bandas: los puntos se arrastran sobre la curva.
+fn parametrico(ui: &mut Ui, f: &mut Fx) {
+    const TOPE: f32 = 18.0;
+    let col = |k: usize| color_banda(k);
+    let id = Id::new(("banda-eq", f.id));
+    let mut k: usize = ui.data(|d| d.get_temp(id)).unwrap_or(3);
+    let (r, fondo) = ui.allocate_exact_size(vec2(ui.available_width(), 170.0), Sense::click_and_drag());
+    fondo.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, crate::idioma::t("Curva del ecualizador")));
+    let pr = ui.painter_at(r);
+    pr.rect_filled(r, 6, WELL);
+    let x_de = |hz: f32| r.left() + r.width() * (hz / 20.0).log10() / 3.0;
+    let y_de = |db: f32| r.center().y - db / TOPE * (r.height() / 2.0 - 8.0);
+    for (hz, n) in [(50.0f32, "50"), (100.0, "100"), (200.0, "200"), (500.0, "500"), (1000.0, "1k"), (2000.0, "2k"), (5000.0, "5k"), (10000.0, "10k")] {
+        pr.vline(x_de(hz), r.y_range(), Stroke::new(1.0, c(0x2c2c2c)));
+        pr.text(pos2(x_de(hz) + 2.0, r.bottom() - 2.0), Align2::LEFT_BOTTOM, n, fuente(10.5), TEXT_FAINT);
+    }
+    for db in [-12.0f32, -6.0, 6.0, 12.0] {
+        pr.hline(r.x_range(), y_de(db), Stroke::new(1.0, c(0x2a2a2a)));
+        pr.text(pos2(r.right() - 3.0, y_de(db)), Align2::RIGHT_CENTER, format!("{db:+.0}"), fuente(10.5), TEXT_FAINT);
+    }
+    pr.hline(r.x_range(), y_de(0.0), Stroke::new(1.0, c(0x4a4a4a)));
+    let n = (r.width() as usize / 2).max(2);
+    let trazo = |p: &[f32]| -> Vec<Pos2> {
+        let y = efectos::curva_par(p, (0..=n).map(|i| 20.0 * 1000f64.powf(i as f64 / n as f64)));
+        y.iter().enumerate().map(|(i, d)| pos2(r.left() + r.width() * i as f32 / n as f32, y_de((*d as f32).clamp(-TOPE * 1.3, TOPE * 1.3)))).collect()
+    };
+    // La banda elegida, sola, en su color.
+    let mut sola = f.p.clone();
+    for j in (0..7).filter(|j| *j != k) {
+        sola[j * 4] = 0.0;
+    }
+    sola[28] = 0.0;
+    let mut m = Mesh::default();
+    for w in trazo(&sola).windows(2) {
+        m.add_colored_rect(Rect::from_two_pos(w[0], pos2(w[1].x, y_de(0.0))), col(k).gamma_multiply(0.22));
+    }
+    pr.add(Shape::mesh(m));
+    pr.add(Shape::line(trazo(&f.p), Stroke::new(2.0, HIGHLIGHT)));
+    for j in 0..7 {
+        let tipo = f.p[j * 4].round() as i32;
+        let plano = !matches!(tipo, 5..=7);
+        let o = pos2(x_de(f.p[j * 4 + 1]), y_de(if plano { 0.0 } else { f.p[j * 4 + 2] }));
+        let resp = ui.interact(Rect::from_center_size(o, Vec2::splat(20.0)), Id::new(("punto-eq", f.id, j)), Sense::click_and_drag());
+        resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, crate::idioma::tf("Banda {}", &[&(j + 1)])));
+        if resp.drag_started() || resp.clicked() {
+            k = j;
+        }
+        if let (true, Some(q)) = (resp.dragged(), resp.interact_pointer_pos()) {
+            f.p[j * 4 + 1] = (20.0 * 1000f32.powf(((q.x - r.left()) / r.width()).clamp(0.0, 1.0))).clamp(20.0, 20000.0);
+            if !plano {
+                f.p[j * 4 + 2] = ((r.center().y - q.y) / (r.height() / 2.0 - 8.0) * TOPE).clamp(-TOPE, TOPE);
+            }
+        }
+        if resp.double_clicked() {
+            f.p[j * 4 + 2] = 0.0;
+        }
+        if resp.hovered() {
+            let giro = ui.input(|i| i.smooth_scroll_delta().y);
+            if giro != 0.0 {
+                f.p[j * 4 + 3] = (f.p[j * 4 + 3] * (1.0 - giro * 0.004)).clamp(1.0, 100.0);
+                ui.input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
+            }
+        }
+        let vivo = tipo != 0;
+        pr.circle(o, if j == k { 8.5 } else { 7.0 }, if vivo { col(j) } else { c(0x4a4a4a) }, Stroke::new(if j == k { 2.0 } else { 1.0 }, if j == k { Color32::WHITE } else { Color32::BLACK }));
+        pr.text(o, Align2::CENTER_CENTER, (j + 1).to_string(), fuente(11.0), COLORED_DARK);
+        resp.on_hover_text(crate::idioma::t("Arrastra: frecuencia y nivel. Rueda: ancho. Doble clic: nivel a cero."));
+    }
+    ui.data_mut(|d| d.insert_temp(id, k));
+    ui.add_space(4.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(crate::idioma::tf("Banda {}", &[&(k + 1)])).color(col(k)).size(14.0));
+        ComboBox::from_id_salt(("tipo-banda", f.id)).width(120.0).selected_text(valor(f.p[k * 4], "banda")).show_ui(ui, |ui| {
+            for (i, n) in efectos::TIPOS_BANDA.into_iter().enumerate() {
+                if ui.selectable_label(f.p[k * 4].round() as usize == i, crate::idioma::t(n)).clicked() {
+                    f.p[k * 4] = i as f32;
+                }
+            }
+        });
+        ui.spacing_mut().item_spacing = vec2(2.0, 4.0);
+        let todos = f.tipo.params();
+        for i in [k * 4 + 1, k * 4 + 2, k * 4 + 3, 28] {
+            let d = &todos[i];
+            ui.allocate_ui_with_layout(vec2(78.0, 74.0), Layout::top_down(Align::Center), |ui| {
+                ui.set_width(78.0);
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.label(RichText::new(crate::idioma::t(d.nombre)).size(12.0).color(TEXT_DIM));
+                perilla(ui, &mut f.p[i], d.min, d.max, d.def, d.log, 18.0, d.nombre);
+                ui.label(RichText::new(valor(f.p[i], d.unidad)).size(12.0));
+            });
+        }
+    });
+}
+
+fn color_banda(k: usize) -> Color32 {
+    [c(0xff7a7a), c(0xffa95c), c(0xffe066), c(0x8ddf6f), c(0x5cd6d0), c(0x6fa8ff), c(0xc48bff)][k % 7]
 }
 
 /// Curva del ecualizador, de 20 Hz a 20 kHz y ±18 dB.

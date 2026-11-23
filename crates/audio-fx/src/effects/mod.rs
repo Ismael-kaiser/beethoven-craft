@@ -3,6 +3,7 @@
 // This file is part of Lemon Studio: https://github.com/ItsAlphaNeon/Lemon-Studio
 // Adapted for Toma Uno on 2026-11-23: only the modules used, no slot factory, no transport hook.
 
+pub mod balance;
 pub mod chorus;
 pub mod filter;
 pub mod flanger;
@@ -16,6 +17,8 @@ pub mod eq;
 pub mod fast_dist;
 pub mod phaser;
 pub mod reverb;
+pub mod stereo_shaper;
+pub mod vocoder;
 
 /// An insert effect processing interleaved stereo in place.
 pub trait Effect: Send {
