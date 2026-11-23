@@ -20,8 +20,19 @@ impl App {
         let alto = 34.0;
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), alto), Sense::hover());
         ui.painter().rect_filled(r, 0, c(0x1f1f1f));
-        let mut x = r.left() + 8.0;
-        let ancho = ((r.width() - 220.0) / self.pestanas.len().max(1) as f32).clamp(96.0, 190.0);
+        let b = Rect::from_center_size(pos2(r.left() + 20.0, r.center().y + 2.0), Vec2::splat(26.0));
+        let resp = ui.interact(b, Id::new("boton-archivos"), Sense::click());
+        resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, crate::idioma::t("Panel de archivos")));
+        let on = self.archivos.rec.abierto;
+        if on || resp.hovered() {
+            ui.painter().rect_filled(b, 7, if on { MAIN.gamma_multiply(0.18) } else { c(0x333333) });
+        }
+        icono(ui.painter(), &tabler::FOLDERS, b.shrink(5.0), if on { MAIN } else { TEXT_DIM });
+        if resp.on_hover_text(format!("{} ({})", crate::idioma::t("Panel de archivos"), crate::atajos::menu("archivos"))).clicked() {
+            self.hacer_atajo("archivos");
+        }
+        let mut x = r.left() + 42.0;
+        let ancho = ((r.width() - 254.0) / self.pestanas.len().max(1) as f32).clamp(96.0, 190.0);
         let mut cerrar = None;
         let mut mover = None;
         for (i, e) in self.pestanas.clone().into_iter().enumerate() {
@@ -59,7 +70,7 @@ impl App {
                 self.espacio = e;
             }
             if let (true, Some(m)) = (resp.dragged(), resp.interact_pointer_pos()) {
-                let j = (((m.x - r.left() - 8.0) / ancho) as usize).min(self.pestanas.len() - 1);
+                let j = (((m.x - r.left() - 42.0) / ancho) as usize).min(self.pestanas.len() - 1);
                 if j != i {
                     mover = Some((i, j));
                 }

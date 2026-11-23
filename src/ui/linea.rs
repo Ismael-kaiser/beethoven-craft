@@ -410,6 +410,7 @@ impl App {
                 match &*s {
                     Soltar::Titulo(i) => self.poner_titulo(*i, t, None),
                     Soltar::Medio(r) => self.poner_medio(&r.clone(), t, 0, None, false),
+                    Soltar::Medios(v) => self.poner_archivos(v, t, None, None),
                     // Un efecto suelto en el vacío vale para todo lo de abajo.
                     Soltar::FxVideo(f) => {
                         let id = self.clip_vacio(t, 5.0);
@@ -708,6 +709,7 @@ impl App {
                 let v = clip.and_then(|id| pareja(&self.p, id, true)).map(|x| x.id);
                 self.poner_estilo(v, i);
             }
+            Soltar::Medios(v) => self.poner_archivos(&v, t, capa, pista),
             Soltar::Medio(r) => match capa {
                 Some(capa) => self.poner_medio(&r, t, capa, None, false),
                 None => self.importar(r),
@@ -987,12 +989,25 @@ impl App {
                 }
             });
         }
+        self.fantasma(ui, rcar.contains_pointer(), carril, a_x, a_t);
         if let (Some(s), Some(m)) = (rcar.dnd_release_payload::<Soltar>(), ui.input(|i| i.pointer.interact_pos())) {
             let t = a_t(m.x).max(0.0);
             let final_ = soltado_en.and_then(|id| self.p.video.iter().find(|c| c.id == id)).is_some_and(|c| t > c.inicio + c.dur / 2.0);
             ac.push(Accion::Soltado((*s).clone(), soltado_en, Some(capa), None, t, final_));
         }
         r.top()
+    }
+
+    /// Dónde quedaría lo que se arrastra desde el panel de archivos.
+    fn fantasma(&self, ui: &Ui, encima: bool, carril: Rect, a_x: &dyn Fn(f64) -> f32, a_t: &dyn Fn(f32) -> f64) {
+        let Some(s) = DragAndDrop::payload::<Soltar>(ui.ctx()).filter(|_| encima) else { return };
+        let (Soltar::Medios(v), Some(m)) = (&*s, ui.input(|i| i.pointer.interact_pos())) else { return };
+        let t = a_t(m.x).max(0.0);
+        let dur: f64 = v.iter().map(|r| self.archivos.dur(r).unwrap_or(5.0)).sum();
+        let r = Rect::from_min_max(pos2(a_x(t), carril.top() + 3.0), pos2(a_x(t + dur), carril.bottom() - 3.0));
+        let p = ui.painter_at(carril);
+        p.rect(r, 5, MAIN.gamma_multiply(0.25), Stroke::new(1.5, MAIN), StrokeKind::Inside);
+        p.text(pos2(r.left() + 6.0, r.top() + 4.0), Align2::LEFT_TOP, tiempo(t), fuente(12.5), TEXT);
     }
 
     fn menu_vinculo(&self, ui: &mut Ui, id: u64, grupo: Option<u64>, ac: &mut Vec<Accion>) {
@@ -1171,6 +1186,7 @@ impl App {
                 }
             });
         }
+        self.fantasma(ui, rfila.contains_pointer(), carril, a_x, a_t);
         if let (Some(s), Some(m)) = (rfila.dnd_release_payload::<Soltar>(), ui.input(|i| i.pointer.interact_pos())) {
             ac.push(Accion::Soltado((*s).clone(), soltado_en, None, Some(id), a_t(m.x).max(0.0), false));
         }

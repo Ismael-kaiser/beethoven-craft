@@ -11,6 +11,7 @@ pub mod formas;
 pub mod idioma;
 pub mod efectos;
 pub mod estilos;
+pub mod explorador;
 pub mod exportar;
 pub mod instrumentos;
 pub mod medios;

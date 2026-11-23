@@ -21,6 +21,7 @@ Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
 - **Animación**: unas 40 animaciones listas, claves, gráfica de curvas y texto letra por letra.
 - **Nodos**: efectos y color conectados como un grafo, con máscaras, calificadores y fusiones.
 - **66 filtros** propios, ruedas de color, onda RGB, histograma y vectorscopio.
+- **Panel de archivos**: carpetas, subcarpetas, búsqueda, miniaturas y vista previa; todo se arrastra a las pistas.
 - **Clip vacío**: aplica efectos a todo lo que hay debajo, textos incluidos.
 - Consola de audio, instrumentos, grabación y separador de voz en tu propia máquina.
 - **Atajos de teclado** que se pueden cambiar todos.
@@ -45,7 +46,9 @@ Guía completa: [docs/daw.md](docs/daw.md)
 
 ## Instalar
 
-No hay descargas listas todavía: se compila. Hace falta [Rust](https://rustup.rs) y `ffmpeg`.
+**Windows**: baja el instalador (`.exe`) o el `.zip` de [Releases](https://github.com/Ismael-kaiser/beethoven-craft/releases); ya trae ffmpeg. No está firmado, así que Windows puede avisar: «Más información» → «Ejecutar de todas formas».
+
+**Para compilarlo** hace falta [Rust](https://rustup.rs) y `ffmpeg`.
 
 ```sh
 git clone https://github.com/Ismael-kaiser/beethoven-craft.git

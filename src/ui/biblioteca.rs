@@ -13,6 +13,7 @@ pub enum Soltar {
     Transicion(&'static str),
     Titulo(usize),
     Medio(PathBuf),
+    Medios(Vec<PathBuf>),
     Estilo(usize),
     Filtro(usize),
 }
@@ -532,6 +533,7 @@ impl App {
             }
             (Soltar::Titulo(i), _) => self.poner_titulo(i, t, None),
             (Soltar::Medio(r), _) => self.importar(r),
+            (Soltar::Medios(v), _) => self.poner_archivos(&v, t, None, None),
             (Soltar::Filtro(i), _) => {
                 let id = video.or_else(|| (0..self.p.capas.len()).rev().find_map(|i| self.p.video_en(i, t)).map(|c| c.id));
                 self.poner_filtro(id, i);

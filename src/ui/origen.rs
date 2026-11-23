@@ -53,6 +53,7 @@ impl App {
         if let Some(o) = &mut self.origen {
             o.tocando = false;
         }
+        self.archivos.parar_vista();
     }
 
     fn tocar_origen(&mut self) {
@@ -65,6 +66,7 @@ impl App {
             o.t = 0.0;
         }
         o.tocando = true;
+        self.archivos.parar_vista();
         let a = self.almacen.get(&o.ruta).cloned();
         let mut m = self.motor.lock().unwrap();
         // Con sonido manda el audio; sin él, un audio vacío lleva la cuenta.
@@ -171,6 +173,11 @@ impl App {
             self.avisar(crate::idioma::t("No pude leer ese archivo"), true);
             return;
         };
+        self.poner_medio_info(ruta, &info, t, Some(capa), tramo, insertar);
+    }
+
+    /// `poner_medio` de un archivo ya sondeado. Sin `capa`, solo su sonido.
+    pub fn poner_medio_info(&mut self, ruta: &Path, info: &Info, t: f64, capa: Option<usize>, tramo: Option<(f64, f64)>, insertar: bool) {
         let imagen = es_imagen(ruta);
         let total = if imagen { 5.0 } else { info.dur };
         let (a, b) = tramo.unwrap_or((0.0, total));
@@ -180,7 +187,7 @@ impl App {
             self.p.empujar(t, dur, &[]);
         }
         let mut ids = vec![];
-        if let Some((w, h, fps)) = info.video {
+        if let (Some((w, h, fps)), Some(capa)) = (info.video, capa) {
             if self.p.video.is_empty() {
                 (self.p.ancho, self.p.alto, self.p.fps) = (w, h, if imagen { 30.0 } else { fps });
             }

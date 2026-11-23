@@ -21,6 +21,8 @@ Copy-Item daw\target\release\beethoven_daw.exe "$T\beethoven-daw.exe"
 Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, AVISOS.md, README.md $T
 if ($Ffmpeg -ne "") {
     Copy-Item (Join-Path $Ffmpeg "ffmpeg.exe"), (Join-Path $Ffmpeg "ffprobe.exe") $T
+    $Lic = Join-Path $Ffmpeg "..\LICENSE.txt"
+    if (Test-Path $Lic) { Copy-Item $Lic (Join-Path $T "FFmpeg-LICENSE.txt") }
 }
 $Zip = "Beethoven Craft-windows.zip"
 if (Test-Path $Zip) { Remove-Item $Zip }

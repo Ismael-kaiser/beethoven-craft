@@ -13,4 +13,4 @@ Incluye trabajo de otras personas:
 - **Cuprum** (Jovanny Lemonad) y **Barlow** (The Barlow Project Authors), SIL Open Font License 1.1 (`recursos/Cuprum-OFL.txt`, `recursos/Barlow-OFL.txt`).
 - **UVR-MDX-NET-Voc_FT**, modelo de Ultimate Vocal Remover (Anjok07, aufr33 y colaboradores), MIT con crédito. Se ejecuta en tu Mac con `tract`.
 - Bibliotecas de Rust: ver `Cargo.lock` (egui, cpal, rfd, serde, realfft, tract, fontdue y sus dependencias).
-- **ffmpeg** se usa como programa aparte; no viene incluido.
+- **ffmpeg** se usa como programa aparte. En Mac y Linux no viene incluido. En el paquete de Windows vienen `ffmpeg.exe` y `ffprobe.exe` sin cambios, de la compilación GPL de https://github.com/BtbN/FFmpeg-Builds (ahí están el código fuente y cómo se compila); su licencia es `FFmpeg-LICENSE.txt`. Más en https://ffmpeg.org.

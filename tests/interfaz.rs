@@ -709,3 +709,125 @@ fn pestana_nodos() {
     h.run_steps(4);
     foto(&mut h, "nodos-ruedas");
 }
+
+/// Carpeta con un video, un sonido, una imagen y una subcarpeta.
+fn carpeta_de_prueba() -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("beethoven-archivos-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(d.join("Día 1")).unwrap();
+    let ff = |args: &[&str], f: &str| {
+        let s = toma_uno::medios::ffmpeg().args(["-v", "error", "-y"]).args(args).arg(d.join(f)).status().unwrap();
+        assert!(s.success(), "{f}");
+    };
+    let video = ["-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=3", "-f", "lavfi", "-i", "sine=440:d=3", "-pix_fmt", "yuv420p", "-shortest"];
+    ff(&video, "entrevista.mp4");
+    ff(&video, "Día 1/playa.mp4");
+    ff(&["-f", "lavfi", "-i", "sine=330:d=4"], "tema.wav");
+    ff(&["-f", "lavfi", "-i", "gradients=s=320x240", "-frames:v", "1"], "portada.png");
+    std::fs::write(d.join("notas.txt"), "x").unwrap();
+    d
+}
+
+/// Deja pasar cuadros hasta que se cumpla algo.
+fn esperar(h: &mut Harness<App>, que: &str, f: impl Fn(&mut Harness<App>) -> bool) {
+    for _ in 0..300 {
+        h.run_steps(1);
+        if f(h) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    panic!("no llegó: {que}");
+}
+
+#[test]
+fn panel_de_archivos() {
+    let d = carpeta_de_prueba();
+    // Pasos cortos, para que un doble clic quepa.
+    let mut h = Harness::builder().with_size([1440.0, 860.0]).with_step_dt(1.0 / 60.0).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
+    h.run_steps(3);
+    h.get_by_label("Panel de archivos").click();
+    h.run_steps(3);
+    h.get_by_label("Descargas");
+    foto(&mut h, "archivos-lugares");
+    h.state_mut().archivos.ir_a(Some(d.clone()));
+    esperar(&mut h, "la lista", |h| h.query_by_label("entrevista.mp4").is_some());
+    assert!(h.query_by_label("notas.txt").is_none(), "solo lo que se puede usar");
+    // La subcarpeta se abre ahí mismo.
+    h.get_by_label("Ver dentro de Día 1").click();
+    esperar(&mut h, "la subcarpeta", |h| h.query_by_label("playa.mp4").is_some());
+    // Vista previa
+    h.get_by_label("entrevista.mp4").click();
+    let r = d.join("entrevista.mp4");
+    esperar(&mut h, "los datos", |h| h.state().archivos.dur(&r).is_some_and(|x| (x - 3.0).abs() < 0.2));
+    esperar(&mut h, "todas las miniaturas", |h| ["tema.wav", "Día 1/playa.mp4", "portada.png"].iter().all(|n| h.state().archivos.dur(&d.join(n)).is_some()));
+    h.run_steps(3);
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    h.run_steps(4);
+    foto(&mut h, "archivos");
+    h.get_by_label("Ver y oír este archivo").click();
+    esperar(&mut h, "que suene", |h| h.state().motor.lock().unwrap().origen.as_ref().is_some_and(|o| o.0.cuadros.len() > 40_000));
+    h.get_by_label("Ver y oír este archivo").click();
+    h.run_steps(3);
+    assert!(h.state().motor.lock().unwrap().origen.is_none(), "se detiene");
+    // Doble clic: al cursor. El segundo no tapa al primero: sube a otra pista.
+    let doble = |h: &mut Harness<App>, n: &str| {
+        let c = h.get_by_label(n).rect().center();
+        h.hover_at(c);
+        // Lejos del clic anterior, o contaría como triple.
+        h.run_steps(60);
+        for pressed in [true, false, true, false] {
+            h.event(eframe::egui::Event::PointerButton { pos: c, button: eframe::egui::PointerButton::Primary, pressed, modifiers: Default::default() });
+        }
+        h.run_steps(30);
+    };
+    doble(&mut h, "entrevista.mp4");
+    doble(&mut h, "playa.mp4");
+    let p = &h.state().p;
+    assert_eq!(p.video.iter().map(|c| (c.capa, c.inicio)).collect::<Vec<_>>(), [(0, 0.0), (1, 0.0)]);
+    assert_eq!((p.ancho, p.alto), (320, 180));
+    assert!(p.vinculados(p.video[0].id).len() == 2, "el sonido queda vinculado");
+    // Arrastrar a las pistas, con varios elegidos.
+    let mut filas = vec![];
+    for n in ["portada.png", "tema.wav"] {
+        filas.push(h.get_by_label(n).rect().center());
+    }
+    h.state_mut().archivos.elegidos = vec![d.join("portada.png"), d.join("entrevista.mp4")];
+    h.run_steps(2);
+    let n = h.state().p.video.len();
+    // La pista V2, después de lo que tiene.
+    let destino = eframe::egui::pos2(1300.0, 540.0);
+    h.hover_at(filas[0]);
+    h.run_steps(2);
+    h.drag_at(filas[0]);
+    h.run_steps(2);
+    for k in 1..=8 {
+        h.hover_at(filas[0] + (destino - filas[0]) * (k as f32 / 8.0));
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+    foto(&mut h, "archivos-arrastre");
+    h.drop_at(destino);
+    h.run_steps(4);
+    let p = &h.state().p;
+    assert_eq!(p.video.len(), n + 2);
+    let (a, b) = (&p.video[n], &p.video[n + 1]);
+    assert!((b.inicio - a.inicio - 5.0).abs() < 1e-6, "uno tras otro");
+    assert_eq!((a.capa, b.capa), (1, 1));
+    // Búsqueda en subcarpetas, sin acentos; y cuadrícula.
+    h.state_mut().archivos.buscar = "PLAYA".into();
+    esperar(&mut h, "la búsqueda", |h| h.query_by_label("playa.mp4").is_some() && h.query_by_label("tema.wav").is_none());
+    h.state_mut().archivos.buscar.clear();
+    h.get_by_label("Ver como cuadrícula").click();
+    h.run_steps(4);
+    foto(&mut h, "archivos-cuadros");
+    doble(&mut h, "Día 1");
+    esperar(&mut h, "entrar a la carpeta", |h| h.query_by_label("playa.mp4").is_some() && h.query_by_label("tema.wav").is_none());
+    h.get_by_label("Carpeta anterior").click();
+    h.run_steps(3);
+    assert_eq!(h.state().archivos.rec.carpeta.as_deref(), Some(d.as_path()));
+    h.get_by_label("Cerrar el panel de archivos").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("tema.wav").is_none());
+    let _ = std::fs::remove_dir_all(d);
+}

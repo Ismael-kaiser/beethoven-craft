@@ -22,6 +22,18 @@ Las pestañas se cierran, se ordenan arrastrando, `+` abre otra y con clic derec
 
 La imagen y el sonido de un video quedan vinculados; clic derecho para desvincular. La automatización está en el clic derecho de la cabecera de la pista.
 
+## Panel de archivos
+
+![Panel de archivos](img/movie-archivos.jpg)
+
+Se abre y se cierra con el botón de carpetas de arriba a la izquierda o con **⌘B**. Está en todas las pestañas.
+
+- La flecha de una carpeta la abre ahí mismo; doble clic entra en ella. Arriba se ve el camino y cada parte se puede tocar.
+- El buscador busca también en las subcarpetas. Se puede filtrar por video, audio o imagen, ordenar y ver como cuadrícula.
+- Un clic muestra el archivo abajo: pasa el ratón por la imagen para recorrerlo o dale reproducir.
+- Se arrastra a una pista, a la vista previa o al espacio vacío. Con ⌘ o Shift se eligen varios y quedan uno tras otro. Doble clic lo pone en el cursor.
+- Clic derecho: favoritos, abrir en Origen, mostrarlo en el sistema. El panel nunca borra, mueve ni cambia tus archivos.
+
 ## Animación
 
 ![Animación](img/movie-animacion.jpg)
@@ -134,6 +146,7 @@ Se cambian en **Atajos de teclado…** (⌘⌥K). En Windows y Linux, ⌘ es Ctr
 | Alejar | - |
 | Ver todo el proyecto | `\` |
 | Imán | Shift+S |
+| Panel de archivos | ⌘+B |
 | Pestaña Playlist | ⌘+1 |
 | Pestaña Video | ⌘+2 |
 | Pestaña Audio | ⌘+3 |

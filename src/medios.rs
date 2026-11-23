@@ -152,8 +152,18 @@ pub fn decodificar_a(ruta: &Path, sr: u32) -> Result<Vec<[f32; 2]>, String> {
     decodificar_con(ruta, sr, "aresample=async=1:first_pts=0")
 }
 
+/// Un tramo del audio, para oírlo sin leer todo el archivo.
+pub fn decodificar_tramo(ruta: &Path, desde: f64, dur: f64) -> Result<Audio, String> {
+    let corte = ["-ss".to_string(), format!("{desde:.3}"), "-t".into(), format!("{dur:.3}")];
+    leer_f32(ffmpeg().args(corte), ruta, SR, "aresample=async=1").map(Audio::nuevo)
+}
+
 fn decodificar_con(ruta: &Path, sr: u32, filtro: &str) -> Result<Vec<[f32; 2]>, String> {
-    let mut h = ffmpeg()
+    leer_f32(&mut ffmpeg(), ruta, sr, filtro)
+}
+
+fn leer_f32(ffmpeg: &mut Command, ruta: &Path, sr: u32, filtro: &str) -> Result<Vec<[f32; 2]>, String> {
+    let mut h = ffmpeg
         .arg("-i")
         .arg(ruta)
         .args(["-vn", "-map", "0:a:0"])

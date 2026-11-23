@@ -1,5 +1,6 @@
 //! La ventana: barra, línea de tiempo, vista previa, consola y editor de audio.
 pub mod animacion;
+pub mod archivos;
 pub mod atajos;
 pub mod biblioteca;
 pub mod color;
@@ -143,6 +144,7 @@ pub struct App {
     /// Pestaña de animación.
     pub anim: animacion::Estado,
     pub atajos: atajos::Estado,
+    pub archivos: archivos::Estado,
     pub nodos: nodos::Estado,
     aplicado: Option<Proyecto>,
     ultimo: Proyecto,
@@ -245,6 +247,7 @@ impl App {
             inicio: inicio::Estado::default(),
             anim: animacion::Estado::default(),
             atajos: Default::default(),
+            archivos: Default::default(),
             nodos: Default::default(),
             aplicado: None,
             ultimo: p.clone(),
@@ -312,6 +315,9 @@ impl App {
             acerca: false,
             cerrar_ya: false,
         };
+        if !sin_dispositivo {
+            a.archivos.cargar();
+        }
         a.abrir_salida();
         a
     }
@@ -1194,6 +1200,7 @@ impl App {
                 self.inicio.mostrar();
             }
             "atajos" => self.atajos.abierto = true,
+            "archivos" => self.archivos.rec.abierto = !self.archivos.rec.abierto,
             "tocar" => self.alternar(),
             "pausa" if self.tocando() => self.alternar(),
             "seguir" if !self.tocando() => self.alternar(),
@@ -1320,6 +1327,7 @@ impl App {
             Panel::top("tira").frame(Frame::NONE).show_separator_line(false).show(ui, |ui| self.tira_pestanas(ui));
             Panel::top("barra").frame(Frame::new().fill(TOOLBAR).inner_margin(6.0)).show(ui, |ui| self.barra(ui));
             self.refrescar_vista(&ctx);
+            self.panel_archivos(ui);
             // Una pestaña sacada a su ventana deja aquí la Playlist.
             match self.espacio {
                 Espacio::Video if !self.ventanas[0] => self.espacio_video(ui),
@@ -1575,7 +1583,15 @@ impl App {
         let todo = ui.available_rect_before_wrap();
         let barra = Rect::from_min_max(pos2(todo.left(), todo.bottom() - 34.0), todo.max);
         let r = Rect::from_min_max(todo.min, pos2(todo.right(), barra.top()));
-        ui.allocate_rect(todo, Sense::hover());
+        let resp = ui.allocate_rect(todo, Sense::hover());
+        // Archivos soltados en la imagen: en el cursor.
+        let trae = resp.dnd_hover_payload::<biblioteca::Soltar>().is_some_and(|s| matches!(*s, biblioteca::Soltar::Medios(_)));
+        if let Some(s) = resp.dnd_release_payload::<biblioteca::Soltar>() {
+            if let biblioteca::Soltar::Medios(v) = &*s {
+                let t = self.ahora();
+                self.poner_archivos(v, t, None, None);
+            }
+        }
         let razon = self.p.ancho as f32 / self.p.alto.max(1) as f32;
         let k = (r.width() / razon).min(r.height());
         let d = Rect::from_center_size(r.center(), vec2(k * razon, k));
@@ -1586,6 +1602,9 @@ impl App {
             _ => {
                 ui.painter().text(r.center(), Align2::CENTER_CENTER, crate::idioma::t("Arrastra aquí tu video, canción o imagen"), fuente(18.0), TEXT_FAINT);
             }
+        }
+        if trae {
+            ui.painter().rect_stroke(r.shrink(6.0), 8, Stroke::new(2.0, MAIN), StrokeKind::Inside);
         }
         if self.espacio == Espacio::Animacion {
             self.trayectoria(ui, d);

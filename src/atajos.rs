@@ -71,6 +71,7 @@ pub const ACCIONES: &[Accion] = &[
     a("alejar", "Vista", "Alejar", "Minus"),
     a("ver_todo", "Vista", "Ver todo el proyecto", "Backslash"),
     a("iman", "Vista", "Imán", "Shift+S"),
+    a("archivos", "Vista", "Panel de archivos", "Cmd+B"),
     a("p_playlist", "Vista", "Pestaña Playlist", "Cmd+1"),
     a("p_video", "Vista", "Pestaña Video", "Cmd+2"),
     a("p_audio", "Vista", "Pestaña Audio", "Cmd+3"),
