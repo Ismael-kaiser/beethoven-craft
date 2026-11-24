@@ -177,10 +177,13 @@ pub struct App {
     vista_v: u64,
     textura: Option<TextureHandle>,
     /// Alto de la vista previa en pixeles.
+    /// Alto de la vista previa; 0: el de la pantalla.
     calidad: usize,
+    /// Pixeles de alto que ocupa la imagen en la pantalla.
+    alto_panel: usize,
     pub tiras: HashMap<PathBuf, Option<TiraLista>>,
     /// Último cuadro compuesto, para los medidores de color.
-    cuadro: Option<(usize, usize, Vec<u8>)>,
+    cuadro: Option<Arc<crate::composicion::Cuadro>>,
     cuadro_v: u64,
     medidor_img: usize,
     medidor_v: u64,
@@ -248,6 +251,8 @@ pub fn carpeta() -> PathBuf {
 impl App {
     /// `sin_dispositivo`: no abre la tarjeta de sonido (pruebas). `muda`: la abre pero manda silencio.
     pub fn nueva(ctx: &Context, sin_dispositivo: bool, muda: bool) -> App {
+        // Se abre desde ya, sin detener la ventana.
+        std::thread::spawn(crate::vgpu::gpu);
         estilo::aplicar(ctx);
         if !sin_dispositivo {
             inicio::cargar_ajustes();
@@ -287,7 +292,8 @@ impl App {
             vista_p: Arc::new(Proyecto::nuevo()),
             vista_v: 0,
             textura: None,
-            calidad: 540,
+            calidad: 0,
+            alto_panel: 540,
             tiras: HashMap::new(),
             cuadro: None,
             cuadro_v: 0,
@@ -731,7 +737,7 @@ impl App {
     /// Rehace las miniaturas con el cuadro que se está viendo.
     pub fn pedir_muestras(&mut self) {
         let base = match &self.cuadro {
-            Some((w, h, q)) if !self.p.video.is_empty() => muestras::reducir(*w, *h, q),
+            Some(q) if !self.p.video.is_empty() => muestras::reducir(q.ancho, q.alto, &q.rgba),
             _ => muestras::de_prueba(),
         };
         // En un cuadro casi negro no se ve nada.
@@ -1012,7 +1018,7 @@ impl App {
     }
 
     pub fn guardar_en(&mut self, ruta: PathBuf) {
-        let mini = self.cuadro.as_ref().filter(|_| !self.p.video.is_empty()).map(|(w, h, q)| muestras::reducir(*w, *h, q));
+        let mini = self.cuadro.as_ref().filter(|_| !self.p.video.is_empty()).map(|q| muestras::reducir(q.ancho, q.alto, &q.rgba));
         let mini = mini.as_ref().map(|q| (muestras::AN as u16, muestras::AL as u16, q.as_slice()));
         match crate::archivo::guardar(&self.p, &ruta, mini, false) {
             Ok(()) => {
@@ -1649,17 +1655,25 @@ impl App {
         let t = self.ahora();
         // El último cuadro sigue visible al llegar al final.
         let t = if self.p.fin() > 0.0 { t.min(self.p.fin() - 0.001).max(0.0) } else { t };
-        let h = self.calidad.min(self.p.alto.max(2) as usize) / 2 * 2;
+        let quiere = if self.calidad > 0 {
+            self.calidad
+        } else {
+            // El escalón que cubre lo que se ve; sin tarjeta gráfica, uno que aguante el procesador.
+            let tope = if crate::vgpu::gpu().is_some() { 1440 } else { 540 };
+            [360, 540, 720, 900, 1080, 1440].into_iter().find(|h| *h >= self.alto_panel).unwrap_or(1440).min(tope)
+        };
+        let h = quiere.min(self.p.alto.max(2) as usize) / 2 * 2;
         let w = (h as f64 * self.p.ancho as f64 / self.p.alto.max(1) as f64 / 2.0).round() as usize * 2;
         let tocando = self.tocando();
         if let Some(q) = self.vista.actualizar(&self.vista_p, self.vista_v, t, tocando, (w.max(2), h.max(2))) {
-            let img = ColorImage::from_rgba_unmultiplied([q.ancho, q.alto], &q.rgba);
+            // El cuadro es opaco: se copia de un jalón.
+            let img = ColorImage::new([q.ancho, q.alto], bytemuck::cast_slice(&q.rgba).to_vec());
             self.cuadro_v += 1;
             match &mut self.textura {
                 Some(x) => x.set(img, TextureOptions::LINEAR),
                 None => self.textura = Some(ctx.load_texture("video", img, TextureOptions::LINEAR)),
             }
-            self.cuadro = Some((q.ancho, q.alto, q.rgba.clone()));
+            self.cuadro = Some(q);
         }
         if self.vista.pendientes > 0 {
             ctx.request_repaint_after(Duration::from_millis(12));
@@ -1682,6 +1696,7 @@ impl App {
         let razon = self.p.ancho as f32 / self.p.alto.max(1) as f32;
         let k = (r.width() / razon).min(r.height());
         let d = Rect::from_center_size(r.center(), vec2(k * razon, k));
+        self.alto_panel = (d.height() * ui.ctx().pixels_per_point()).round().max(2.0) as usize;
         match &self.textura {
             Some(x) if !self.p.video.is_empty() => {
                 ui.painter().image(x.id(), d, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
@@ -1719,13 +1734,25 @@ impl App {
         }
         u.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ComboBox::from_id_salt("calidad").width(86.0).selected_text(match self.calidad {
-                360 => "Rápida",
-                720 => "Nítida",
-                _ => "Normal",
+                0 => crate::idioma::t("Automática"),
+                360 => crate::idioma::t("Rápida"),
+                720 => crate::idioma::t("Nítida"),
+                1080 => crate::idioma::t("Completa"),
+                _ => crate::idioma::t("Normal"),
             }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.calidad, 360, "Rápida");
-                ui.selectable_value(&mut self.calidad, 540, "Normal");
-                ui.selectable_value(&mut self.calidad, 720, "Nítida");
+                ui.selectable_value(&mut self.calidad, 0, crate::idioma::t("Automática")).on_hover_text(crate::idioma::t("Tan nítida como se ve en tu pantalla"));
+                ui.selectable_value(&mut self.calidad, 360, crate::idioma::t("Rápida"));
+                ui.selectable_value(&mut self.calidad, 540, crate::idioma::t("Normal"));
+                ui.selectable_value(&mut self.calidad, 720, crate::idioma::t("Nítida"));
+                ui.selectable_value(&mut self.calidad, 1080, crate::idioma::t("Completa"));
+                ui.separator();
+                let mut usa = crate::vgpu::encendida();
+                if ui.checkbox(&mut usa, crate::idioma::t("Usar la tarjeta gráfica")).changed() {
+                    crate::vgpu::apagar(!usa);
+                    crate::video::SIN_CHIP.store(!usa, Relaxed);
+                    self.vista_v += 1;
+                }
+                ui.label(RichText::new(crate::vgpu::gpu().map_or("", |g| g.nombre())).size(12.0).color(TEXT_FAINT));
             }).response.on_hover_text(crate::idioma::t("Calidad de la vista previa. No cambia lo que se exporta."));
             ui.label(RichText::new(tiempo(self.p.fin())).color(TEXT_DIM));
             if ui.available_width() > 130.0 && ui.add(Button::new(RichText::new(format!("{}×{} · {}", self.p.ancho, self.p.alto, proyecto::nombre_fps((self.p.fps * 100.0).round() / 100.0))).size(13.0).color(TEXT_DIM)).frame(false)).on_hover_text(crate::idioma::t("Resolución y fotogramas por segundo del proyecto")).clicked() {

@@ -935,6 +935,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-gpu"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "effectcraft-color",
+ "effectcraft-effects",
+ "effectcraft-geom",
+ "effectcraft-keyframe",
+ "effectcraft-project",
+ "effectcraft-raster",
+ "effectcraft-time",
+ "log",
+ "pollster 1.0.3",
+ "rayon",
+ "web-time",
+ "wgpu",
+]
+
+[[package]]
 name = "craft-mime"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=5a7a63a21dd03dd1a2bc6c308a3a6ce818caae87#5a7a63a21dd03dd1a2bc6c308a3a6ce818caae87"
@@ -3974,7 +3993,9 @@ name = "toma-uno"
 version = "0.1.0"
 dependencies = [
  "audio-fx",
+ "bytemuck",
  "cpal",
+ "craft-gpu",
  "craft-trans",
  "crossbeam-channel",
  "effectcraft-color",

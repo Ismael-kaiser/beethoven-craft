@@ -33,6 +33,7 @@ fn fluidez() {
         ("desenfoque direccional", base(&["ec.blur.directional"], "")),
         ("tres pesados", base(&["fc:volumetric_rays", "ec.blur.gaussian", "fc:glint"], "")),
     ];
+    let tam = if std::env::var_os("GRANDE").is_some() { (1920, 1080) } else { (960, 540) };
     let filtro = std::env::var("CASO").unwrap_or_default();
     for (n, p) in casos.iter().filter(|c| c.0.contains(&filtro)) {
         for vuelta in 0..2 {
@@ -42,7 +43,7 @@ fn fluidez() {
                 let (mut vistos, mut atraso, mut ancho) = (vec![], vec![], 0);
                 while t0.elapsed().as_secs_f64() < 5.0 {
                     let t = ini + t0.elapsed().as_secs_f64();
-                    if let Some(q) = v.actualizar(p, 1, t, true, (960, 540)) {
+                    if let Some(q) = v.actualizar(p, 1, t, true, tam) {
                         vistos.push(t0.elapsed().as_secs_f64());
                         atraso.push(t - q.t);
                         ancho = q.ancho;
@@ -67,4 +68,39 @@ fn fluidez() {
             }
         }
     }
+}
+
+/// Al reproducir, el procesador le pasa la decodificación al chip sin que se note ni cambie ningún cuadro.
+#[test]
+#[ignore]
+fn relevo_del_chip() {
+    use toma_uno::composicion::Fuente;
+    use toma_uno::video::{Lectores, Modo};
+    let v = std::path::PathBuf::from(std::env::var("VIDEO").unwrap());
+    let i = toma_uno::medios::sondear(&v).unwrap();
+    let mut p = Proyecto::nuevo();
+    let mut c = p.nuevo_video(v, Contenido::Archivo, 0.0, 60.0);
+    let (w, h, fps) = i.video.unwrap();
+    (c.ancho, c.alto, c.fps, c.total) = (w, h, fps, i.dur);
+    let modo = Modo { yuv: true, ..Default::default() };
+    let mut l = Lectores::nuevos(60.0, true).con(modo);
+    let mut s = Lectores::nuevos(60.0, true).con(modo);
+    l.seguido = true;
+    let (mut cambio, mut peor) = (None, 0.0f64);
+    for n in 0..(3.0 * fps) as usize {
+        let t = 63.0 + (n as f64 + 0.02) / fps;
+        let t0 = Instant::now();
+        let a = l.cuadro(&c, t, 960, 540).unwrap();
+        peor = peor.max(if n > 0 { t0.elapsed().as_secs_f64() } else { 0.0 });
+        let b = s.cuadro(&c, t, 960, 540).unwrap();
+        assert!((a.t - b.t).abs() < 1e-3, "{n}: {} {}", a.t, b.t);
+        let d = a.yuv.iter().zip(&b.yuv).map(|(x, y)| x.abs_diff(*y) as u64).sum::<u64>() as f64 / a.yuv.len() as f64;
+        assert!(d < 1.0, "{n}: {d}");
+        if cambio.is_none() && l.con_chip() > 0 {
+            cambio = Some(n);
+        }
+        std::thread::sleep(Duration::from_secs_f64(0.8 / fps));
+    }
+    println!("pasó al chip en el cuadro {cambio:?}; espera más larga {:.0} ms", peor * 1e3);
+    assert!(cambio.is_some());
 }

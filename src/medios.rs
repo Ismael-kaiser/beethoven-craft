@@ -163,6 +163,36 @@ pub struct Info {
     pub dur: f64,
 }
 
+/// Memoria RAM de la máquina, en bytes.
+pub fn memoria_total() -> u64 {
+    let de = || -> Option<u64> {
+        if cfg!(target_os = "macos") {
+            let s = comando("sysctl").args(["-n", "hw.memsize"]).output().ok()?;
+            return String::from_utf8_lossy(&s.stdout).trim().parse().ok();
+        }
+        let s = std::fs::read_to_string("/proc/meminfo").ok()?;
+        s.lines().find(|l| l.starts_with("MemTotal"))?.split_whitespace().nth(1)?.parse::<u64>().ok().map(|k| k * 1024)
+    };
+    de().unwrap_or(8 << 30)
+}
+
+/// ¿El video trae transparencia? Se pregunta una vez por archivo.
+pub fn con_alfa(ruta: &Path) -> bool {
+    static C: std::sync::Mutex<Vec<(PathBuf, bool)>> = std::sync::Mutex::new(vec![]);
+    if let Some(x) = C.lock().unwrap().iter().find(|x| x.0 == ruta) {
+        return x.1;
+    }
+    let s = comando(herramienta("ffprobe"))
+        .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt:stream_tags=alpha_mode", "-of", "csv=p=0"])
+        .arg(ruta)
+        .output();
+    let s = s.map(|s| String::from_utf8_lossy(&s.stdout).to_string()).unwrap_or_default();
+    // Formatos con canal de transparencia, y los WebM que lo traen aparte.
+    let si = s.split([',', '\n']).any(|x| ["yuva", "rgba", "bgra", "argb", "abgr", "ya8", "ya16", "gbrap", "pal8", "ayuv"].iter().any(|a| x.trim().starts_with(a)) || x.trim() == "1");
+    C.lock().unwrap().push((ruta.to_path_buf(), si));
+    si
+}
+
 pub fn sondear(ruta: &Path) -> Result<Info, String> {
     let s = comando(herramienta("ffprobe"))
         .args(["-v", "error", "-show_streams", "-show_format", "-of", "json"])

@@ -1,0 +1,25 @@
+[package]
+name = "craft-gpu"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Compositor de GPU de EffectCraft (wgpu), con acceso a sus piezas"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+effectcraft-time = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-geom = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-color = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-project = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-raster = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-effects = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+effectcraft-keyframe = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
+wgpu = { version = "30", features = ["fragile-send-sync-non-atomic-wasm"] }
+bytemuck = "1"
+log = "0.4"
+rayon = "1"
+web-time = "1"
+pollster = "1"

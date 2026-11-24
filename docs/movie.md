@@ -77,6 +77,14 @@ Elige un clip y abre **◆ Animar**, arriba a la izquierda de la imagen. Está e
 
 «+ Agregar efecto» tiene los efectos por grupo. El grupo **Beethoven DAW** trae el ecualizador paramétrico (los puntos se arrastran sobre la curva, la rueda cambia el ancho), distorsión, moldeador estéreo, vocoder y balance.
 
+### Mezcladores
+
+En la consola, **+ → Mezclador** crea uno. Su nombre se escribe en la misma tira. A un mezclador se le manda un clip (selecciónalo y usa **Mezclador → …**, o clic derecho → **Mandar al mezclador**), varios a la vez, o una pista entera (**→ Maestro** en su tira, o clic derecho en la pista → **Salida al mezclador**). Cada mezclador tiene sus efectos, volumen, paneo, silencio y solo. Un clip que va directo a un mezclador no pasa por el volumen ni los efectos de su pista.
+
+### Color de los clips
+
+Clic derecho en un clip de audio o video → **Color del clip**. Si hay varios elegidos, se tiñen todos.
+
 ## Nodos
 
 ![Nodos](img/movie-nodos.jpg)
@@ -96,6 +104,10 @@ Son 66 y todos son puntos de partida de «Mezcla de color»: después de ponerlo
 ## Efectos y estilos propios
 
 Además de los efectos de EffectCraft y FilmCraft, Movie trae 76 hechos para este proyecto, por grupo: Al ritmo, Pantallas y cámaras, Adornos, Cómic y color, Espejos y ondas, Elegantes, Movimiento y pulso, 3D y lentes, Luces, Fiesta y naturaleza, Terror, Marcos y aperturas, Retro y dibujo. Los **estilos** juntan varios con sus valores. Todos sus controles se pueden animar.
+
+## Rendimiento
+
+La vista previa y la exportación usan la tarjeta gráfica (Metal, DirectX 12 o Vulkan) y el chip de video de la máquina. Lo que no tiene versión para la tarjeta se hace en el procesador, y todo se ve igual. Junto a la imagen está la calidad de la vista previa: **Automática** la hace tan nítida como se ve en tu pantalla; ahí mismo se apaga la tarjeta si da problemas. Los cuadros con efectos se calculan por adelantado y se guardan en la RAM (una parte chica) y en un archivo temporal de hasta 3 GB que se borra solo.
 
 ## Proyecto
 

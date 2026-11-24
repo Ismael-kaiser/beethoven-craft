@@ -10,12 +10,58 @@ use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, OnceLock};
 
-/// Un cuadro decodificado, RGBA de 8 bits.
+/// Un cuadro decodificado.
+#[derive(Default)]
 pub struct Cuadro {
     pub t: f64,
     pub ancho: usize,
     pub alto: usize,
+    /// RGBA de 8 bits; vacío si viene en `yuv`.
     pub rgba: Vec<u8>,
+    /// Planos Y, U y V a 4:2:0 (BT.709, rango limitado), como sale de casi todo video: pesa menos de la mitad.
+    pub yuv: Vec<u8>,
+}
+
+impl Cuadro {
+    pub fn en_rgba(&self) -> std::borrow::Cow<'_, [u8]> {
+        if self.yuv.is_empty() { (&self.rgba[..]).into() } else { a_rgba(&self.yuv, self.ancho, self.alto).into() }
+    }
+    pub fn peso(&self) -> usize {
+        self.rgba.len() + self.yuv.len()
+    }
+}
+
+/// Planos 4:2:0 a RGBA, con el color suavizado entre muestras.
+pub fn a_rgba(yuv: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let (cw, ch) = (w / 2, h / 2);
+    let (y, c) = yuv.split_at(w * h);
+    let (u, v) = c.split_at(cw * ch);
+    let mut o = vec![255u8; w * h * 4];
+    o.par_chunks_mut(w * 4).enumerate().for_each(|(j, fila)| {
+        // Color: centrado a lo alto y pegado a la izquierda a lo ancho.
+        let (a, b) = (j / 2, if j % 2 == 0 { (j / 2).saturating_sub(1) } else { (j / 2 + 1).min(ch - 1) });
+        let mezcla = |p: &[u8], i: usize| p[a * cw + i] as i32 * 3 + p[b * cw + i] as i32;
+        for (i, (px, l)) in fila.as_chunks_mut::<4>().0.iter_mut().zip(&y[j * w..]).enumerate() {
+            let (p, q) = (i / 2, if i % 2 == 0 { i / 2 } else { (i / 2 + 1).min(cw - 1) });
+            let uu = (mezcla(u, p) + mezcla(u, q) - 1024) as f32 * (1.0 / 8.0);
+            let vv = (mezcla(v, p) + mezcla(v, q) - 1024) as f32 * (1.0 / 8.0);
+            let l = (*l as f32 - 16.0) * (255.0 / 219.0);
+            const K: f32 = 255.0 / 224.0;
+            px[0] = (l + 1.5748 * K * vv + 0.5) as u8;
+            px[1] = (l - 0.187324 * K * uu - 0.468124 * K * vv + 0.5) as u8;
+            px[2] = (l + 1.8556 * K * uu + 0.5) as u8;
+        }
+    });
+    o
+}
+
+/// RGBA a planos 4:2:0 (BT.709, rango limitado).
+pub fn a_yuv(rgba: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let (mut y, mut u, mut v) = (vec![], vec![], vec![]);
+    effectcraft_raster::yuv::rgba_to_yuv420(rgba, w, h, &mut y, &mut u, &mut v);
+    y.append(&mut u);
+    y.append(&mut v);
+    y
 }
 
 pub const FUSIONES: [(&str, BlendMode); 12] = [
@@ -235,9 +281,9 @@ fn fc_es_centro(d: &ct::ParamDef) -> bool {
     matches!(&d.default, craft_trans::ParamValue::Vec2(v) if v.x.is_nan())
 }
 
-struct Entorno {
-    dur: f64,
-    fps: f64,
+pub struct Entorno {
+    pub dur: f64,
+    pub fps: f64,
 }
 
 impl craft_trans::vfx::FxEnv for Entorno {
@@ -249,8 +295,8 @@ impl craft_trans::vfx::FxEnv for Entorno {
     }
 }
 
-/// Efecto de FilmCraft: trabaja en luz lineal sobre la capa completa.
-fn aplicar_fc(f: &FxVideo, d: &ct::EffectDef, t: f64, dur: f64, fps: f64, buf: ec::Buf, tam: [f64; 2]) -> ec::Buf {
+/// El efecto con sus valores en el segundo `t`.
+pub fn valores_fc(f: &FxVideo, d: &ct::EffectDef, t: f64, tam: [f64; 2]) -> ct::EffectInstance {
     let mut e = d.instance();
     for p in &d.params {
         let Some(v) = f.p.get(p.id).map(|x| x.en(t)) else { continue };
@@ -267,6 +313,12 @@ fn aplicar_fc(f: &FxVideo, d: &ct::EffectDef, t: f64, dur: f64, fps: f64, buf: e
         };
         e.params.insert(p.id.to_string(), ct::Param { value: q });
     }
+    e
+}
+
+/// Efecto de FilmCraft: trabaja en luz lineal sobre la capa completa.
+fn aplicar_fc(f: &FxVideo, d: &ct::EffectDef, t: f64, dur: f64, fps: f64, buf: ec::Buf, tam: [f64; 2]) -> ec::Buf {
+    let e = valores_fc(f, d, t, tam);
     let mut img = a_lineal(&buf.img);
     let env = Entorno { dur, fps };
     let cx = craft_trans::vfx::FxCtx { t: craft_trans::Tick, px_scale: buf.scale as f32, seconds: t, env: Some(&env), frame_rate: fps };
@@ -275,7 +327,7 @@ fn aplicar_fc(f: &FxVideo, d: &ct::EffectDef, t: f64, dur: f64, fps: f64, buf: e
 }
 
 /// Cuadros del pasado de una capa, para los efectos de tiempo.
-struct Pasado {
+pub struct Pasado {
     /// (segundo de la capa, imagen)
     v: Vec<(f64, ec::Buf)>,
 }
@@ -295,17 +347,8 @@ impl ec::EffectHost for Pasado {
 /// Efectos que miran otros momentos del clip.
 pub const DE_TIEMPO: [&str; 6] = ["ec.time.echo", "ec.time.posterizetime", "ec.time.timedifference", "ec.time.ccwidetime", "ec.time.ccforcemotionblur", "ec.time.pixelmotionblur"];
 
-#[allow(clippy::too_many_arguments)]
-fn aplicar_fx(f: &FxVideo, t: f64, dur: f64, fps: f64, buf: ec::Buf, tam: [f64; 2], pasado: Option<&Pasado>) -> ec::Buf {
-    if let Some(d) = f.tipo.strip_prefix("fc:").and_then(ct::find_video) {
-        let respaldo = buf.clone();
-        return std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| aplicar_fc(f, d, t, dur, fps, buf, tam))).unwrap_or(respaldo);
-    }
-    if f.tipo.starts_with("bc:") {
-        let img = crate::vpropios::aplicar(f, t, &buf.img, buf.scale);
-        return ec::Buf { img, ..buf };
-    }
-    let Some(s) = ec::find(&f.tipo) else { return buf };
+/// Los valores de un efecto de EffectCraft en el segundo `t`.
+pub fn valores_ec(f: &FxVideo, s: &ec::EffectSpec, t: f64, tam: [f64; 2]) -> ec::Params {
     let values = s
         .params
         .iter()
@@ -327,7 +370,21 @@ fn aplicar_fx(f: &FxVideo, t: f64, dur: f64, fps: f64, buf: ec::Buf, tam: [f64; 
             (p.id.to_string(), v)
         })
         .collect();
-    let params = ec::Params { values };
+    ec::Params { values }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn aplicar_fx(f: &FxVideo, t: f64, dur: f64, fps: f64, buf: ec::Buf, tam: [f64; 2], pasado: Option<&Pasado>) -> ec::Buf {
+    if let Some(d) = f.tipo.strip_prefix("fc:").and_then(ct::find_video) {
+        let respaldo = buf.clone();
+        return std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| aplicar_fc(f, d, t, dur, fps, buf, tam))).unwrap_or(respaldo);
+    }
+    if f.tipo.starts_with("bc:") {
+        let img = crate::vpropios::aplicar(f, t, &buf.img, buf.scale);
+        return ec::Buf { img, ..buf };
+    }
+    let Some(s) = ec::find(&f.tipo) else { return buf };
+    let params = valores_ec(f, s, t, tam);
     let respaldo = buf.clone();
     // Un efecto que truene no debe tirar la app: se salta.
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -411,6 +468,10 @@ pub fn transicion_nueva(tipo: &str) -> Transicion {
 /// De dónde salen los cuadros decodificados: clip, segundo del archivo, tamaño.
 pub trait Fuente {
     fn cuadro(&mut self, c: &ClipVideo, t: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>>;
+    /// Igual, pero quien lo pide sabe cambiarle el tamaño: puede llegar más grande o más chico.
+    fn cuadro_libre(&mut self, c: &ClipVideo, t: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
+        self.cuadro(c, t, ancho, alto)
+    }
     /// Los últimos cuadros que se vieron de ese clip.
     fn recientes(&self, _: &ClipVideo) -> Vec<Arc<Cuadro>> {
         vec![]
@@ -419,7 +480,7 @@ pub trait Fuente {
 
 /// Lo que se le pide a la fuente para dibujar `c` en `t` sobre un lienzo de `w` × `h`: segundo del archivo y tamaño.
 /// `None`: no sale de un archivo (título, color, ajuste).
-fn pedido(c: &ClipVideo, t: f64, w: usize, h: usize) -> Option<(f64, usize, usize)> {
+pub fn pedido(c: &ClipVideo, t: f64, w: usize, h: usize) -> Option<(f64, usize, usize)> {
     let (aw, ah) = ajuste(c, w, h);
     match c.contenido {
         Contenido::Archivo => Some((c.fuente(t).clamp(0.0, (c.total - 0.02).max(0.0)), aw, ah)),
@@ -429,7 +490,7 @@ fn pedido(c: &ClipVideo, t: f64, w: usize, h: usize) -> Option<(f64, usize, usiz
 }
 
 /// El clip pegado a la izquierda de `c` en su capa: el que sale en la transición de entrada.
-fn previo<'a>(p: &'a Proyecto, c: &ClipVideo) -> Option<&'a ClipVideo> {
+pub fn previo<'a>(p: &'a Proyecto, c: &ClipVideo) -> Option<&'a ClipVideo> {
     p.video.iter().find(|q| q.capa == c.capa && q.id != c.id && (q.fin() - c.inicio).abs() < 0.05)
 }
 
@@ -472,9 +533,12 @@ impl Fuente for Prestado {
     fn cuadro(&mut self, c: &ClipVideo, _: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
         self.0.get(&c.id).filter(|q| (q.ancho, q.alto) == (ancho, alto)).cloned()
     }
+    fn cuadro_libre(&mut self, c: &ClipVideo, _: f64, _: usize, _: usize) -> Option<Arc<Cuadro>> {
+        self.0.get(&c.id).cloned()
+    }
 }
 
-fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<ec::Buf> {
+pub fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<ec::Buf> {
     let k = h as f64 / p.alto.max(1) as f64;
     let img = match &c.contenido {
         Contenido::Titulo(x) => titulos::dibujar_en(x, w, h, t - c.inicio, c.dur),
@@ -484,10 +548,23 @@ fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dy
         Contenido::Archivo | Contenido::Imagen => {
             let (ts, aw, ah) = pedido(c, t, w, h)?;
             let q = f.cuadro(c, ts, aw, ah)?;
-            Image::from_rgba8(q.ancho as u32, q.alto as u32, &q.rgba)
+            Image::from_rgba8(q.ancho as u32, q.alto as u32, &q.en_rgba())
         }
     };
     Some(ec::Buf { img, offset: [0.0; 2], scale: k })
+}
+
+/// Los cuadros anteriores, si algún efecto del clip los mira.
+pub fn pasado_de(c: &ClipVideo, f: &dyn Fuente, escala: f64) -> Option<Pasado> {
+    c.fx.iter().any(|x| x.activo && DE_TIEMPO.contains(&x.tipo.as_str())).then(|| Pasado {
+        v: f.recientes(c)
+            .iter()
+            .map(|q| {
+                let t = (q.t - c.desde) / c.mov.velocidad.max(0.01);
+                (t, ec::Buf { img: Image::from_rgba8(q.ancho as u32, q.alto as u32, &q.en_rgba()), offset: [0.0; 2], scale: escala })
+            })
+            .collect(),
+    })
 }
 
 /// El clip ya con efectos y movimiento, en un lienzo transparente de `w` × `h`.
@@ -511,15 +588,7 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
         });
     }
     let tam = [bw / b.scale, bh / b.scale];
-    let pasado = c.fx.iter().any(|x| x.activo && DE_TIEMPO.contains(&x.tipo.as_str())).then(|| Pasado {
-        v: f.recientes(c)
-            .iter()
-            .map(|q| {
-                let t = (q.t - c.desde) / c.mov.velocidad.max(0.01);
-                (t, ec::Buf { img: Image::from_rgba8(q.ancho as u32, q.alto as u32, &q.rgba), offset: [0.0; 2], scale: b.scale })
-            })
-            .collect(),
-    });
+    let pasado = pasado_de(c, f, b.scale);
     for x in c.fx.iter().filter(|x| x.activo) {
         b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, pasado.as_ref());
     }
@@ -584,7 +653,7 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
 }
 
 /// Un texto o figura que se ve igual todo el tiempo.
-fn quieto(c: &ClipVideo, t: f64) -> bool {
+pub fn quieto(c: &ClipVideo, t: f64) -> bool {
     let fijo = match &c.contenido {
         Contenido::Titulo(x) => x.anim.is_none(),
         Contenido::Forma(_) => true,
@@ -598,14 +667,14 @@ fn quieto(c: &ClipVideo, t: f64) -> bool {
 }
 
 /// Un recuadro de imagen: (x, y) y lo que va ahí.
-struct Recuadro {
-    x: usize,
-    y: usize,
-    img: Image,
+pub struct Recuadro {
+    pub x: usize,
+    pub y: usize,
+    pub img: Arc<Image>,
 }
 
 /// El dibujo de un clip quieto, recortado a lo que tiene, guardado para el siguiente cuadro.
-fn guardado(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Arc<Recuadro> {
+pub fn guardado(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Arc<Recuadro> {
     use std::hash::{DefaultHasher, Hash, Hasher};
     static G: OnceLock<std::sync::Mutex<Vec<(u64, Arc<Recuadro>)>>> = OnceLock::new();
     let mut k = DefaultHasher::new();
@@ -624,9 +693,9 @@ fn guardado(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn
                 let i = (y0 as usize + y) * w + x0 as usize;
                 fila.copy_from_slice(&img.data[i..i + rw]);
             }
-            Recuadro { x: x0 as usize, y: y0 as usize, img: r }
+            Recuadro { x: x0 as usize, y: y0 as usize, img: Arc::new(r) }
         }
-        None => Recuadro { x: 0, y: 0, img: Image::new(0, 0) },
+        None => Recuadro { x: 0, y: 0, img: Arc::new(Image::new(0, 0)) },
     });
     let mut g = g.lock().unwrap();
     if g.len() >= 24 {
@@ -651,8 +720,39 @@ fn encimar(l: &mut Image, q: &Recuadro) {
     });
 }
 
-/// Compone el cuadro del segundo `t`. Opaco, RGBA de 8 bits.
+/// Compone el cuadro del segundo `t`, en la tarjeta gráfica si se puede. Opaco, RGBA de 8 bits.
 pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) -> Vec<u8> {
+    let mut hay = p.capas.iter().enumerate().filter(|x| x.1.visible).filter_map(|(i, _)| p.video_en(i, t).map(|c| (i, c))).peekable();
+    let corto = hay.peek().is_none() || hay.any(|(i, c)| atajo(p, i, c, t, w, h));
+    if !corto {
+        if let Some(v) = crate::vgpu::componer(p, t, w, h, f, crate::vgpu::Salida::Rgba) {
+            return v;
+        }
+    }
+    componer_cpu(p, t, w, h, f)
+}
+
+/// Lo mismo en planos 4:2:0 (tamaño par), como lo quiere el codificador.
+pub fn componer_yuv(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) -> Vec<u8> {
+    let hay = p.capas.iter().enumerate().filter(|x| x.1.visible).filter_map(|(i, _)| p.video_en(i, t).map(|c| (i, c)));
+    match hay.into_iter().find(|(i, c)| atajo(p, *i, c, t, w, h)) {
+        // Sin cambios: el cuadro pasa tal cual.
+        Some((_, c)) => {
+            if let Some(q) = pedido(c, t, w, h).and_then(|(ts, aw, ah)| f.cuadro(c, ts, aw, ah)).filter(|q| !q.yuv.is_empty()) {
+                return q.yuv.clone();
+            }
+        }
+        None => {
+            if let Some(v) = crate::vgpu::componer(p, t, w, h, f, crate::vgpu::Salida::I420) {
+                return v;
+            }
+        }
+    }
+    a_yuv(&componer(p, t, w, h, f), w, h)
+}
+
+/// Lo mismo, en el procesador.
+pub fn componer_cpu(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) -> Vec<u8> {
     let negro = [0.0, 0.0, 0.0, 1.0];
     let mut lienzo: Option<Image> = None;
     let escala = h as f32 / p.alto.max(1) as f32;
@@ -663,7 +763,7 @@ pub fn componer(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente) ->
         let Some(c) = p.video_en(i, t) else { continue };
         if atajo(p, i, c, t, w, h) {
             if let Some(q) = pedido(c, t, w, h).and_then(|(ts, aw, ah)| f.cuadro(c, ts, aw, ah)) {
-                return q.rgba.clone();
+                return q.en_rgba().into_owned();
             }
         }
         if c.contenido == Contenido::Ajuste {

@@ -20,7 +20,7 @@ impl Fuente for Fija {
             .map(|k| {
                 let mut rgba = self.0.rgba.clone();
                 rgba.chunks_exact_mut(AN * 4).for_each(|d| d.rotate_left(k * 12));
-                Arc::new(Cuadro { t: 1.0 - k as f64 / 24.0, ancho: AN, alto: AL, rgba })
+                Arc::new(Cuadro { t: 1.0 - k as f64 / 24.0, ancho: AN, alto: AL, rgba, ..Default::default() })
             })
             .collect()
     }
@@ -77,7 +77,7 @@ fn base() -> Proyecto {
 
 /// Calcula todas las muestras: (clave, RGBA).
 pub fn calcular(cuadro: Vec<u8>, entregar: impl Fn(String, Vec<u8>) -> bool) {
-    let mut f = Fija(Arc::new(Cuadro { t: 1.0, ancho: AN, alto: AL, rgba: cuadro.clone() }));
+    let mut f = Fija(Arc::new(Cuadro { t: 1.0, ancho: AN, alto: AL, rgba: cuadro.clone(), ..Default::default() }));
     for (i, e) in estilos::ESTILOS.iter().enumerate() {
         let mut p = base();
         let id = p.video[0].id;

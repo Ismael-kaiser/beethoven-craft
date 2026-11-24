@@ -122,8 +122,8 @@ impl App {
         let (w, h) = (256usize, 128usize);
         if self.medidor_v != self.cuadro_v {
             self.medidor_v = self.cuadro_v;
-            if let Some((an, al, q)) = &self.cuadro {
-                let img = medir(self.medidor_img, *an, *al, q, w, h);
+            if let Some(q) = &self.cuadro {
+                let img = medir(self.medidor_img, q.ancho, q.alto, &q.rgba, w, h);
                 match &mut self.medidor_tex {
                     Some(t) => t.set(img, TextureOptions::LINEAR),
                     None => self.medidor_tex = Some(ui.ctx().load_texture("medidor", img, TextureOptions::LINEAR)),

@@ -7,6 +7,7 @@ use crate::{Affine, EffectInstance, ParamValue, Tick, Vec2};
 use rayon::prelude::*;
 
 mod distort;
+pub use distort::placements;
 mod lights;
 
 /// What an effect may know about its clip.
@@ -51,27 +52,30 @@ pub fn auto_point(effect: &str, param: &str) -> Option<(f64, f64)> {
 pub(crate) fn def_value(e: &EffectInstance, id: &str) -> Option<ParamValue> {
     e.def().and_then(|d| d.param(id)).map(|p| p.default.clone())
 }
-pub(crate) fn fv(e: &EffectInstance, id: &str, cx: &FxCtx) -> f32 {
+pub fn fv(e: &EffectInstance, id: &str, cx: &FxCtx) -> f32 {
     e.f64_at(id, cx.t) as f32
 }
-pub(crate) fn bv(e: &EffectInstance, id: &str) -> bool {
+pub fn bv(e: &EffectInstance, id: &str) -> bool {
     e.param(id).and_then(|p| p.value.as_bool()).or_else(|| def_value(e, id).and_then(|v| v.as_bool())).unwrap_or(false)
 }
-pub(crate) fn chv(e: &EffectInstance, id: &str) -> u32 {
+pub fn chv(e: &EffectInstance, id: &str) -> u32 {
     match e.param(id).map(|p| p.value.clone()).or_else(|| def_value(e, id)) {
         Some(ParamValue::Choice(c)) => c,
         _ => 0,
     }
 }
-pub(crate) fn cv(e: &EffectInstance, id: &str, cx: &FxCtx) -> [f32; 4] {
+pub fn cv(e: &EffectInstance, id: &str, cx: &FxCtx) -> [f32; 4] {
     e.param(id).and_then(|p| p.value_at(cx.t).as_color()).or_else(|| def_value(e, id).and_then(|v| v.as_color())).unwrap_or([1.0; 4])
 }
 /// A point parameter in working pixels. Auto (NaN) components use the effect's auto position
 /// (`filmcraft_project::effect::auto_point`) or the layer centre.
-pub(crate) fn pv(e: &EffectInstance, id: &str, cx: &FxCtx, img: &Image) -> Vec2 {
+pub fn pv(e: &EffectInstance, id: &str, cx: &FxCtx, img: &Image) -> Vec2 {
+    pv_in(e, id, cx, img.w, img.h)
+}
+pub fn pv_in(e: &EffectInstance, id: &str, cx: &FxCtx, w: usize, h: usize) -> Vec2 {
     let v = e.param(id).map(|p| p.vec2_at(cx.t)).or_else(|| def_value(e, id).and_then(|v| v.as_vec2())).unwrap_or(Vec2::new(f64::NAN, f64::NAN));
     let (fx, fy) = auto_point(&e.effect, id).unwrap_or((0.5, 0.5));
-    Vec2::new(if v.x.is_nan() { img.w as f64 * fx } else { v.x * cx.px_scale as f64 }, if v.y.is_nan() { img.h as f64 * fy } else { v.y * cx.px_scale as f64 })
+    Vec2::new(if v.x.is_nan() { w as f64 * fx } else { v.x * cx.px_scale as f64 }, if v.y.is_nan() { h as f64 * fy } else { v.y * cx.px_scale as f64 })
 }
 /// A point offset parameter (no auto position) in working pixels.
 pub(crate) fn offv(e: &EffectInstance, id: &str, cx: &FxCtx) -> Vec2 {
@@ -98,7 +102,7 @@ pub(crate) fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
 }
 /// sRGB-encoded straight colour param → linear RGB.
 #[inline]
-pub(crate) fn lin(c: [f32; 4]) -> [f32; 3] {
+pub fn lin(c: [f32; 4]) -> [f32; 3] {
     dec([c[0], c[1], c[2]])
 }
 
@@ -162,7 +166,7 @@ pub(crate) fn hash_u(x: i64, y: i64, z: i64, seed: u64) -> u64 {
 }
 /// Uniform 0..1 from integer coordinates.
 #[inline]
-pub(crate) fn hash01(x: i64, y: i64, z: i64, seed: u64) -> f32 {
+pub fn hash01(x: i64, y: i64, z: i64, seed: u64) -> f32 {
     (hash_u(x, y, z, seed) >> 40) as f32 / (1u64 << 24) as f32
 }
 
@@ -205,7 +209,7 @@ pub(crate) fn noise3(x: f32, y: f32, z: f32, seed: u64) -> f32 {
 }
 
 /// Fractal (fBm) noise with `octaves` (fractional octaves fade in), about −1..1.
-pub(crate) fn fbm(x: f32, y: f32, z: f32, octaves: f32, seed: u64) -> f32 {
+pub fn fbm(x: f32, y: f32, z: f32, octaves: f32, seed: u64) -> f32 {
     let n = octaves.clamp(1.0, 10.0);
     let (mut sum, mut amp, mut freq, mut norm) = (0.0, 1.0, 1.0, 0.0);
     let mut i = 0;
@@ -318,11 +322,7 @@ pub(crate) fn clip_progress(cx: &FxCtx) -> f64 {
 pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) -> bool {
     match e.effect.as_str() {
         "rotate_3d" => distort::rotate_3d(img, e, cx),
-        "grow" | "shrink" => distort::grow(img, e, cx),
-        "move" => distort::move_fx(img, e, cx),
-        "spin" => distort::spin(img, e, cx),
-        "wiggle" => distort::wiggle(img, e, cx),
-        "camera_shake" => distort::camera_shake(img, e, cx),
+        "grow" | "shrink" | "move" | "spin" | "wiggle" | "camera_shake" => distort::moved(img, e, cx),
         "rounded_crop" => distort::rounded_crop(img, e, cx),
         "clone" => distort::clone_fx(img, e, cx),
         "echo_glow" => lights::echo_glow(img, e, cx),

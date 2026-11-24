@@ -207,7 +207,7 @@ fn luz(p: P4) -> f32 {
     0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
 }
 
-fn azar(a: i32, b: i32) -> f32 {
+pub fn azar(a: i32, b: i32) -> f32 {
     let mut h = (a as u32).wrapping_mul(0x9E37_79B1) ^ (b as u32).wrapping_mul(0x85EB_CA77);
     h ^= h >> 15;
     h = h.wrapping_mul(0x2C1B_3C6D);
@@ -323,7 +323,7 @@ fn pantalla(p: P4, l: [f32; 3]) -> P4 {
     [f(p[0], l[0]), f(p[1], l[1]), f(p[2], l[2]), p[3]]
 }
 
-fn arcoiris(h: f32) -> [f32; 4] {
+pub fn arcoiris(h: f32) -> [f32; 4] {
     let f = |d: f32| ((h + d).rem_euclid(1.0) * 6.0 - 3.0).abs().clamp(1.0, 2.0) - 1.0;
     [f(0.0), f(2.0 / 3.0), f(1.0 / 3.0), 1.0]
 }
@@ -368,7 +368,7 @@ impl Img {
 }
 
 /// (número de golpe, qué tanto le queda al golpe de 1 a 0)
-fn golpe(t: f64, bpm: f64, cada: f64, desf: f64, caida: f64) -> (i32, f32) {
+pub fn golpe(t: f64, bpm: f64, cada: f64, desf: f64, caida: f64) -> (i32, f32) {
     let b = 60.0 / bpm.max(1.0) * cada.round().max(1.0);
     let u = (t - desf / 1000.0) / b;
     let k = u.floor();
@@ -424,15 +424,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
     }
     // Partículas que caen o suben: (x, y, tamaño, número).
     let particulas = |total: f32, abajo: f32, tam: f32| -> Vec<(f32, f32, f32, i32)> {
-        (0..(total * por("cant").max(0.05)) as i32)
-            .map(|i| {
-                let a = azar(i, semilla);
-                let v = 0.09 + 0.16 * azar(i, 11);
-                let y = (azar(i, 5) + abajo * v * tv).rem_euclid(1.2) - 0.1;
-                let x = a + 0.025 * (tv * (0.6 + azar(i, 3)) + a * 40.0).sin();
-                (x * wf, y * hf, hf * tam * (0.5 + azar(i, 9)) * por("tam").max(0.1), i)
-            })
-            .collect()
+        particulas(total, abajo, tam, por("cant"), por("tam"), tv, semilla, (wf, hf))
     };
     // Pinta partículas solo en su recuadro. `fig` da la cobertura en (-1..1).
     let estampar = |ps: &[(f32, f32, f32, i32)], color: &dyn Fn(i32) -> [f32; 4], fig: &dyn Fn(f32, f32, i32) -> f32, suma: bool| -> Image {
@@ -926,10 +918,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         "bc:polvo" => {
             let g = por("cant");
-            // Cambia 12 veces por segundo, como película rayada.
-            let c12 = (t * 12.0).floor() as i32;
-            let motas: Vec<(f32, f32, f32, i32)> = (0..(60.0 * g) as i32).map(|i| (azar(i, c12) * wf, azar(i + 99, c12) * hf, hf * (0.003 + 0.011 * azar(i, c12 + 7).powi(3)), i)).collect();
-            let rayas: Vec<(f32, f32, f32)> = (0..(8.0 * g) as i32).filter(|i| azar(*i, c12 / 4 + 50) > 0.45).map(|i| (azar(i, c12 / 4 + 3) * wf + (azar(i, c12) - 0.5) * 3.0 * e, 0.12 + 0.3 * azar(i, 8), azar(i, 77))).collect();
+            let (motas, rayas) = polvo(g, t, e, wf, hf);
             let m = estampar(&motas, &|i| if azar(i, 41) > 0.5 { [0.96, 0.94, 0.88, 1.0] } else { [0.05, 0.04, 0.03, 1.0] }, &|u, v, i| (1.0 - escalon(0.5, 1.0, (u * u + (v * (1.0 + 2.0 * azar(i, 3))).powi(2)).sqrt())) * 0.75, false);
             let s2 = Img { w, h, d: m.data.iter().map(|p| if p[3] > 0.0 { [p[0] / p[3], p[1] / p[3], p[2] / p[3], p[3]] } else { [0.0; 4] }).collect() };
             recorrer(&s2, img, mezcla, |x, y, p| {
@@ -1241,26 +1230,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             })
         }
         "bc:fuegos" => {
-            let n = (5.0 * por("cant")).ceil() as i32;
-            let mut ps: Vec<(f32, f32, f32, i32)> = vec![];
-            for k in 0..n {
-                let ciclo = 1.7 + azar(k, 2);
-                let tt = tv + azar(k, 8) * ciclo;
-                let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0));
-                let (ox, oy) = ((0.12 + 0.76 * azar(k, vez)) * wf, (0.12 + 0.4 * azar(k + 7, vez)) * hf);
-                if u < 0.22 {
-                    ps.push((ox, hf + (oy - hf) * (u / 0.22), hf * 0.006 * por("tam"), k * 1000 + 999));
-                    continue;
-                }
-                let v = (u - 0.22) / 0.78;
-                let r = hf * 0.24 * por("tam") * (1.0 - (1.0 - v).powi(3));
-                for j in 0..46 {
-                    let a = j as f32 * 2.39996 + azar(k, vez + 3) * 6.0;
-                    let q = r * (0.45 + 0.55 * azar(j, k + vez));
-                    let vivo = (1.0 - v) * (0.6 + 0.4 * (tv * 30.0 + j as f32).sin());
-                    ps.push((ox + a.cos() * q, oy + a.sin() * q + v * v * hf * 0.07, hf * 0.011 * por("tam") * vivo.max(0.05), k * 1000 + j));
-                }
-            }
+            let ps = fuegos(por("cant"), por("tam"), tv, wf, hf);
             estampar(&ps, &|i| { let c = arcoiris(azar(i / 1000, 5)); [0.35 + 0.65 * c[0], 0.35 + 0.65 * c[1], 0.35 + 0.65 * c[2], 1.0] }, &|u, v, _| (1.0 - (u * u + v * v).sqrt()).max(0.0).powf(1.4), true)
         }
         "bc:globos" => {
@@ -1307,19 +1277,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             )
         }
         "bc:fugaces" => {
-            let n = (7.0 * por("cant")).ceil() as i32;
-            let v: Vec<(f32, f32, f32, f32, f32)> = (0..n)
-                .filter_map(|i| {
-                    let ciclo = 2.5 + 3.0 * azar(i, 2);
-                    let tt = tv + azar(i, 3) * ciclo;
-                    let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0) * ciclo / 0.9);
-                    (u < 1.0).then(|| {
-                        let (ox, oy) = (azar(i, vez) * wf * 1.1, azar(i + 4, vez) * hf * 0.5);
-                        let l = hf * (0.25 + 0.25 * azar(i, vez + 2));
-                        (ox - u * l * 1.6, oy + u * l, l * 0.55, (u * 3.14).sin(), 0.5)
-                    })
-                })
-                .collect();
+            let v = fugaces(por("cant"), tv, wf, hf);
             pintar!(|x, y, p| {
                 let mut l = 0.0f32;
                 for (ox, oy, largo, a, _) in &v {
@@ -1334,13 +1292,7 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             })
         }
         "bc:murcielagos" => {
-            let ps: Vec<(f32, f32, f32, i32)> = (0..(16.0 * por("cant")) as i32)
-                .map(|i| {
-                    let x = (azar(i, 1) + tv * (0.09 + 0.1 * azar(i, 2))).rem_euclid(1.3) - 0.15;
-                    let y = azar(i, 3) * 0.75 + 0.05 + 0.07 * (tv * 2.0 + azar(i, 4) * 9.0).sin();
-                    (x * wf, y * hf, hf * 0.05 * (0.4 + azar(i, 5)) * por("tam"), i)
-                })
-                .collect();
+            let ps = murcielagos(por("cant"), por("tam"), tv, wf, hf);
             estampar(
                 &ps,
                 &|_| [0.02, 0.01, 0.03, 1.0],
@@ -1582,4 +1534,81 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
         }
         _ => img.clone(),
     }
+}
+
+// ---- lo que se calcula una vez por cuadro, en el procesador o para la tarjeta
+
+type Mota = (f32, f32, f32, i32);
+
+/// Partículas que caen o suben: (x, y, tamaño, número).
+#[allow(clippy::too_many_arguments)]
+pub fn particulas(total: f32, abajo: f32, tam: f32, cant: f32, tam_k: f32, tv: f32, semilla: i32, (wf, hf): (f32, f32)) -> Vec<Mota> {
+    (0..(total * cant.max(0.05)) as i32)
+        .map(|i| {
+            let a = azar(i, semilla);
+            let v = 0.09 + 0.16 * azar(i, 11);
+            let y = (azar(i, 5) + abajo * v * tv).rem_euclid(1.2) - 0.1;
+            let x = a + 0.025 * (tv * (0.6 + azar(i, 3)) + a * 40.0).sin();
+            (x * wf, y * hf, hf * tam * (0.5 + azar(i, 9)) * tam_k.max(0.1), i)
+        })
+        .collect()
+}
+
+pub fn fuegos(cant: f32, tam: f32, tv: f32, wf: f32, hf: f32) -> Vec<Mota> {
+    let n = (5.0 * cant).ceil() as i32;
+    let mut ps: Vec<(f32, f32, f32, i32)> = vec![];
+    for k in 0..n {
+        let ciclo = 1.7 + azar(k, 2);
+        let tt = tv + azar(k, 8) * ciclo;
+        let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0));
+        let (ox, oy) = ((0.12 + 0.76 * azar(k, vez)) * wf, (0.12 + 0.4 * azar(k + 7, vez)) * hf);
+        if u < 0.22 {
+            ps.push((ox, hf + (oy - hf) * (u / 0.22), hf * 0.006 * tam, k * 1000 + 999));
+            continue;
+        }
+        let v = (u - 0.22) / 0.78;
+        let r = hf * 0.24 * tam * (1.0 - (1.0 - v).powi(3));
+        for j in 0..46 {
+            let a = j as f32 * 2.39996 + azar(k, vez + 3) * 6.0;
+            let q = r * (0.45 + 0.55 * azar(j, k + vez));
+            let vivo = (1.0 - v) * (0.6 + 0.4 * (tv * 30.0 + j as f32).sin());
+            ps.push((ox + a.cos() * q, oy + a.sin() * q + v * v * hf * 0.07, hf * 0.011 * tam * vivo.max(0.05), k * 1000 + j));
+        }
+    }
+    ps
+}
+
+pub fn fugaces(cant: f32, tv: f32, wf: f32, hf: f32) -> Vec<(f32, f32, f32, f32, f32)> {
+    let n = (7.0 * cant).ceil() as i32;
+    (0..n)
+        .filter_map(|i| {
+            let ciclo = 2.5 + 3.0 * azar(i, 2);
+            let tt = tv + azar(i, 3) * ciclo;
+            let (vez, u) = ((tt / ciclo).floor() as i32, (tt / ciclo).rem_euclid(1.0) * ciclo / 0.9);
+            (u < 1.0).then(|| {
+                let (ox, oy) = (azar(i, vez) * wf * 1.1, azar(i + 4, vez) * hf * 0.5);
+                let l = hf * (0.25 + 0.25 * azar(i, vez + 2));
+                (ox - u * l * 1.6, oy + u * l, l * 0.55, (u * 3.14).sin(), 0.5)
+            })
+        })
+        .collect()
+}
+
+pub fn murcielagos(cant: f32, tam: f32, tv: f32, wf: f32, hf: f32) -> Vec<Mota> {
+    (0..(16.0 * cant) as i32)
+        .map(|i| {
+            let x = (azar(i, 1) + tv * (0.09 + 0.1 * azar(i, 2))).rem_euclid(1.3) - 0.15;
+            let y = azar(i, 3) * 0.75 + 0.05 + 0.07 * (tv * 2.0 + azar(i, 4) * 9.0).sin();
+            (x * wf, y * hf, hf * 0.05 * (0.4 + azar(i, 5)) * tam, i)
+        })
+        .collect()
+}
+
+/// Motas y rayas de película.
+pub fn polvo(g: f32, t: f64, e: f32, wf: f32, hf: f32) -> (Vec<Mota>, Vec<(f32, f32, f32)>) {
+    // Cambia 12 veces por segundo, como película rayada.
+    let c12 = (t * 12.0).floor() as i32;
+    let motas: Vec<(f32, f32, f32, i32)> = (0..(60.0 * g) as i32).map(|i| (azar(i, c12) * wf, azar(i + 99, c12) * hf, hf * (0.003 + 0.011 * azar(i, c12 + 7).powi(3)), i)).collect();
+    let rayas: Vec<(f32, f32, f32)> = (0..(8.0 * g) as i32).filter(|i| azar(*i, c12 / 4 + 50) > 0.45).map(|i| (azar(i, c12 / 4 + 3) * wf + (azar(i, c12) - 0.5) * 3.0 * e, 0.12 + 0.3 * azar(i, 8), azar(i, 77))).collect();
+    (motas, rayas)
 }

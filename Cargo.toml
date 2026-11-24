@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/audio-fx", "crates/craft-trans"]
+members = ["crates/audio-fx", "crates/craft-gpu", "crates/craft-trans"]
 # Beethoven DAW es otro proyecto de Cargo y se compila aparte.
 exclude = ["daw"]
 
@@ -15,6 +15,7 @@ name = "toma_uno"
 
 [dependencies]
 audio-fx = { path = "crates/audio-fx" }
+craft-gpu = { path = "crates/craft-gpu" }
 craft-trans = { path = "crates/craft-trans" }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu"] }
 cpal = "0.18"
@@ -35,6 +36,7 @@ effectcraft-raster = { git = "https://github.com/storytold/effectcraft.git", rev
 effectcraft-color = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
 rayon = "1"
 memmap2 = "0.9"
+bytemuck = "1"
 fontdue = "0.9"
 
 # Linux: eframe sin sus funciones por defecto no trae con qué abrir ventanas.

@@ -22,6 +22,10 @@ pub struct Lector {
     sig: Option<Cuadro>,
     pub fin: bool,
     paso: f64,
+    /// Decodifica el chip de video, no el procesador.
+    chip: bool,
+    /// Lo que entrega primero.
+    desde: f64,
 }
 
 impl Drop for Lector {
@@ -32,42 +36,50 @@ impl Drop for Lector {
 }
 
 impl Lector {
-    pub fn abrir(c: &ClipVideo, desde: f64, tam: (usize, usize), fps_max: f64) -> std::io::Result<Lector> {
+    pub fn abrir(c: &ClipVideo, desde: f64, tam: (usize, usize), fps_max: f64, m: Modo) -> std::io::Result<Lector> {
         let imagen = c.contenido == Contenido::Imagen;
         let fps = c.fps.min(fps_max).max(1.0);
         let (w, h) = tam;
         // Se alinea a la rejilla de cuadros para que el mismo instante dé siempre el mismo cuadro.
         let desde = ((desde * fps + 0.01).floor() / fps).max(0.0);
         let mut com = medios::ffmpeg();
+        let chip = m.chip && !imagen && !SIN_CHIP.load(std::sync::atomic::Ordering::Relaxed);
+        if chip {
+            // Si el chip no sabe ese formato, ffmpeg sigue con el procesador.
+            com.args(["-hwaccel", if cfg!(target_os = "macos") { "videotoolbox" } else { "auto" }]);
+        }
         com.args(["-threads", "4"]);
         if !imagen {
             com.args(["-ss", &format!("{desde:.6}")]);
         }
         com.arg("-i").arg(&c.ruta).args(["-an", "-sn", "-map", "0:v:0", "-vf"]);
-        let escala = format!("scale={w}:{h}:flags=bilinear,setsar=1");
+        let yuv = m.yuv && !imagen && w % 2 == 0 && h % 2 == 0 && !medios::con_alfa(&c.ruta);
+        let color = if yuv { ":out_color_matrix=bt709:out_range=tv" } else { "" };
+        let escala = format!("scale={w}:{h}:flags={}{color},setsar=1", if m.fino { "bicubic" } else { "bilinear" });
         com.arg(if imagen { escala } else { format!("fps={}:start_time=0,{escala}", medios::fps_fraccion(fps)) });
         if imagen {
             com.args(["-frames:v", "1"]);
         }
         let mut hijo =
-            com.args(["-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"]).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()?;
+            com.args(["-pix_fmt", if yuv { "yuv420p" } else { "rgba" }, "-f", "rawvideo", "pipe:1"]).stdout(Stdio::piped()).stderr(Stdio::null()).spawn()?;
         let mut o = hijo.stdout.take().unwrap();
         let (tx, rx) = bounded(4);
         std::thread::spawn(move || {
             let mut i = 0u64;
             loop {
-                let mut rgba = vec![0u8; w * h * 4];
-                if o.read_exact(&mut rgba).is_err() {
+                let mut d = vec![0u8; if yuv { w * h * 3 / 2 } else { w * h * 4 }];
+                if o.read_exact(&mut d).is_err() {
                     return;
                 }
                 let t = desde + i as f64 / fps;
                 i += 1;
-                if tx.send(Cuadro { t, ancho: w, alto: h, rgba }).is_err() {
+                let (rgba, yuv) = if yuv { (vec![], d) } else { (d, vec![]) };
+                if tx.send(Cuadro { t, ancho: w, alto: h, rgba, yuv }).is_err() {
                     return;
                 }
             }
         });
-        Ok(Lector { hijo, rx, ruta: c.ruta.clone(), tam, ultimo: None, cola: Default::default(), sig: None, fin: false, paso: 1.0 / fps })
+        Ok(Lector { hijo, rx, ruta: c.ruta.clone(), tam, ultimo: None, cola: Default::default(), sig: None, fin: false, paso: 1.0 / fps, chip, desde })
     }
 
     /// Avanza hasta el cuadro que toca en `t`. Sin `esperar`, entrega lo más nuevo que haya.
@@ -120,6 +132,20 @@ impl Lector {
     }
 }
 
+/// Cómo se decodifica.
+#[derive(Clone, Copy, Default)]
+pub struct Modo {
+    /// Con el chip de video: tarda más en arrancar, pero casi no usa el procesador.
+    pub chip: bool,
+    /// Planos 4:2:0 en vez de RGBA.
+    pub yuv: bool,
+    /// Al cambiar de tamaño, mejor calidad.
+    pub fino: bool,
+}
+
+/// El chip no se usa (o el usuario lo apagó).
+pub static SIN_CHIP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Lectores abiertos, uno por clip.
 pub struct Lectores {
     v: HashMap<u64, (Lector, u32)>,
@@ -128,17 +154,62 @@ pub struct Lectores {
     pub tocando: bool,
     /// Exportación: espera cada cuadro en vez de mostrar el más nuevo.
     pub exacto: bool,
+    pub modo: Modo,
+    /// Se está reproduciendo: los que abrieron con el procesador (arranca antes) le pasan el trabajo al chip.
+    pub seguido: bool,
+    relevos: HashMap<u64, Lector>,
 }
+
+/// Con cuánta anticipación se prepara el relevo del chip.
+const RELEVO: f64 = 1.0;
 
 impl Lectores {
     pub fn nuevos(fps_max: f64, exacto: bool) -> Self {
-        Lectores { v: HashMap::new(), ronda: 0, fps_max, tocando: exacto, exacto }
+        Lectores { v: HashMap::new(), ronda: 0, fps_max, tocando: exacto, exacto, modo: Modo::default(), seguido: false, relevos: HashMap::new() }
+    }
+    pub fn con(mut self, modo: Modo) -> Self {
+        self.modo = modo;
+        self
+    }
+    /// Cuántos decodifica el chip de video.
+    pub fn con_chip(&self) -> usize {
+        self.v.values().filter(|x| x.0.chip).count()
     }
     /// Cierra los que no se usaron en las últimas rondas.
     pub fn limpiar(&mut self) {
         self.ronda += 1;
         let r = self.ronda;
+        self.relevos.retain(|id, _| self.v.contains_key(id));
         self.v.retain(|_, (_, u)| r - *u < 40);
+    }
+}
+
+impl Lectores {
+    /// Al reproducir de corrido, se abre otro lector con el chip un poco adelante y se cambia al llegar ahí.
+    fn relevar(&mut self, c: &ClipVideo, t: f64, tam: (usize, usize)) {
+        let normal = c.contenido == Contenido::Archivo && (c.mov.velocidad - 1.0).abs() < 1e-3;
+        if !self.seguido || self.modo.chip || !normal || self.v.get(&c.id).is_none_or(|(l, _)| l.chip || l.fin) {
+            return;
+        }
+        match self.relevos.get(&c.id) {
+            None => {
+                if let Ok(l) = Lector::abrir(c, t + RELEVO, tam, self.fps_max, Modo { chip: true, ..self.modo }) {
+                    self.relevos.insert(c.id, l);
+                }
+            }
+            Some(l) if t >= l.desde - 1e-6 || t < l.desde - RELEVO - 0.2 => {
+                let l = self.relevos.remove(&c.id).unwrap();
+                // Solo si ya entregó algo y sigue en su lugar.
+                if t >= l.desde - 1e-6 && t < l.desde + 0.3 && !l.rx.is_empty() && l.tam == tam {
+                    if let Some(v) = self.v.get_mut(&c.id) {
+                        let cola = std::mem::take(&mut v.0.cola);
+                        v.0 = l;
+                        v.0.cola = cola;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -150,8 +221,10 @@ impl Fuente for Lectores {
         let tam = (ancho, alto);
         if !self.v.get(&c.id).is_some_and(|(l, _)| l.sirve(c, t, tam, self.tocando)) {
             self.v.remove(&c.id);
-            self.v.insert(c.id, (Lector::abrir(c, t, tam, self.fps_max).ok()?, 0));
+            self.relevos.remove(&c.id);
+            self.v.insert(c.id, (Lector::abrir(c, t, tam, self.fps_max, self.modo).ok()?, 0));
         }
+        self.relevar(c, t, tam);
         let (l, u) = self.v.get_mut(&c.id)?;
         *u = self.ronda;
         l.hasta(t, self.exacto)
@@ -171,15 +244,20 @@ pub struct Pedido {
 
 /// Escalas de la vista previa mientras se reproduce: si no alcanza, se baja de escalón. El video se decodifica siempre
 /// completo y se achica después: cambiar de escalón no vuelve a abrirlo.
-const ESCALAS: [f64; 5] = [1.0, 0.75, 0.5, 0.35, 0.25];
+const ESCALAS: [f64; 5] = [1.0, 0.8, 0.65, 0.5, 0.4];
 /// Cuadros que se componen a la vez.
-const OBREROS: usize = 2;
+const OBREROS: usize = 3;
 /// Cuánto se calcula por adelantado al reproducir y en pausa, en segundos.
-const ADELANTO: f64 = 0.5;
-const ADELANTO_PAUSA: f64 = 4.0;
-/// Memoria RAM para los cuadros ya hechos: los de ahorita nada más. Los demás van a un archivo temporal, que se borra solo.
-const MEMORIA: usize = 48 << 20;
-const DISCO: u64 = 1 << 30;
+const ADELANTO: f64 = 1.5;
+const ADELANTO_PAUSA: f64 = 20.0;
+/// Archivo temporal para los cuadros que ya no caben en la RAM; se borra solo.
+const DISCO: u64 = 3 << 30;
+
+/// Memoria RAM para los cuadros ya hechos: una parte de la que tiene la máquina.
+fn memoria_cuadros() -> usize {
+    static M: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *M.get_or_init(|| (medios::memoria_total() / 16).clamp(192 << 20, 2 << 30) as usize)
+}
 
 /// El tamaño de la vista previa a la escala `s`, en pares.
 pub fn a_escala((w, h): (usize, usize), s: f64) -> (usize, usize) {
@@ -192,6 +270,7 @@ fn reducir(q: &Arc<Cuadro>, w: usize, h: usize) -> Arc<Cuadro> {
     if (q.ancho, q.alto) == (w, h) {
         return q.clone();
     }
+    let d = q.en_rgba();
     let mut rgba = vec![255u8; w * h * 4];
     let tope = |v: usize, n: usize| v.min(n.saturating_sub(1));
     rgba.chunks_exact_mut(w * 4).enumerate().for_each(|(y, fila)| {
@@ -203,13 +282,13 @@ fn reducir(q: &Arc<Cuadro>, w: usize, h: usize) -> Arc<Cuadro> {
             for yy in ys {
                 for xx in xs {
                     let i = (yy * q.ancho + xx) * 4;
-                    (0..4).for_each(|k| s[k] += q.rgba[i + k] as u32);
+                    (0..4).for_each(|k| s[k] += d[i + k] as u32);
                 }
             }
             *o = s.map(|v| (v / 4) as u8);
         }
     });
-    Arc::new(Cuadro { t: q.t, ancho: w, alto: h, rgba })
+    Arc::new(Cuadro { t: q.t, ancho: w, alto: h, rgba, ..Default::default() })
 }
 
 /// Los cuadros de video que necesita una composición, ya decodificados.
@@ -221,6 +300,9 @@ struct Surtido {
 impl Fuente for Surtido {
     fn cuadro(&mut self, c: &ClipVideo, _: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
         self.cuadros.get(&c.id).map(|q| reducir(q, ancho, alto))
+    }
+    fn cuadro_libre(&mut self, c: &ClipVideo, _: f64, _: usize, _: usize) -> Option<Arc<Cuadro>> {
+        self.cuadros.get(&c.id).cloned()
     }
     fn recientes(&self, c: &ClipVideo) -> Vec<Arc<Cuadro>> {
         // Del mismo tamaño que el cuadro de ahora.
@@ -315,7 +397,7 @@ impl Disco {
     fn leer(&self, l: &Lugar) -> Option<Cuadro> {
         let mut rgba = vec![0u8; l.ancho * l.alto * 4];
         leer_de(&self.f, &mut rgba, l.donde).ok()?;
-        Some(Cuadro { t: l.t, ancho: l.ancho, alto: l.alto, rgba })
+        Some(Cuadro { t: l.t, ancho: l.ancho, alto: l.alto, rgba, ..Default::default() })
     }
 }
 
@@ -399,13 +481,15 @@ struct Director {
     /// Lo último que se entregó: cuadro, firma y escalón.
     entregado: Option<(i64, u64, usize)>,
     cambio: Instant,
+    /// La última vez que salió un cuadro.
+    visto: Instant,
     /// Segundos que cuesta un cuadro completo, según los últimos.
     costo: f64,
 }
 
 impl Director {
     fn fps(p: &Proyecto) -> f64 {
-        p.fps.clamp(1.0, 30.0)
+        p.fps.clamp(1.0, 60.0)
     }
 
     fn firma_de(&mut self, i: i64) -> u64 {
@@ -431,10 +515,18 @@ impl Director {
         if salto || otra {
             self.sig = q.i;
         }
+        // Al empezar a reproducir, la calidad que se calcula que aguanta: no se espera a que se trabe.
+        if q.tocando && antes.as_ref().is_some_and(|a| !a.tocando) && self.costo > 0.0 {
+            let k = self.costo * Self::fps(&q.p) / 1.6;
+            self.nivel = (0..ESCALAS.len()).find(|n| k * ESCALAS[*n].powi(2) < 0.9).unwrap_or(ESCALAS.len() - 1);
+            self.ritmo = 0.0;
+            self.paso = 1;
+        }
         if antes.as_ref().is_none_or(|a| a.i != q.i || a.version != q.version || a.tam != q.tam || a.tocando != q.tocando) {
             self.cambio = Instant::now();
         }
         self.lectores.tocando = true;
+        self.lectores.seguido = q.tocando;
         self.pedido = Some(q);
     }
 
@@ -447,6 +539,13 @@ impl Director {
         let vivo = self.pedido.as_ref().is_some_and(|q| !q.tocando && q.i == h.i && q.tam == h.tam);
         if vivo && self.firma_de(h.i) != h.firma {
             self.entregado = None;
+            let _ = self.sale.send(h.q.clone());
+        }
+        // Tan atrasado que no se iba a ver nada: más vale mostrarlo que dejar la imagen congelada.
+        let tarde = self.pedido.as_ref().is_some_and(|q| q.tocando && q.tam == h.tam && self.visto.elapsed() > Duration::from_millis(250) && (q.i - h.i).abs() as f64 <= 2.0 * Self::fps(&q.p));
+        if tarde && self.entregado.is_none_or(|e| h.i > e.0 || e.0 - h.i > 8) {
+            self.entregado = Some((h.i, h.firma, h.nivel));
+            self.visto = Instant::now();
             let _ = self.sale.send(h.q.clone());
         }
         // Lo que alcanza a hacer el equipo: lo que tardó entre los que iban a la vez. Esperar al archivo no cuenta.
@@ -483,7 +582,7 @@ impl Director {
     /// Suelta de la RAM primero lo que ya pasó y luego lo que más falta para verse.
     fn aligerar(&mut self) {
         let (ahora, tam) = self.pedido.as_ref().map_or((0, (0, 0)), |q| (q.i, q.tam));
-        while self.memoria > MEMORIA {
+        while self.memoria > memoria_cuadros() {
             let lejos = |k: &(i64, (usize, usize))| if k.1 != tam { i64::MAX } else if k.0 < ahora { 1_000_000 + ahora - k.0 } else { k.0 - ahora };
             let Some(k) = self.guardados.iter().filter(|g| g.1.q.is_some()).max_by_key(|g| lejos(g.0)).map(|g| *g.0) else { break };
             let Some(g) = self.guardados.get_mut(&k) else { break };
@@ -567,7 +666,18 @@ impl Director {
             return;
         };
         self.entregado = Some((j, f, g.nivel));
+        self.visto = Instant::now();
         let _ = self.sale.send(q);
+    }
+
+    /// Cuántos cuadros por adelantado caben en la RAM, dejando lugar a los de atrás; y cuántos más en el disco.
+    fn caben(&self) -> i64 {
+        let peso = self.pedido.as_ref().map_or(1, |q| q.tam.0 * q.tam.1 * 4).max(1);
+        (memoria_cuadros() / peso * 2 / 3).max(4) as i64
+    }
+    fn caben_disco(&self) -> i64 {
+        let peso = self.pedido.as_ref().map_or(1, |q| q.tam.0 * q.tam.1 * 4).max(1);
+        (DISCO as usize / 2 / peso) as i64
     }
 
     /// El siguiente cuadro que conviene hacer, si hay lugar.
@@ -593,8 +703,8 @@ impl Director {
             if self.cambio.elapsed() < Duration::from_millis(700) || !self.vuelo.is_empty() || self.tarda < 0.012 {
                 return None;
             }
-            let hasta = i + (ADELANTO_PAUSA * fps) as i64;
-            return (i + 1..=hasta).take_while(|j| (*j as f64) / fps < fin).find(|j| trabajoso(&p, *j as f64 / fps) && self.listo(*j).is_none()).map(|j| (j, self.nivel.min(2)));
+            let hasta = i + ((ADELANTO_PAUSA * fps) as i64).min(self.caben() + self.caben_disco());
+            return (i + 1..=hasta).take_while(|j| (*j as f64) / fps < fin).find(|j| trabajoso(&p, *j as f64 / fps) && self.listo(*j).is_none()).map(|j| (j, 0));
         }
         if self.vuelo.len() >= OBREROS {
             return None;
@@ -603,7 +713,7 @@ impl Director {
         if self.sig < i {
             self.sig = i + if self.tarda > 1.0 / fps { (self.tarda * fps).ceil() as i64 } else { 0 };
         }
-        let hasta = i + (ADELANTO * fps) as i64;
+        let hasta = i + ((ADELANTO * fps) as i64).min(self.caben());
         while self.sig <= hasta {
             let j = self.sig;
             if j as f64 / fps >= fin && j > i {
@@ -652,7 +762,7 @@ fn obrero(entra: Receiver<Trabajo>, sale: Sender<Hecho>) {
         let ini = Instant::now();
         let (w, h) = a_escala(x.tam, ESCALAS[x.nivel]);
         let rgba = composicion::componer(&x.p, x.t, w, h, &mut x.surtido);
-        let q = Arc::new(Cuadro { t: x.t, ancho: w, alto: h, rgba });
+        let q = Arc::new(Cuadro { t: x.t, ancho: w, alto: h, rgba, ..Default::default() });
         if sale.send(Hecho { i: x.i, firma: x.firma, tam: x.tam, nivel: x.nivel, q, seg: ini.elapsed().as_secs_f64() }).is_err() {
             return;
         }
@@ -676,7 +786,7 @@ impl Default for VistaPrevia {
             let (a_obreros, trabajos) = unbounded();
             let (hecho, hechos) = unbounded();
             let mut d = Director {
-                lectores: Lectores::nuevos(30.0, true),
+                lectores: Lectores::nuevos(60.0, true).con(Modo { yuv: true, ..Default::default() }),
                 a_obreros,
                 sale,
                 pedido: None,
@@ -694,6 +804,7 @@ impl Default for VistaPrevia {
                 desahogo: 0,
                 entregado: None,
                 cambio: Instant::now(),
+                visto: Instant::now(),
                 costo: 0.0,
             };
             // Los obreros se prenden con el primer pedido: hay vistas que nunca se usan.
@@ -743,7 +854,7 @@ impl VistaPrevia {
             self.pendientes = u32::from(!tocando && c.ancho < tam.0);
             r = Some(c);
         }
-        let fps = p.fps.clamp(1.0, 30.0);
+        let fps = p.fps.clamp(1.0, 60.0);
         // Un pedido por cuadro de video, no por cuadro de pantalla.
         let i = (t * fps + 0.01).floor() as i64;
         if self.ultimo != Some((i, version, tam, tocando)) {

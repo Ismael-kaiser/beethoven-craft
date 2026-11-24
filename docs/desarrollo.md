@@ -7,6 +7,8 @@ Son dos proyectos de Cargo en el mismo repositorio:
 | `src/` | Beethoven Movie y el menú principal (egui) |
 | `src/ui/` | Sus pestañas y ventanas |
 | `crates/audio-fx` | Efectos e instrumentos de audio |
+| `crates/craft-gpu` | Compositor de tarjeta gráfica (wgpu) de EffectCraft, más los efectos `bc:` y los de FilmCraft como núcleos (`shaders/bc.wgsl`) |
+| `src/vgpu.rs` | Une la composición de Movie con la tarjeta; `composicion.rs` es la versión del procesador |
 | `crates/craft-trans` | Transiciones y efectos de FilmCraft |
 | `daw/` | Beethoven DAW, con su propio `Cargo.toml` |
 | `daw/crates/os-app` | Interfaz del DAW; las pestañas propias son `tabs.rs`, `page.rs`, `score.rs`, `ideas.rs` y `grooves.rs` |

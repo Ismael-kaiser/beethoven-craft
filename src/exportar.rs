@@ -3,7 +3,7 @@ use crate::composicion::{self, Fuente};
 use crate::medios::{self, Wav};
 use crate::modelo::{Proyecto, SR};
 use crate::motor::{self, Almacen};
-use crate::video::Lectores;
+use crate::video::{Lectores, Modo as Decodificar};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Stdio;
@@ -53,12 +53,12 @@ impl Opciones {
         match self.codec {
             // El codificador de la Mac va mucho más rápido y deja libre el procesador para componer.
             Codec::H264 if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => {
-                s(&["-c:v", "h264_videotoolbox", "-profile:v", "high", "-q:v", ["45", "60", "75"][self.calidad.min(2)], "-pix_fmt", "yuv420p"])
+                s(&["-c:v", "h264_videotoolbox", "-profile:v", "high", "-q:v", ["52", "70", "84"][self.calidad.min(2)], "-pix_fmt", "yuv420p"])
             }
             Codec::H264 => s(&["-c:v", "libx264", "-preset", "veryfast", "-crf", ["24", "18", "14"][self.calidad.min(2)], "-pix_fmt", "yuv420p"]),
             // En Mac, el codificador de la máquina; en Windows y Linux, x265.
             Codec::H265 if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => {
-                s(&["-c:v", "hevc_videotoolbox", "-q:v", ["45", "60", "75"][self.calidad.min(2)], "-tag:v", "hvc1", "-pix_fmt", "yuv420p"])
+                s(&["-c:v", "hevc_videotoolbox", "-q:v", ["52", "70", "84"][self.calidad.min(2)], "-tag:v", "hvc1", "-pix_fmt", "yuv420p"])
             }
             Codec::H265 => s(&["-c:v", "libx265", "-preset", "fast", "-crf", ["28", "23", "19"][self.calidad.min(2)], "-tag:v", "hvc1", "-pix_fmt", "yuv420p"]),
             Codec::ProRes if cfg!(target_os = "macos") && !SIN_ACELERADOR.load(Relaxed) => s(&["-c:v", "prores_videotoolbox", "-profile:v", ["1", "2", "3"][self.calidad.min(2)], "-pix_fmt", "p210le"]),
@@ -152,7 +152,9 @@ fn componer(
     avance: &AtomicU32,
     cancelar: &AtomicBool,
 ) -> Result<(), String> {
-    let wav = std::env::temp_dir().join(format!("beethoven-craft-{}.wav", std::process::id()));
+    // Cada exportación con el suyo: puede haber dos a la vez.
+    static N: AtomicU32 = AtomicU32::new(0);
+    let wav = std::env::temp_dir().join(format!("beethoven-craft-{}-{}.wav", std::process::id(), N.fetch_add(1, Relaxed)));
     let r = componer_con(p, almacen, tmp, &wav, op, ini, dur, avance, cancelar);
     let _ = std::fs::remove_file(&wav);
     r
@@ -186,14 +188,17 @@ fn componer_con(
     w.cerrar().map_err(e)?;
     let (an, al) = op.tam.unwrap_or((p.ancho, p.alto));
     let (an, al) = (an as usize / 2 * 2, al as usize / 2 * 2);
+    // Casi todo se codifica a 4:2:0: los cuadros van así desde el archivo hasta el codificador, sin convertir.
+    let yuv = op.codec != Codec::ProRes;
+    let modo = Decodificar { chip: true, yuv, fino: true };
     let (fr, fps) = (medios::fps_fraccion(p.fps), medios::fps_exacto(p.fps));
     let mut hijo = medios::ffmpeg()
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
-        .args(["-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", &format!("{an}x{al}"), "-r", &fr, "-i", "pipe:0", "-i"])
+        .args(["-y", "-f", "rawvideo", "-pix_fmt", if yuv { "yuv420p" } else { "rgba" }, "-color_range", if yuv { "tv" } else { "pc" }, "-s", &format!("{an}x{al}"), "-r", &fr, "-i", "pipe:0", "-i"])
         .arg(wav)
-        .args(["-map", "0:v", "-map", "1:a", "-vf", "scale=out_color_matrix=bt709:out_range=tv"])
+        .args(["-map", "0:v", "-map", "1:a", "-vf", if yuv { "setparams=range=tv:colorspace=bt709:color_primaries=bt709:color_trc=bt709" } else { "scale=out_color_matrix=bt709:out_range=tv" }])
         .args(op.video())
         .args(["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"])
         .args(op.audio())
@@ -213,17 +218,17 @@ fn componer_con(
     let t_de = |n: u64| ini + (n as f64 + 0.02) / fps;
     if composicion::usa_pasado(p) {
         // Los efectos de tiempo miran los cuadros anteriores del lector: van uno tras otro.
-        let mut l = Lectores::nuevos(240.0, true);
+        let mut l = Lectores::nuevos(240.0, true).con(modo);
         for n in 0..total {
             l.limpiar();
-            let cuadro = composicion::componer(p, t_de(n), an, al, &mut l);
+            let cuadro = if yuv { composicion::componer_yuv(p, t_de(n), an, al, &mut l) } else { composicion::componer(p, t_de(n), an, al, &mut l) };
             if cancelar.load(Relaxed) || ent.write_all(&cuadro).is_err() {
                 break;
             }
             avance.store((n * 1000 / total) as u32, Relaxed);
         }
     } else {
-        en_paralelo(p, total, &t_de, (an, al), &mut ent, avance, cancelar);
+        en_paralelo(p, total, &t_de, (an, al), modo, &mut ent, avance, cancelar);
     }
     drop(ent);
     if cancelar.load(Relaxed) {
@@ -241,11 +246,13 @@ fn componer_con(
 }
 
 /// Un hilo decodifica en orden, varios componen a la vez y aquí se escriben en orden a ffmpeg.
+#[allow(clippy::too_many_arguments)]
 fn en_paralelo(
     p: &Proyecto,
     total: u64,
     t_de: &(dyn Fn(u64) -> f64 + Sync),
     (an, al): (usize, usize),
+    modo: Decodificar,
     ent: &mut impl Write,
     avance: &AtomicU32,
     cancelar: &AtomicBool,
@@ -260,7 +267,7 @@ fn en_paralelo(
         let (listo, hechos) = bounded::<(u64, Vec<u8>)>(hilos);
         let (escritos, parar) = (&escritos, &parar);
         s.spawn(move || {
-            let mut l = Lectores::nuevos(240.0, true);
+            let mut l = Lectores::nuevos(240.0, true).con(modo);
             for n in 0..total {
                 while n >= escritos.load(Relaxed) + ventana && !parar.load(Relaxed) {
                     std::thread::sleep(std::time::Duration::from_millis(1));
@@ -282,7 +289,8 @@ fn en_paralelo(
             let (trabajos, listo) = (trabajos.clone(), listo.clone());
             s.spawn(move || {
                 for (n, m) in trabajos {
-                    let cuadro = composicion::componer(p, t_de(n), an, al, &mut composicion::Prestado(m));
+                    let mut m = composicion::Prestado(m);
+                    let cuadro = if modo.yuv { composicion::componer_yuv(p, t_de(n), an, al, &mut m) } else { composicion::componer(p, t_de(n), an, al, &mut m) };
                     if listo.send((n, cuadro)).is_err() {
                         break;
                     }

@@ -24,6 +24,7 @@ pub mod motor;
 pub mod propios;
 pub mod proyectos;
 pub mod separar;
+pub mod vgpu;
 pub mod video;
 pub mod vpropios;
 pub mod ui;

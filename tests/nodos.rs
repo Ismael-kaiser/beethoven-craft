@@ -16,7 +16,7 @@ impl Fuente for Img {
             let c = [[230.0, 40.0, 30.0], [40.0, 200.0, 60.0], [40.0, 70.0, 220.0], [150.0, 150.0, 150.0]][(x * 3.999) as usize];
             (0..3).for_each(|k| q[k] = (c[k] * (0.3 + 0.7 * y)) as u8);
         }
-        Some(Arc::new(Cuadro { t, ancho: an, alto: al, rgba }))
+        Some(Arc::new(Cuadro { t, ancho: an, alto: al, rgba, ..Default::default() }))
     }
     fn recientes(&self, _: &ClipVideo) -> Vec<Arc<Cuadro>> {
         vec![]
