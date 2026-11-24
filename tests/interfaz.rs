@@ -1000,3 +1000,102 @@ fn ecualizador_parametrico() {
     assert!(p[13] > antes[13] * 1.2 && p[14] > antes[14] + 4.0, "{:?} -> {:?}", &antes[12..16], &p[12..16]);
     assert_eq!(p[0..12], antes[0..12], "las demás quietas");
 }
+
+/// El menú: cambiar nombre, duplicar, buscar, mandar a la papelera y restaurar.
+#[test]
+fn proyectos_del_menu() {
+    use toma_uno::modelo::Proyecto;
+    let d = std::env::temp_dir().join(format!("beethoven-menu-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let d = d.canonicalize().unwrap();
+    for (i, n) in ["Boda de Ana", "Video musical", "Vlog de la playa", "Comercial"].into_iter().enumerate() {
+        let mut q = vec![255u8; 320 * 180 * 4];
+        q.chunks_mut(4).enumerate().for_each(|(k, p)| {
+            let (x, y) = ((k % 320) as f32 / 320.0, (k / 320) as f32 / 180.0);
+            let c = [[220.0, 120.0, 90.0], [90.0, 110.0, 220.0], [80.0, 180.0, 190.0], [200.0, 170.0, 80.0]][i];
+            (0..3).for_each(|j| p[j] = (c[j] * (0.35 + 0.65 * (1.0 - y)) * (0.8 + 0.2 * x)) as u8);
+        });
+        toma_uno::archivo::guardar(&Proyecto::nuevo(), &d.join(format!("{n}.bcraft")), Some((320, 180, &q[..])), false).unwrap();
+    }
+    std::fs::write(d.join("Cumbia.beethoven"), "x").unwrap();
+    let mut h = Harness::builder().with_size([1180.0, 740.0]).with_step_dt(1.0 / 60.0).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
+    h.state_mut().inicio.base = Some(d.clone());
+    h.state_mut().inicio.mostrar();
+    // La canción entra a la lista como si se hubiera abierto.
+    toma_uno::proyectos::Libro { base: d.clone() }.anotar(&d.join("Cumbia.beethoven"));
+    h.run_steps(4);
+    foto(&mut h, "menu-proyectos");
+    let nombres = |h: &Harness<App>| {
+        let mut v: Vec<String> = h.state().inicio.lista.iter().flatten().map(|f| f.nombre.clone()).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(nombres(&h).len(), 5);
+    h.get_by_label("Videos").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Cumbia").is_none() && h.query_by_label("Comercial").is_some());
+    h.get_by_label("Todos").click();
+    h.run_steps(3);
+    // Cambiar nombre, desde los tres puntos.
+    h.get_by_label("Más de Comercial").click();
+    h.run_steps(4);
+    foto(&mut h, "menu-opciones");
+    h.get_by_label("Cambiar nombre…").click();
+    h.run_steps(4);
+    h.state_mut().inicio.renombrando.as_mut().unwrap().1 = "Comercial de tenis".into();
+    h.run_steps(2);
+    h.get_by_label("Guardar nombre").click();
+    h.run_steps(4);
+    assert!(d.join("Comercial de tenis.bcraft").exists() && !d.join("Comercial.bcraft").exists());
+    // Duplicar
+    h.get_by_label("Más de Vlog de la playa").click();
+    h.run_steps(4);
+    h.get_by_label("Duplicar").click();
+    h.run_steps(4);
+    assert!(nombres(&h).contains(&"Vlog de la playa copia".into()), "{:?}", nombres(&h));
+    // Buscar, sin acentos ni mayúsculas.
+    h.state_mut().inicio.buscar = "PLAYA".into();
+    h.run_steps(3);
+    assert!(h.query_by_label("Vlog de la playa").is_some() && h.query_by_label("Boda de Ana").is_none());
+    h.state_mut().inicio.buscar.clear();
+    h.run_steps(3);
+    // Eliminar dos a la vez: pregunta, y se van a la papelera.
+    for n in ["Boda de Ana", "Vlog de la playa copia"] {
+        h.state_mut().inicio.elegidos.insert(d.join(format!("{n}.bcraft")));
+    }
+    h.run_steps(3);
+    foto(&mut h, "menu-elegidos");
+    h.get_by_label("Eliminar").click();
+    h.run_steps(4);
+    assert!(d.join("Boda de Ana.bcraft").exists(), "antes del sí no pasa nada");
+    foto(&mut h, "menu-eliminar");
+    h.get_by_label("Sí, eliminar").click();
+    h.run_steps(5);
+    assert!(!d.join("Boda de Ana.bcraft").exists());
+    assert_eq!((nombres(&h).len(), h.state().inicio.borrados.len()), (4, 2));
+    // Restaurar una y borrar la otra para siempre.
+    h.get_by_label("Papelera").click();
+    h.run_steps(4);
+    foto(&mut h, "menu-papelera");
+    let b = h.state().inicio.borrados.clone();
+    let i = b.iter().position(|b| b.original.ends_with("Boda de Ana.bcraft")).unwrap();
+    h.get_all_by_label("Restaurar").nth(i).unwrap().click();
+    h.run_steps(5);
+    assert!(d.join("Boda de Ana.bcraft").exists());
+    h.get_by_label("Borrar para siempre").click();
+    h.run_steps(4);
+    h.get_by_label("Sí, borrar para siempre").click();
+    h.run_steps(5);
+    assert!(h.state().inicio.borrados.is_empty());
+    h.get_by_label("Proyectos").click();
+    h.run_steps(4);
+    h.get_by_label("Ver como lista").click();
+    h.run_steps(4);
+    foto(&mut h, "menu-lista");
+    // Formato a un clic.
+    h.get_by_label("9:16").click();
+    h.run_steps(3);
+    assert_eq!((h.state().p.ancho, h.state().p.alto, h.state().p.fijo), (1080, 1920, true));
+    let _ = std::fs::remove_dir_all(d);
+}

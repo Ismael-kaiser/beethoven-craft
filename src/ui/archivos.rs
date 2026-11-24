@@ -1046,7 +1046,7 @@ impl App {
 }
 
 /// Abre el explorador del sistema con el archivo elegido.
-fn mostrar(r: &Path) {
+pub fn mostrar(r: &Path) {
     let _ = if cfg!(target_os = "macos") {
         std::process::Command::new("open").arg("-R").arg(r).spawn()
     } else if cfg!(windows) {

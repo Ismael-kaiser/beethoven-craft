@@ -2,6 +2,14 @@
 
 El editor de video. Se abre desde el menú con **Nuevo video**.
 
+## El menú
+
+![Menú](img/menu.jpg)
+
+Muestra tus videos y tus canciones del DAW. Arriba se crea uno nuevo, con su formato a un clic (16:9, 9:16, 1:1, 4:5). Se puede buscar, filtrar, ordenar y ver como tarjetas o como lista.
+
+Con `⋯` o clic derecho en un proyecto: abrir, cambiar nombre, duplicar, mostrarlo en el Finder, quitarlo de la lista o **eliminarlo**. ⌘+clic elige varios. Lo eliminado va a la **Papelera** del menú, de donde se restaura o se borra para siempre. Solo se mueve el archivo del proyecto: tus videos, sonidos e imágenes nunca se tocan.
+
 Las pestañas se cierran, se ordenan arrastrando, `+` abre otra y con clic derecho se sacan a su propia ventana.
 
 ## Pestañas

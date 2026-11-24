@@ -15,6 +15,7 @@ pub struct TablerIcon {
 /// Cuadro clave: un rombo y una flecha (dibujado para Beethoven Movie).
 pub const KEYFRAME: TablerIcon = TablerIcon { filled: false, d: "M 9 5 L 15 12 L 9 19 L 3 12 Z M 15 6 L 20 12 L 15 18" };
 /// `movie` (outline)
+pub const TRASH: TablerIcon = TablerIcon { filled: false, d: "M 4 7 L 20 7 M 10 11 L 10 17 M 14 11 L 14 17 M 5 7 L 6 19 C 6 20.1 6.9 21 8 21 L 16 21 C 17.1 21 18 20.1 18 19 L 19 7 M 9 7 L 9 4 C 9 3.45 9.45 3 10 3 L 14 3 C 14.55 3 15 3.45 15 4 L 15 7" };
 pub const MOVIE: TablerIcon = TablerIcon { filled: false, d: "M 6 4 L 18 4 C 19.105 4 20 4.895 20 6 L 20 18 C 20 19.105 19.105 20 18 20 L 6 20 C 4.895 20 4 19.105 4 18 L 4 6 C 4 4.895 4.895 4 6 4 M 8 4 L 8 20 M 16 4 L 16 20 M 4 8 L 8 8 M 4 16 L 8 16 M 4 12 L 20 12 M 16 8 L 20 8 M 16 16 L 20 16" };
 /// `minus` (outline)
 pub const MINUS: TablerIcon = TablerIcon { filled: false, d: "M 5 12 L 19 12" };

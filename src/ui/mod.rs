@@ -201,7 +201,6 @@ pub struct App {
     metronomo: bool,
     pub escuchar: bool,
     monitor_auto: bool,
-    retrato: Option<TextureHandle>,
     tx: Sender<Evento>,
     rx: Receiver<Evento>,
     tareas: HashMap<u64, Tarea>,
@@ -301,7 +300,6 @@ impl App {
             metronomo: false,
             escuchar: true,
             monitor_auto: false,
-            retrato: Some(ctx.load_texture("retrato", ColorImage::from_rgba_unmultiplied([512, 512], ICONO), TextureOptions::LINEAR)),
             tx,
             rx,
             tareas: HashMap::new(),
@@ -1045,7 +1043,11 @@ impl App {
             }
             Confirmar::Nuevo => {
                 self.detener();
-                self.poner(Proyecto::nuevo());
+                let mut p = Proyecto::nuevo();
+                if let Some((w, h)) = self.inicio.formato.take() {
+                    (p.ancho, p.alto, p.fijo) = (w, h, true);
+                }
+                self.poner(p);
                 self.ruta = None;
             }
             Confirmar::Abrir => {
@@ -2060,9 +2062,8 @@ impl App {
             Modal::new(Id::new("acerca")).show(ctx, |ui| {
                 ui.set_width(420.0);
                 ui.horizontal(|ui| {
-                    if let Some(x) = &self.retrato {
-                        ui.image((x.id(), vec2(96.0, 96.0)));
-                    }
+                    let (r, _) = ui.allocate_exact_size(Vec2::splat(96.0), Sense::hover());
+                    inicio::logo(ui, r);
                     ui.vertical(|ui| {
                         ui.heading(crate::idioma::t("Beethoven Craft"));
                         ui.label(crate::idioma::t("Compositor de video y audio."));

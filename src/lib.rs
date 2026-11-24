@@ -22,6 +22,7 @@ pub mod nombres;
 pub mod titulos;
 pub mod motor;
 pub mod propios;
+pub mod proyectos;
 pub mod separar;
 pub mod video;
 pub mod vpropios;
