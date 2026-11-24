@@ -32,7 +32,10 @@ fn etiqueta(ui: &mut Ui, n: &str) {
 
 /// Renglón con rombo, nombre y deslizador.
 pub fn numero(ui: &mut Ui, n: &str, p: &mut Prop, t: f64, min: f64, max: f64, def: f64, u: &str) {
-    ui.horizontal(|ui| {
+    if fuera(ui) {
+        return;
+    }
+    let r = ui.horizontal(|ui| {
         if rombo(ui, !p.claves.is_empty(), p.clave_en(t).is_some()).clicked() {
             p.alternar_clave(t);
         }
@@ -49,6 +52,24 @@ pub fn numero(ui: &mut Ui, n: &str, p: &mut Prop, t: f64, min: f64, max: f64, de
             p.poner(t, Valor::Num(v));
         }
     });
+    ALTO.set(r.response.rect.height());
+}
+
+thread_local! {
+    /// Lo que mide un renglón de control.
+    static ALTO: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
+/// Si el renglón que sigue no se ve, deja su lugar sin dibujarlo: un efecto puede traer cien controles.
+fn fuera(ui: &mut Ui) -> bool {
+    let alto = ALTO.get();
+    let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), alto));
+    // Con holgura, para que arrastrar un control cerca de la orilla no lo suelte.
+    if alto <= 0.0 || ui.is_rect_visible(r.expand2(vec2(0.0, 120.0))) {
+        return false;
+    }
+    ui.allocate_space(vec2(1.0, alto));
+    true
 }
 
 fn color(ui: &mut Ui, c: &mut [f32; 4]) -> bool {
@@ -472,6 +493,9 @@ pub fn fx_ui(ui: &mut Ui, f: &mut FxVideo, t: f64) {
                 });
             }
             (_, v) => {
+                if fuera(ui) {
+                    continue;
+                }
                 ui.horizontal(|ui| {
                     let animable = matches!(v, Valor::Punto(_) | Valor::Color(_));
                     if animable {
@@ -545,6 +569,9 @@ fn fc_ui(ui: &mut Ui, f: &mut FxVideo, d: &ct::EffectDef, t: f64) {
             (ct::ParamKind::Float { soft_min, soft_max, unit, .. }, Valor::Num(_)) => numero(ui, n, p, t, *soft_min, *soft_max, q.default.as_f64().unwrap_or(0.0), unit),
             (ct::ParamKind::Angle, Valor::Num(_)) => numero(ui, n, p, t, -360.0, 360.0, q.default.as_f64().unwrap_or(0.0), "°"),
             (k, v) => {
+                if fuera(ui) {
+                    continue;
+                }
                 ui.horizontal(|ui| {
                     ui.add_space(20.0);
                     etiqueta(ui, n);

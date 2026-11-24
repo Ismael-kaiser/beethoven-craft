@@ -149,10 +149,14 @@ pub struct App {
     pub archivos: archivos::Estado,
     pub ajustes_proyecto: Option<proyecto::Ajustes>,
     pub nodos: nodos::Estado,
-    aplicado: Option<Proyecto>,
+    aplicado: Option<Arc<Proyecto>>,
+    /// Versión del proyecto que ya está en el historial, y si difiere de lo guardado (con la versión en que se vio).
+    v_historial: u64,
+    sucio: std::cell::Cell<(u64, bool)>,
+    respaldo: Sender<Proyecto>,
     ultimo: Proyecto,
-    deshacer: Vec<Proyecto>,
-    rehacer: Vec<Proyecto>,
+    deshacer: Vec<Foto>,
+    rehacer: Vec<Foto>,
     guardado: Proyecto,
     pub almacen: Almacen,
     pub motor: Arc<Mutex<Motor>>,
@@ -189,6 +193,10 @@ pub struct App {
     pub muestras: HashMap<String, TextureHandle>,
     muestras_hechas: usize,
     muestras_pedidas: bool,
+    /// Se está reproduciendo.
+    suena: Arc<AtomicBool>,
+    /// Cuándo se preparó el audio que sigue.
+    audio_listo: Instant,
     pub origen: Option<origen::Origen>,
     pub seleccion: HashSet<u64>,
     pidiendo: HashSet<PathBuf>,
@@ -253,6 +261,9 @@ impl App {
             ajustes_proyecto: None,
             nodos: Default::default(),
             aplicado: None,
+            v_historial: 0,
+            sucio: Default::default(),
+            respaldo: hilo_respaldo(),
             ultimo: p.clone(),
             guardado: p.clone(),
             p,
@@ -288,6 +299,8 @@ impl App {
             muestras: HashMap::new(),
             muestras_hechas: 0,
             muestras_pedidas: false,
+            suena: Default::default(),
+            audio_listo: Instant::now(),
             origen: None,
             seleccion: HashSet::new(),
             pidiendo: HashSet::new(),
@@ -374,6 +387,7 @@ impl App {
                 self.ir(0.0);
             }
             self.sincronizar();
+            self.preparar_audio();
             self.motor.lock().unwrap().tocando = true;
         }
     }
@@ -723,7 +737,16 @@ impl App {
         self.muestras_pedidas = true;
         self.muestras_hechas = 0;
         let tx = self.tx.clone();
-        std::thread::spawn(move || muestras::calcular(base, |k, q| tx.send(Evento::Muestra(k, q)).is_ok()));
+        let suena = self.suena.clone();
+        std::thread::spawn(move || {
+            muestras::calcular(base, |k, q| {
+                // Las miniaturas no le quitan procesador a la reproducción.
+                while suena.load(Relaxed) {
+                    std::thread::sleep(Duration::from_millis(120));
+                }
+                tx.send(Evento::Muestra(k, q)).is_ok()
+            })
+        });
     }
 
     fn importar_imagen(&mut self, ruta: PathBuf, info: Info) {
@@ -929,36 +952,58 @@ impl App {
 
     /// Entrega los cambios al motor.
     pub fn sincronizar(&mut self) {
-        if self.aplicado.as_ref() == Some(&self.p) {
+        if self.aplicado.as_deref() == Some(&self.p) {
             return;
         }
-        let ids = self.motor.lock().unwrap().ids_fx();
-        let n = motor::preparar(&self.p, &self.almacen, &ids);
-        let _viejo = self.motor.lock().unwrap().aplicar(n);
-        self.aplicado = Some(self.p.clone());
+        // Un cambio de imagen no vuelve a preparar el sonido.
+        if !self.aplicado.as_deref().is_some_and(|a| misma_mezcla(a, &self.p)) {
+            let ids = self.motor.lock().unwrap().ids_fx();
+            let n = motor::preparar(&self.p, &self.almacen, &ids);
+            let _viejo = self.motor.lock().unwrap().aplicar(n);
+        }
         self.vista_p = Arc::new(self.p.clone());
+        self.aplicado = Some(self.vista_p.clone());
         self.vista_v += 1;
     }
 
+    /// Como `p != guardado`, sin comparar otra vez si nada cambió.
+    fn por_guardar(&self) -> bool {
+        let (v, r) = self.sucio.get();
+        if v == self.vista_v {
+            return r;
+        }
+        let r = self.p != self.guardado;
+        self.sucio.set((self.vista_v, r));
+        r
+    }
+
     fn historial(&mut self, ctx: &Context) {
-        if self.p != self.ultimo && !ctx.input(|i| i.pointer.any_down()) {
-            self.deshacer.push(std::mem::replace(&mut self.ultimo, self.p.clone()));
-            self.rehacer.clear();
-            if self.deshacer.len() > 200 {
-                self.deshacer.remove(0);
-            }
-            // Respaldo por si la app se cierra de golpe.
-            if !self.sin_dispositivo {
-                let _ = std::fs::create_dir_all(carpeta());
-                let _ = crate::archivo::guardar(&self.p, &carpeta().join("Autoguardado.bcraft"), None, false);
-            }
+        // Va después de `sincronizar`: si la versión es la misma, nada cambió.
+        if self.v_historial == self.vista_v || ctx.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        self.v_historial = self.vista_v;
+        if self.p == self.ultimo {
+            return;
+        }
+        let antes = std::mem::replace(&mut self.ultimo, self.p.clone());
+        self.deshacer.push(Foto::de(&antes));
+        self.rehacer.clear();
+        // Con un tope de pasos y de memoria.
+        let mut peso: usize = self.deshacer.iter().map(|f| f.0.len()).sum();
+        while self.deshacer.len() > 200 || (peso > 24 << 20 && self.deshacer.len() > 20) {
+            peso -= self.deshacer.remove(0).0.len();
+        }
+        // Respaldo por si la app se cierra de golpe, en su propio hilo.
+        if !self.sin_dispositivo {
+            let _ = self.respaldo.send(self.p.clone());
         }
     }
 
     fn volver(&mut self, atras: bool) {
         let (de, a) = if atras { (&mut self.deshacer, &mut self.rehacer) } else { (&mut self.rehacer, &mut self.deshacer) };
-        if let Some(q) = de.pop() {
-            a.push(std::mem::replace(&mut self.p, q));
+        if let Some(q) = de.pop().and_then(|f| f.abrir()) {
+            a.push(Foto::de(&std::mem::replace(&mut self.p, q)));
             self.p.sig_id = self.p.sig_id.max(self.ultimo.sig_id);
             self.ultimo = self.p.clone();
         }
@@ -970,6 +1015,7 @@ impl App {
         match crate::archivo::guardar(&self.p, &ruta, mini, false) {
             Ok(()) => {
                 self.guardado = self.p.clone();
+                self.sucio.set((0, false));
                 self.avisar(crate::idioma::tf("Guardado en {}", &[&(ruta.display())]), false);
                 if !self.sin_dispositivo {
                     inicio::anotar(&ruta);
@@ -1011,6 +1057,7 @@ impl App {
         self.clip = None;
         self.ultimo = p.clone();
         self.guardado = p.clone();
+        self.sucio.set((0, false));
         self.p = p;
         self.deshacer.clear();
         self.rehacer.clear();
@@ -1294,6 +1341,28 @@ impl App {
         self.espacio = e;
     }
 
+    /// Los audios largos viven en disco: lo que va a sonar en los próximos segundos se trae antes, en otro hilo.
+    fn preparar_audio(&self) {
+        let t = self.ahora();
+        let v: Vec<(Arc<Audio>, f64, f64)> = self
+            .p
+            .pistas
+            .iter()
+            .flat_map(|p| &p.clips)
+            .filter(|c| c.inicio < t + 8.0 && c.inicio + c.dur > t)
+            .filter_map(|c| {
+                // Una versión con otra velocidad o al revés corre por su cuenta: se trae con holgura.
+                let a = self.almacen.get(&c.clave())?.clone();
+                let d = c.desde / c.velocidad.max(0.01) + (t - c.inicio).max(0.0);
+                let d = if c.invertido { (c.desde + c.dur - (t - c.inicio).max(0.0) - 8.0).max(0.0) } else { d };
+                Some((a, d - 0.5, d + 8.5))
+            })
+            .collect();
+        if !v.is_empty() {
+            std::thread::spawn(move || v.iter().for_each(|(a, i, j)| a.preparar(*i, *j)));
+        }
+    }
+
     // ---- dibujo
 
     pub fn ui(&mut self, ui: &mut Ui) {
@@ -1326,6 +1395,12 @@ impl App {
                 baja(self.picos.entry(id).or_default(), n);
             }
             baja(&mut self.pico_maestro, m);
+        }
+        let suena = self.tocando();
+        self.suena.store(suena, Relaxed);
+        if suena && self.audio_listo.elapsed() > Duration::from_millis(800) {
+            self.audio_listo = Instant::now();
+            self.preparar_audio();
         }
         self.inicio.ajustar_ventana(&ctx);
         if self.inicio.visible {
@@ -1582,7 +1657,7 @@ impl App {
                 Some(x) => x.set(img, TextureOptions::LINEAR),
                 None => self.textura = Some(ctx.load_texture("video", img, TextureOptions::LINEAR)),
             }
-            self.cuadro = Some((q.ancho, q.alto, q.rgba));
+            self.cuadro = Some((q.ancho, q.alto, q.rgba.clone()));
         }
         if self.vista.pendientes > 0 {
             ctx.request_repaint_after(Duration::from_millis(12));
@@ -2082,6 +2157,40 @@ impl App {
             });
         }
     }
+}
+
+/// Un paso del historial: el proyecto comprimido. Completos llenarían la memoria.
+struct Foto(Vec<u8>);
+
+impl Foto {
+    fn de(p: &Proyecto) -> Foto {
+        Foto(miniz_oxide::deflate::compress_to_vec(&rmp_serde::to_vec_named(p).unwrap_or_default(), 1))
+    }
+    fn abrir(&self) -> Option<Proyecto> {
+        rmp_serde::from_slice(&miniz_oxide::inflate::decompress_to_vec(&self.0).ok()?).ok()
+    }
+}
+
+/// Guarda el respaldo sin detener la ventana: siempre el más nuevo, y no más de uno cada tres segundos.
+fn hilo_respaldo() -> Sender<Proyecto> {
+    let (tx, rx) = unbounded::<Proyecto>();
+    std::thread::spawn(move || {
+        while let Ok(mut p) = rx.recv() {
+            std::thread::sleep(Duration::from_millis(1200));
+            while let Ok(n) = rx.try_recv() {
+                p = n;
+            }
+            let _ = std::fs::create_dir_all(carpeta());
+            let _ = crate::archivo::guardar(&p, &carpeta().join("Autoguardado.bcraft"), None, false);
+            std::thread::sleep(Duration::from_millis(1800));
+        }
+    });
+    tx
+}
+
+/// ¿Suenan igual? Lo de la imagen no cuenta.
+fn misma_mezcla(a: &Proyecto, b: &Proyecto) -> bool {
+    a.pistas == b.pistas && a.maestro_db == b.maestro_db && a.fx_maestro == b.fx_maestro && a.bpm == b.bpm && a.patrones == b.patrones && a.ajuste_ms == b.ajuste_ms && a.fin() == b.fin()
 }
 
 pub fn es_imagen(r: &Path) -> bool {

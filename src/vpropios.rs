@@ -1198,16 +1198,26 @@ pub fn aplicar(f: &FxVideo, t: f64, img: &Image, escala: f64) -> Image {
             let (m, k) = luces(&s, por("desde"), 2.0 * e, 2.0 * e);
             let (ox, oy, g) = (cx + por("x") * wf, cy + por("y") * hf, por("cant"));
             const N: usize = 28;
+            // Los rayos son suaves: se hacen en chico y se estiran.
+            let d: Vec<P4> = (0..m.w * m.h)
+                .into_par_iter()
+                .map(|i| {
+                    let (x, y) = (((i % m.w) as f32 + 0.5) / k, ((i / m.w) as f32 + 0.5) / k);
+                    let mut q = [0.0f32; 4];
+                    let r = azar((i % m.w) as i32, (i / m.w) as i32);
+                    let mut peso = 1.0;
+                    for j in 0..N {
+                        let z = 1.0 - (j as f32 + r) / N as f32 * 0.85;
+                        let v = m.en((ox + (x - ox) * z) * k, (oy + (y - oy) * z) * k);
+                        (0..3).for_each(|c| q[c] += v[c] * peso / N as f32);
+                        peso *= 0.965;
+                    }
+                    q
+                })
+                .collect();
+            let r = Img { w: m.w, h: m.h, d: emborronar(&d, m.w, m.h, 1, 1) };
             pintar!(|x, y, p| {
-                let mut q = [0.0f32; 3];
-                let r = azar(x as i32, y as i32);
-                let mut peso = 1.0;
-                for i in 0..N {
-                    let z = 1.0 - (i as f32 + r) / N as f32 * 0.85;
-                    let v = m.en((ox + (x - ox) * z) * k, (oy + (y - oy) * z) * k);
-                    (0..3).for_each(|j| q[j] += v[j] * peso / N as f32);
-                    peso *= 0.965;
-                }
+                let q = r.en(x * k, y * k);
                 pantalla(p, [q[0] * g * 1.9, q[1] * g * 1.75, q[2] * g * 1.4])
             })
         }

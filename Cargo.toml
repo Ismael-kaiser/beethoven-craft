@@ -34,6 +34,7 @@ effectcraft-project = { git = "https://github.com/storytold/effectcraft.git", re
 effectcraft-raster = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
 effectcraft-color = { git = "https://github.com/storytold/effectcraft.git", rev = "1738360417403d8780aa3a4949bd6f6a49b6588d" }
 rayon = "1"
+memmap2 = "0.9"
 fontdue = "0.9"
 
 # Linux: eframe sin sus funciones por defecto no trae con qué abrir ventanas.

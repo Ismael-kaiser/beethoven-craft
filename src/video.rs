@@ -158,15 +158,28 @@ impl Fuente for Lectores {
     }
 }
 
+/// Lo que la ventana quiere ver.
 pub struct Pedido {
     pub p: Arc<Proyecto>,
+    pub version: u64,
+    /// Número de cuadro de la vista previa y su segundo.
+    i: i64,
     pub t: f64,
     pub tocando: bool,
     pub tam: (usize, usize),
 }
 
-/// Escalas de la vista previa mientras se reproduce: si un cuadro no alcanza, se baja un escalón.
-const ESCALAS: [f64; 4] = [1.0, 0.75, 0.5, 0.35];
+/// Escalas de la vista previa mientras se reproduce: si no alcanza, se baja de escalón. El video se decodifica siempre
+/// completo y se achica después: cambiar de escalón no vuelve a abrirlo.
+const ESCALAS: [f64; 5] = [1.0, 0.75, 0.5, 0.35, 0.25];
+/// Cuadros que se componen a la vez.
+const OBREROS: usize = 2;
+/// Cuánto se calcula por adelantado al reproducir y en pausa, en segundos.
+const ADELANTO: f64 = 0.5;
+const ADELANTO_PAUSA: f64 = 4.0;
+/// Memoria RAM para los cuadros ya hechos: los de ahorita nada más. Los demás van a un archivo temporal, que se borra solo.
+const MEMORIA: usize = 48 << 20;
+const DISCO: u64 = 1 << 30;
 
 /// El tamaño de la vista previa a la escala `s`, en pares.
 pub fn a_escala((w, h): (usize, usize), s: f64) -> (usize, usize) {
@@ -174,13 +187,485 @@ pub fn a_escala((w, h): (usize, usize), s: f64) -> (usize, usize) {
     (par(w), par(h))
 }
 
-/// Hilo que compone la vista previa. Siempre atiende el pedido más nuevo.
+/// Un cuadro decodificado, al tamaño que hace falta.
+fn reducir(q: &Arc<Cuadro>, w: usize, h: usize) -> Arc<Cuadro> {
+    if (q.ancho, q.alto) == (w, h) {
+        return q.clone();
+    }
+    let mut rgba = vec![255u8; w * h * 4];
+    let tope = |v: usize, n: usize| v.min(n.saturating_sub(1));
+    rgba.chunks_exact_mut(w * 4).enumerate().for_each(|(y, fila)| {
+        // Dos por dos muestras: alcanza para bajar hasta la cuarta parte sin dientes.
+        let ys = [tope((y * 4 + 1) * q.alto / (h * 4), q.alto), tope((y * 4 + 3) * q.alto / (h * 4), q.alto)];
+        for (x, o) in fila.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let xs = [tope((x * 4 + 1) * q.ancho / (w * 4), q.ancho), tope((x * 4 + 3) * q.ancho / (w * 4), q.ancho)];
+            let mut s = [0u32; 4];
+            for yy in ys {
+                for xx in xs {
+                    let i = (yy * q.ancho + xx) * 4;
+                    (0..4).for_each(|k| s[k] += q.rgba[i + k] as u32);
+                }
+            }
+            *o = s.map(|v| (v / 4) as u8);
+        }
+    });
+    Arc::new(Cuadro { t: q.t, ancho: w, alto: h, rgba })
+}
+
+/// Los cuadros de video que necesita una composición, ya decodificados.
+struct Surtido {
+    cuadros: HashMap<u64, Arc<Cuadro>>,
+    pasado: HashMap<u64, Vec<Arc<Cuadro>>>,
+}
+
+impl Fuente for Surtido {
+    fn cuadro(&mut self, c: &ClipVideo, _: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
+        self.cuadros.get(&c.id).map(|q| reducir(q, ancho, alto))
+    }
+    fn recientes(&self, c: &ClipVideo) -> Vec<Arc<Cuadro>> {
+        // Del mismo tamaño que el cuadro de ahora.
+        self.pasado.get(&c.id).cloned().unwrap_or_default()
+    }
+}
+
+/// Un cuadro por componer.
+struct Trabajo {
+    i: i64,
+    firma: u64,
+    p: Arc<Proyecto>,
+    t: f64,
+    tam: (usize, usize),
+    nivel: usize,
+    surtido: Surtido,
+}
+
+struct Hecho {
+    i: i64,
+    firma: u64,
+    tam: (usize, usize),
+    nivel: usize,
+    q: Arc<Cuadro>,
+    seg: f64,
+}
+
+struct Guardado {
+    firma: u64,
+    nivel: usize,
+    q: Option<Arc<Cuadro>>,
+    /// Dónde quedó en el disco.
+    disco: Option<Lugar>,
+    /// Última vez que sirvió.
+    uso: u64,
+}
+
+/// Un cuadro en el disco.
+#[derive(Clone, Copy, PartialEq)]
+struct Lugar {
+    donde: u64,
+    ancho: usize,
+    alto: usize,
+    t: f64,
+}
+
+/// Archivo temporal que se llena en círculo: lo nuevo va encima de lo más viejo.
+struct Disco {
+    f: std::fs::File,
+    ruta: PathBuf,
+    cursor: u64,
+    /// Lo escrito, del más viejo al más nuevo: desde dónde, cuánto y de quién es.
+    orden: std::collections::VecDeque<(u64, u64, (i64, (usize, usize)))>,
+}
+
+impl Disco {
+    fn nuevo() -> Option<Disco> {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let ruta = std::env::temp_dir().join(format!("beethoven-cuadros-{}-{n}", std::process::id()));
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&ruta).ok()?;
+        // Ya abierto se puede borrar del listado: el sistema lo quita al cerrar la app, aunque truene.
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(&ruta);
+        Some(Disco { f, ruta, cursor: 0, orden: Default::default() })
+    }
+
+    /// Escribe y devuelve dónde, y los cuadros que se encimaron.
+    fn poner(&mut self, k: (i64, (usize, usize)), q: &Cuadro) -> Option<(Lugar, Vec<(i64, (usize, usize))>)> {
+        let n = q.rgba.len() as u64;
+        if n > DISCO / 4 {
+            return None;
+        }
+        if self.cursor + n > DISCO {
+            self.cursor = 0;
+        }
+        let (a, z) = (self.cursor, self.cursor + n);
+        let mut fuera = vec![];
+        self.orden.retain(|(o, l, k)| {
+            let choca = *o < z && o + l > a;
+            if choca {
+                fuera.push(*k);
+            }
+            !choca
+        });
+        escribir_en(&self.f, &q.rgba, a).ok()?;
+        self.orden.push_back((a, n, k));
+        self.cursor = z;
+        Some((Lugar { donde: a, ancho: q.ancho, alto: q.alto, t: q.t }, fuera))
+    }
+
+    fn leer(&self, l: &Lugar) -> Option<Cuadro> {
+        let mut rgba = vec![0u8; l.ancho * l.alto * 4];
+        leer_de(&self.f, &mut rgba, l.donde).ok()?;
+        Some(Cuadro { t: l.t, ancho: l.ancho, alto: l.alto, rgba })
+    }
+}
+
+impl Drop for Disco {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.ruta);
+    }
+}
+
+#[cfg(unix)]
+fn escribir_en(f: &std::fs::File, b: &[u8], donde: u64) -> std::io::Result<()> {
+    std::os::unix::fs::FileExt::write_all_at(f, b, donde)
+}
+#[cfg(unix)]
+fn leer_de(f: &std::fs::File, b: &mut [u8], donde: u64) -> std::io::Result<()> {
+    std::os::unix::fs::FileExt::read_exact_at(f, b, donde)
+}
+#[cfg(windows)]
+fn escribir_en(f: &std::fs::File, mut b: &[u8], mut donde: u64) -> std::io::Result<()> {
+    while !b.is_empty() {
+        let n = std::os::windows::fs::FileExt::seek_write(f, b, donde)?;
+        (b, donde) = (&b[n..], donde + n as u64);
+    }
+    Ok(())
+}
+#[cfg(windows)]
+fn leer_de(f: &std::fs::File, mut b: &mut [u8], mut donde: u64) -> std::io::Result<()> {
+    while !b.is_empty() {
+        let n = std::os::windows::fs::FileExt::seek_read(f, b, donde)?;
+        if n == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        (b, donde) = (&mut b[n..], donde + n as u64);
+    }
+    Ok(())
+}
+
+/// Lo que decide cómo se ve el segundo `t`: si no cambia, el cuadro guardado sirve aunque se edite otra parte.
+fn firma(p: &Proyecto, t: f64) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (p.ancho, p.alto, p.fps.to_bits()).hash(&mut h);
+    p.capas.iter().for_each(|c| c.visible.hash(&mut h));
+    // Con los vecinos, por las transiciones.
+    for c in p.video.iter().filter(|c| c.inicio < t + 3.0 && c.fin() > t - 3.0) {
+        serde_json::to_string(c).unwrap_or_default().hash(&mut h);
+    }
+    h.finish()
+}
+
+/// ¿Cuesta componer ese segundo? Un video solo se copia tal cual y no vale la pena adelantarlo.
+fn trabajoso(p: &Proyecto, t: f64) -> bool {
+    p.video.iter().any(|c| c.inicio <= t && c.fin() > t && (!c.simple() || c.contenido != Contenido::Archivo))
+}
+
+/// El hilo que decide: decodifica en orden, reparte la composición entre varios hilos, guarda lo hecho y entrega el cuadro
+/// que toca.
+struct Director {
+    lectores: Lectores,
+    a_obreros: Sender<Trabajo>,
+    sale: Sender<Arc<Cuadro>>,
+    pedido: Option<Pedido>,
+    guardados: HashMap<(i64, (usize, usize)), Guardado>,
+    memoria: usize,
+    /// Se abre con el primer cuadro que costó trabajo.
+    disco: Option<Disco>,
+    reloj: u64,
+    /// Firmas ya calculadas de esta versión del proyecto.
+    firmas: HashMap<i64, u64>,
+    /// En los obreros: cuadro y firma.
+    vuelo: Vec<(i64, u64)>,
+    sig: i64,
+    nivel: usize,
+    /// De cuántos en cuántos cuadros se calcula cuando ni así alcanza.
+    paso: i64,
+    /// Segundos entre un cuadro listo y el siguiente, con los obreros llenos.
+    ritmo: f64,
+    /// Lo que tarda un cuadro, de que se manda a que regresa.
+    tarda: f64,
+    desahogo: u32,
+    /// Lo último que se entregó: cuadro, firma y escalón.
+    entregado: Option<(i64, u64, usize)>,
+    cambio: Instant,
+    /// Segundos que cuesta un cuadro completo, según los últimos.
+    costo: f64,
+}
+
+impl Director {
+    fn fps(p: &Proyecto) -> f64 {
+        p.fps.clamp(1.0, 30.0)
+    }
+
+    fn firma_de(&mut self, i: i64) -> u64 {
+        let Some(q) = &self.pedido else { return 0 };
+        let (p, f) = (q.p.clone(), Self::fps(&q.p));
+        *self.firmas.entry(i).or_insert_with(|| firma(&p, i as f64 / f))
+    }
+
+    /// El cuadro guardado de `i` si todavía vale: su escalón.
+    fn listo(&mut self, i: i64) -> Option<usize> {
+        let tam = self.pedido.as_ref()?.tam;
+        let f = self.firma_de(i);
+        self.guardados.get(&(i, tam)).filter(|g| g.firma == f).map(|g| g.nivel)
+    }
+
+    fn pedir(&mut self, q: Pedido) {
+        let antes = self.pedido.take();
+        let otra = antes.as_ref().is_none_or(|a| a.version != q.version);
+        if otra {
+            self.firmas.clear();
+        }
+        let salto = antes.as_ref().is_none_or(|a| a.tam != q.tam || a.tocando != q.tocando || (q.i - a.i).abs() > 8 || q.i < a.i);
+        if salto || otra {
+            self.sig = q.i;
+        }
+        if antes.as_ref().is_none_or(|a| a.i != q.i || a.version != q.version || a.tam != q.tam || a.tocando != q.tocando) {
+            self.cambio = Instant::now();
+        }
+        self.lectores.tocando = true;
+        self.pedido = Some(q);
+    }
+
+    fn recibir(&mut self, h: Hecho) {
+        self.vuelo.retain(|v| *v != (h.i, h.firma));
+        self.tarda += (h.seg - self.tarda) * if self.tarda == 0.0 { 1.0 } else { 0.25 };
+        let completo = h.seg / ESCALAS[h.nivel].powi(2);
+        self.costo += (completo - self.costo) * if self.costo == 0.0 { 1.0 } else { 0.3 };
+        // Mientras se mueve un control llegan cuadros de hace un momento: se muestran, para ver el cambio en vivo.
+        let vivo = self.pedido.as_ref().is_some_and(|q| !q.tocando && q.i == h.i && q.tam == h.tam);
+        if vivo && self.firma_de(h.i) != h.firma {
+            self.entregado = None;
+            let _ = self.sale.send(h.q.clone());
+        }
+        // Lo que alcanza a hacer el equipo: lo que tardó entre los que iban a la vez. Esperar al archivo no cuenta.
+        let d = h.seg / (self.vuelo.len() + 1).min(OBREROS) as f64;
+        self.ritmo += (d - self.ritmo) * if self.ritmo == 0.0 { 1.0 } else { 0.25 };
+        self.reloj += 1;
+        let k = (h.i, h.tam);
+        // Lo que sale barato no se escribe: se vuelve a hacer.
+        let mut lugar = None;
+        if h.seg > 0.008 {
+            if self.disco.is_none() {
+                self.disco = Disco::nuevo();
+            }
+            if let Some((l, fuera)) = self.disco.as_mut().and_then(|d| d.poner(k, &h.q)) {
+                lugar = Some(l);
+                for x in fuera.into_iter().filter(|x| *x != k) {
+                    if let Some(g) = self.guardados.get_mut(&x) {
+                        g.disco = None;
+                        if g.q.is_none() {
+                            self.guardados.remove(&x);
+                        }
+                    }
+                }
+            }
+        }
+        self.memoria += h.q.rgba.len();
+        if let Some(v) = self.guardados.insert(k, Guardado { firma: h.firma, nivel: h.nivel, q: Some(h.q), disco: lugar, uso: self.reloj }) {
+            self.memoria -= v.q.map_or(0, |q| q.rgba.len());
+        }
+        self.aligerar();
+        self.regular(h.nivel);
+    }
+
+    /// Suelta de la RAM primero lo que ya pasó y luego lo que más falta para verse.
+    fn aligerar(&mut self) {
+        let (ahora, tam) = self.pedido.as_ref().map_or((0, (0, 0)), |q| (q.i, q.tam));
+        while self.memoria > MEMORIA {
+            let lejos = |k: &(i64, (usize, usize))| if k.1 != tam { i64::MAX } else if k.0 < ahora { 1_000_000 + ahora - k.0 } else { k.0 - ahora };
+            let Some(k) = self.guardados.iter().filter(|g| g.1.q.is_some()).max_by_key(|g| lejos(g.0)).map(|g| *g.0) else { break };
+            let Some(g) = self.guardados.get_mut(&k) else { break };
+            self.memoria -= g.q.take().map_or(0, |q| q.rgba.len());
+            if g.disco.is_none() {
+                self.guardados.remove(&k);
+            }
+        }
+        // Las fichas sin cuadro pesan poco, pero no se acumulan sin fin.
+        if self.guardados.len() > 20_000 {
+            self.guardados.retain(|_, g| g.q.is_some());
+        }
+    }
+
+    /// Sube o baja de calidad según lo que alcanza.
+    fn regular(&mut self, nivel: usize) {
+        let Some(q) = self.pedido.as_ref().filter(|q| q.tocando) else { return };
+        if self.ritmo <= 0.0 || nivel != self.nivel {
+            return;
+        }
+        let k = self.ritmo * Self::fps(&q.p) / self.paso as f64;
+        let area = |a: usize, b: usize| (ESCALAS[b] / ESCALAS[a]).powi(2);
+        if k > 0.9 {
+            self.desahogo = 0;
+            // El costo va con el área: se baja de una vez hasta donde alcance. Si ni así, la mitad de los cuadros; y al
+            // final, más chico.
+            let tope = if self.paso > 1 { ESCALAS.len() - 1 } else { ESCALAS.len() - 2 };
+            let meta = (self.nivel..=tope).find(|n| k * area(self.nivel, *n) < 0.7).unwrap_or(tope).max(self.nivel);
+            if meta > self.nivel {
+                self.ritmo *= area(self.nivel, meta);
+                self.nivel = meta;
+            } else if self.paso < 4 {
+                self.paso += 1;
+            }
+        } else if k < 0.4 {
+            self.desahogo += 1;
+            if self.desahogo > 24 {
+                self.desahogo = 0;
+                if self.paso > 1 && k * (self.paso as f64) / ((self.paso - 1) as f64) < 0.7 {
+                    self.paso -= 1;
+                } else if self.nivel > 0 && k * area(self.nivel, self.nivel - 1) < 0.7 {
+                    self.ritmo *= area(self.nivel, self.nivel - 1);
+                    self.nivel -= 1;
+                }
+            }
+        } else {
+            self.desahogo = 0;
+        }
+    }
+
+    /// Manda a la ventana el mejor cuadro que haya para lo que pidió.
+    fn entregar(&mut self) {
+        let Some((i, tam, tocando)) = self.pedido.as_ref().map(|q| (q.i, q.tam, q.tocando)) else { return };
+        let mejor = match self.listo(i) {
+            Some(_) => Some(i),
+            None if tocando => {
+                // El más cercano ya hecho, sin regresar de lo que se está viendo.
+                let (r, paso) = (self.paso.max(2) * 3, self.paso);
+                let visto = self.entregado.map_or(i64::MIN, |e| e.0);
+                let adelante = visto < i - r * 2 || visto > i + r * 2;
+                (1..=r).flat_map(|d| [i - d, i + d.min(paso)]).filter(|j| adelante || *j > visto).find(|j| self.listo(*j).is_some())
+            }
+            None => None,
+        };
+        let Some(j) = mejor else { return };
+        let f = self.firma_de(j);
+        self.reloj += 1;
+        let Some(g) = self.guardados.get_mut(&(j, tam)) else { return };
+        g.uso = self.reloj;
+        // Ya se está viendo.
+        if self.entregado == Some((j, f, g.nivel)) {
+            return;
+        }
+        let q = match (&g.q, &g.disco, &self.disco) {
+            (Some(q), ..) => Some(q.clone()),
+            (None, Some(l), Some(d)) => d.leer(l).map(Arc::new),
+            _ => None,
+        };
+        let Some(q) = q else {
+            self.guardados.remove(&(j, tam));
+            return;
+        };
+        self.entregado = Some((j, f, g.nivel));
+        let _ = self.sale.send(q);
+    }
+
+    /// El siguiente cuadro que conviene hacer, si hay lugar.
+    fn siguiente(&mut self) -> Option<(i64, usize)> {
+        let (i, tocando, fps, fin, p) = self.pedido.as_ref().map(|q| (q.i, q.tocando, Self::fps(&q.p), q.p.fin(), q.p.clone()))?;
+        if !tocando {
+            // En pausa, primero el que se ve, completo.
+            let f = self.firma_de(i);
+            let hay = self.listo(i);
+            if hay != Some(0) {
+                if self.vuelo.contains(&(i, f)) || self.vuelo.len() >= 2 {
+                    return None;
+                }
+                // Primero uno rápido si el completo tarda; el bueno, cuando ya no se mueve.
+                let rapido = (0..ESCALAS.len()).find(|n| self.costo * ESCALAS[*n].powi(2) < 0.07).unwrap_or(ESCALAS.len() - 1);
+                return match hay {
+                    None => Some((i, rapido)),
+                    Some(_) if self.cambio.elapsed() > Duration::from_millis(220) => Some((i, 0)),
+                    Some(_) => None,
+                };
+            }
+            // Y con calma, lo que sigue, para que al reproducir ya esté.
+            if self.cambio.elapsed() < Duration::from_millis(700) || !self.vuelo.is_empty() || self.tarda < 0.012 {
+                return None;
+            }
+            let hasta = i + (ADELANTO_PAUSA * fps) as i64;
+            return (i + 1..=hasta).take_while(|j| (*j as f64) / fps < fin).find(|j| trabajoso(&p, *j as f64 / fps) && self.listo(*j).is_none()).map(|j| (j, self.nivel.min(2)));
+        }
+        if self.vuelo.len() >= OBREROS {
+            return None;
+        }
+        // Se quedó atrás: se brinca a uno que sí alcance a estar a tiempo.
+        if self.sig < i {
+            self.sig = i + if self.tarda > 1.0 / fps { (self.tarda * fps).ceil() as i64 } else { 0 };
+        }
+        let hasta = i + (ADELANTO * fps) as i64;
+        while self.sig <= hasta {
+            let j = self.sig;
+            if j as f64 / fps >= fin && j > i {
+                return None;
+            }
+            self.sig += self.paso;
+            let f = self.firma_de(j);
+            if self.listo(j).is_some() || self.vuelo.contains(&(j, f)) {
+                continue;
+            }
+            // Si no alcanza para todos, un hueco con vecinos hechos se queda como está.
+            let paso = self.paso;
+            if paso > 1 && (1..paso).any(|d| self.listo(j - d).is_some() || self.listo(j + d).is_some()) {
+                continue;
+            }
+            return Some((j, self.nivel));
+        }
+        None
+    }
+
+    /// Decodifica lo que necesita el cuadro `j` y lo manda a componer.
+    fn lanzar(&mut self, j: i64, nivel: usize) {
+        let firma = self.firma_de(j);
+        let Some(q) = &self.pedido else { return };
+        let (p, tam, t) = (q.p.clone(), q.tam, j as f64 / Self::fps(&q.p));
+        self.lectores.limpiar();
+        let de_tiempo = composicion::usa_pasado(&p);
+        let mut s = Surtido { cuadros: HashMap::new(), pasado: HashMap::new() };
+        for (c, ts, aw, ah) in composicion::pedidos(&p, t, tam.0, tam.1) {
+            if let Some(q) = self.lectores.cuadro(c, ts, aw, ah) {
+                if de_tiempo {
+                    s.pasado.insert(c.id, self.lectores.recientes(c));
+                }
+                s.cuadros.insert(c.id, q);
+            }
+        }
+        // Los efectos de tiempo mezclan cuadros del mismo tamaño.
+        let nivel = if de_tiempo { 0 } else { nivel };
+        self.vuelo.push((j, firma));
+        let _ = self.a_obreros.send(Trabajo { i: j, firma, p, t, tam, nivel, surtido: s });
+    }
+}
+
+fn obrero(entra: Receiver<Trabajo>, sale: Sender<Hecho>) {
+    while let Ok(mut x) = entra.recv() {
+        let ini = Instant::now();
+        let (w, h) = a_escala(x.tam, ESCALAS[x.nivel]);
+        let rgba = composicion::componer(&x.p, x.t, w, h, &mut x.surtido);
+        let q = Arc::new(Cuadro { t: x.t, ancho: w, alto: h, rgba });
+        if sale.send(Hecho { i: x.i, firma: x.firma, tam: x.tam, nivel: x.nivel, q, seg: ini.elapsed().as_secs_f64() }).is_err() {
+            return;
+        }
+    }
+}
+
+/// Vista previa: compone por adelantado y guarda lo hecho. Siempre atiende el pedido más nuevo.
 pub struct VistaPrevia {
     tx: Sender<Pedido>,
-    rx: Receiver<Cuadro>,
+    rx: Receiver<Arc<Cuadro>>,
     /// Pedidos sin respuesta.
     pub pendientes: u32,
-    ultimo: Option<(f64, u64, (usize, usize))>,
+    ultimo: Option<(i64, u64, (usize, usize), bool)>,
 }
 
 impl Default for VistaPrevia {
@@ -188,31 +673,60 @@ impl Default for VistaPrevia {
         let (tx, entra) = unbounded::<Pedido>();
         let (sale, rx) = unbounded();
         std::thread::spawn(move || {
-            let mut l = Lectores::nuevos(30.0, false);
-            // Escalón de `ESCALAS`: sube al reproducir si no alcanza, y vuelve a 0 al pausar.
-            let mut nivel = 0;
-            // Cuadros lentos seguidos: uno solo (abrir el video, saltar) no cuenta.
-            let mut lentos = 0;
-            while let Ok(mut q) = entra.recv() {
-                while let Ok(n) = entra.try_recv() {
-                    q = n;
+            let (a_obreros, trabajos) = unbounded();
+            let (hecho, hechos) = unbounded();
+            let mut d = Director {
+                lectores: Lectores::nuevos(30.0, true),
+                a_obreros,
+                sale,
+                pedido: None,
+                guardados: HashMap::new(),
+                memoria: 0,
+                disco: None,
+                reloj: 0,
+                firmas: HashMap::new(),
+                vuelo: vec![],
+                sig: 0,
+                nivel: 0,
+                paso: 1,
+                ritmo: 0.0,
+                tarda: 0.0,
+                desahogo: 0,
+                entregado: None,
+                cambio: Instant::now(),
+                costo: 0.0,
+            };
+            // Los obreros se prenden con el primer pedido: hay vistas que nunca se usan.
+            let mut prendidos = false;
+            loop {
+                // Con trabajo pendiente no se espera; si no, hasta que algo pase.
+                crossbeam_channel::select! {
+                    recv(entra) -> q => match q {
+                        Ok(q) => d.pedir(q),
+                        Err(_) => return,
+                    },
+                    recv(hechos) -> h => if let Ok(h) = h { d.recibir(h) },
+                    default(Duration::from_millis(if d.pedido.is_some() { 60 } else { 5000 })) => {}
                 }
-                l.tocando = q.tocando;
-                l.limpiar();
-                if !q.tocando {
-                    (nivel, lentos) = (0, 0);
+                while let Ok(q) = entra.try_recv() {
+                    d.pedir(q);
                 }
-                let (w, h) = a_escala(q.tam, ESCALAS[nivel]);
-                let t0 = Instant::now();
-                let rgba = composicion::componer(&q.p, q.t, w, h, &mut l);
-                // Tres cuartos de lo que dura un cuadro: el resto es para pedirlo y mostrarlo.
-                let presupuesto = 0.75 / q.p.fps.clamp(1.0, 30.0);
-                lentos = if q.tocando && t0.elapsed().as_secs_f64() > presupuesto { lentos + 1 } else { 0 };
-                if lentos >= 3 && nivel + 1 < ESCALAS.len() {
-                    (nivel, lentos) = (nivel + 1, 0);
+                while let Ok(h) = hechos.try_recv() {
+                    d.recibir(h);
                 }
-                if sale.send(Cuadro { t: q.t, ancho: w, alto: h, rgba }).is_err() {
-                    return;
+                d.entregar();
+                // De uno en uno: entre cada cuadro se vuelve a ver si pidieron otra cosa.
+                while let Some((j, nivel)) = d.siguiente() {
+                    if !std::mem::replace(&mut prendidos, true) {
+                        for _ in 0..OBREROS {
+                            let (e, s) = (trabajos.clone(), hecho.clone());
+                            std::thread::spawn(move || obrero(e, s));
+                        }
+                    }
+                    d.lanzar(j, nivel);
+                    if !entra.is_empty() || !hechos.is_empty() {
+                        break;
+                    }
                 }
             }
         });
@@ -222,19 +736,20 @@ impl Default for VistaPrevia {
 
 impl VistaPrevia {
     /// Pide el cuadro de `t` si hace falta y devuelve el más nuevo que esté listo. `version` cambia con cada edición.
-    pub fn actualizar(&mut self, p: &Arc<Proyecto>, version: u64, t: f64, tocando: bool, tam: (usize, usize)) -> Option<Cuadro> {
+    pub fn actualizar(&mut self, p: &Arc<Proyecto>, version: u64, t: f64, tocando: bool, tam: (usize, usize)) -> Option<Arc<Cuadro>> {
         let mut r = None;
         while let Ok(c) = self.rx.try_recv() {
+            // En pausa, un cuadro chico es un adelanto: falta el bueno.
+            self.pendientes = u32::from(!tocando && c.ancho < tam.0);
             r = Some(c);
-            self.pendientes = 0;
         }
         let fps = p.fps.clamp(1.0, 30.0);
         // Un pedido por cuadro de video, no por cuadro de pantalla.
-        let clave = ((t * fps + 0.01).floor() / fps, version, tam);
-        if self.ultimo != Some(clave) && self.pendientes == 0 {
-            self.ultimo = Some(clave);
+        let i = (t * fps + 0.01).floor() as i64;
+        if self.ultimo != Some((i, version, tam, tocando)) {
+            self.ultimo = Some((i, version, tam, tocando));
             self.pendientes = 1;
-            let _ = self.tx.send(Pedido { p: p.clone(), t: clave.0, tocando, tam });
+            let _ = self.tx.send(Pedido { p: p.clone(), version, i, t: i as f64 / fps, tocando, tam });
         }
         r
     }

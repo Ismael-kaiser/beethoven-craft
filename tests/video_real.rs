@@ -379,8 +379,9 @@ fn vista_previa_baja_la_calidad_si_no_alcanza() {
     let p = Arc::new(p);
     let mut v = VistaPrevia::default();
     let tam = (960, 540);
+    // En pausa puede llegar antes un adelanto chico: se espera el bueno.
     let mut pedir = |t: f64, tocando: bool| loop {
-        if let Some(c) = v.actualizar(&p, 1, t, tocando, tam) {
+        if let Some(c) = v.actualizar(&p, 1, t, tocando, tam).filter(|c| tocando || c.ancho == tam.0) {
             return (c.ancho, c.alto);
         }
         std::thread::sleep(Duration::from_millis(2));

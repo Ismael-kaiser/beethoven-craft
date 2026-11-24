@@ -115,7 +115,7 @@ impl App {
         });
         // Nombre del proyecto a la derecha
         let n = self.ruta.as_ref().map_or(crate::idioma::t("Proyecto sin guardar").into(), |r| nombre_de(r));
-        let n = if self.p != self.guardado { format!("{n} •") } else { n };
+        let n = if self.por_guardar() { format!("{n} •") } else { n };
         ui.painter().text(r.right_center() - vec2(12.0, 0.0), Align2::RIGHT_CENTER, n, fuente(14.0), TEXT_FAINT);
     }
 }

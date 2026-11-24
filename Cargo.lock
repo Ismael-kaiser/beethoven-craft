@@ -3985,6 +3985,7 @@ dependencies = [
  "eframe",
  "egui_kittest",
  "fontdue",
+ "memmap2",
  "midir",
  "miniz_oxide 0.8.9",
  "rayon",

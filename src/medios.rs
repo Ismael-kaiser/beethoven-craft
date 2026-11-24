@@ -7,14 +7,89 @@ use std::process::{Command, Stdio};
 /// Muestras por punto de la forma de onda.
 pub const PUNTO: usize = 256;
 
+/// Las muestras de un audio. Las largas viven en un archivo temporal y el sistema trae a la RAM solo lo que se va usando.
+pub enum Cuadros {
+    Ram(Vec<[f32; 2]>),
+    Disco(memmap2::Mmap),
+}
+
+impl std::ops::Deref for Cuadros {
+    type Target = [[f32; 2]];
+    fn deref(&self) -> &[[f32; 2]] {
+        match self {
+            Cuadros::Ram(v) => v,
+            // SEGURO: el archivo lo escribió esta app con pares de f32, mide un múltiplo de 8 bytes, la memoria mapeada
+            // empieza al inicio de una página y cualquier patrón de bits es un f32 válido.
+            Cuadros::Disco(m) => unsafe { std::slice::from_raw_parts(m.as_ptr().cast(), m.len() / 8) },
+        }
+    }
+}
+
+/// Desde cuántos cuadros se van al disco (20 s).
+const AL_DISCO: usize = SR as usize * 20;
+
+/// Archivo temporal para un audio. En Mac y Linux se borra del listado al abrirlo; en Windows, al soltarlo.
+struct Temporal {
+    f: std::io::BufWriter<std::fs::File>,
+    n: usize,
+    #[cfg(not(unix))]
+    ruta: PathBuf,
+}
+
+impl Temporal {
+    fn nuevo() -> Option<Temporal> {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let ruta = std::env::temp_dir().join(format!("beethoven-audio-{}-{n}", std::process::id()));
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&ruta).ok()?;
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(&ruta);
+        Some(Temporal {
+            f: std::io::BufWriter::with_capacity(1 << 18, f),
+            n: 0,
+            #[cfg(not(unix))]
+            ruta,
+        })
+    }
+    fn escribir(&mut self, v: &[[f32; 2]]) -> std::io::Result<()> {
+        for x in v {
+            self.f.write_all(&x[0].to_ne_bytes())?;
+            self.f.write_all(&x[1].to_ne_bytes())?;
+        }
+        self.n += v.len();
+        Ok(())
+    }
+    fn mapa(mut self) -> Option<Cuadros> {
+        self.f.flush().ok()?;
+        // SEGURO: nadie más tiene este archivo; nadie lo cambia ni lo recorta mientras esté mapeado.
+        let m = unsafe { memmap2::Mmap::map(self.f.get_ref()).ok()? };
+        // En Windows el archivo mapeado no se puede borrar todavía: lo limpia el sistema con los demás temporales.
+        #[cfg(not(unix))]
+        let _ = std::fs::remove_file(&self.ruta);
+        (m.len() == self.n * 8).then_some(Cuadros::Disco(m))
+    }
+}
+
 pub struct Audio {
-    pub cuadros: Vec<[f32; 2]>,
+    pub cuadros: Cuadros,
     /// (mínimo, máximo) cada `PUNTO` cuadros.
     pub onda: Vec<(f32, f32)>,
 }
 
 impl Audio {
     pub fn nuevo(cuadros: Vec<[f32; 2]>) -> Self {
+        Self::con(Cuadros::Ram(cuadros))
+    }
+    /// Trae a la RAM lo que está por sonar, para que leerlo del disco no atrase el sonido.
+    pub fn preparar(&self, de: f64, a: f64) {
+        if let Cuadros::Disco(_) = self.cuadros {
+            let i = ((de.max(0.0) * SR as f64) as usize).min(self.cuadros.len());
+            let j = ((a.max(0.0) * SR as f64) as usize).clamp(i, self.cuadros.len());
+            // Una muestra por página basta.
+            std::hint::black_box(self.cuadros[i..j].iter().step_by(512).map(|x| x[0]).sum::<f32>());
+        }
+    }
+    fn con(cuadros: Cuadros) -> Self {
         let onda = cuadros
             .chunks(PUNTO)
             .map(|c| c.iter().flatten().fold((0f32, 0f32), |(a, b), &x| (a.min(x), b.max(x))))
@@ -136,14 +211,44 @@ fn num(v: &serde_json::Value) -> Option<f64> {
 }
 
 pub fn decodificar(ruta: &Path) -> Result<Audio, String> {
-    decodificar_a(ruta, SR).map(Audio::nuevo)
+    // Respeta el arranque del audio dentro del video (algunos empiezan tarde).
+    leer_audio(&mut ffmpeg(), ruta, "aresample=async=1:first_pts=0")
+}
+
+/// Como `leer_f32`, pero lo largo va cayendo al disco mientras se lee.
+fn leer_audio(ffmpeg: &mut Command, ruta: &Path, filtro: &str) -> Result<Audio, String> {
+    let mut ram: Vec<[f32; 2]> = vec![];
+    let mut disco: Option<Temporal> = None;
+    let mut roto = false;
+    leer_f32_en(ffmpeg, ruta, SR, filtro, &mut |v| {
+        ram.extend_from_slice(v);
+        if ram.len() >= AL_DISCO && !roto {
+            if disco.is_none() {
+                disco = Temporal::nuevo();
+            }
+            match disco.as_mut().map(|d| d.escribir(&ram)) {
+                Some(Ok(())) => ram.clear(),
+                // Sin disco (lleno o sin permiso) se sigue en RAM.
+                _ => roto = true,
+            }
+        }
+    })?;
+    match disco {
+        Some(mut d) if !roto => {
+            d.escribir(&ram).map_err(|e| e.to_string())?;
+            d.mapa().map(Audio::con).ok_or_else(|| crate::idioma::t("No pude guardar el audio temporal").to_string())
+        }
+        // Se llenó a medias: se lee otra vez, completo en RAM.
+        Some(_) => decodificar_a(ruta, SR).map(Audio::nuevo),
+        None => Ok(Audio::nuevo(ram)),
+    }
 }
 
 /// Como `decodificar`, a otra velocidad y con el mismo tono.
 pub fn decodificar_a_velocidad(ruta: &Path, v: f64) -> Result<Audio, String> {
     // `atempo` acepta de 0.5 en adelante: más lento se hace en dos pasos.
     let f = if v < 0.5 { format!("atempo={},atempo={}", v.sqrt(), v.sqrt()) } else { format!("atempo={v}") };
-    decodificar_con(ruta, SR, &format!("aresample=async=1:first_pts=0,{f}")).map(Audio::nuevo)
+    leer_audio(&mut ffmpeg(), ruta, &format!("aresample=async=1:first_pts=0,{f}"))
 }
 
 /// Audio estéreo de un archivo a la frecuencia `sr`.
@@ -163,6 +268,12 @@ fn decodificar_con(ruta: &Path, sr: u32, filtro: &str) -> Result<Vec<[f32; 2]>, 
 }
 
 fn leer_f32(ffmpeg: &mut Command, ruta: &Path, sr: u32, filtro: &str) -> Result<Vec<[f32; 2]>, String> {
+    let mut v = vec![];
+    leer_f32_en(ffmpeg, ruta, sr, filtro, &mut |x| v.extend_from_slice(x))?;
+    Ok(v)
+}
+
+fn leer_f32_en(ffmpeg: &mut Command, ruta: &Path, sr: u32, filtro: &str, dar: &mut dyn FnMut(&[[f32; 2]])) -> Result<(), String> {
     let mut h = ffmpeg
         .arg("-i")
         .arg(ruta)
@@ -175,6 +286,7 @@ fn leer_f32(ffmpeg: &mut Command, ruta: &Path, sr: u32, filtro: &str) -> Result<
         .map_err(|e| crate::idioma::tf("No pude ejecutar ffmpeg: {}", &[&e]))?;
     let mut o = h.stdout.take().unwrap();
     let mut v: Vec<[f32; 2]> = vec![];
+    let mut total = 0;
     let mut b = vec![0u8; 1 << 16];
     let mut lleno = 0;
     loop {
@@ -184,19 +296,22 @@ fn leer_f32(ffmpeg: &mut Command, ruta: &Path, sr: u32, filtro: &str) -> Result<
         }
         lleno += n;
         let usar = lleno / 8 * 8;
+        v.clear();
         v.extend(b[..usar].chunks_exact(8).map(|c| {
             [f32::from_le_bytes(c[..4].try_into().unwrap()), f32::from_le_bytes(c[4..].try_into().unwrap())]
         }));
+        dar(&v);
+        total += v.len();
         b.copy_within(usar..lleno, 0);
         lleno -= usar;
     }
     let mut e = String::new();
     let _ = h.stderr.take().unwrap().read_to_string(&mut e);
     let _ = h.wait();
-    if v.is_empty() {
+    if total == 0 {
         return Err(crate::idioma::tf("No pude leer el audio: {}", &[&(e.lines().next().unwrap_or("archivo vacío"))]));
     }
-    Ok(v)
+    Ok(())
 }
 
 /// Escribe un WAV de 32 bits flotantes por partes; el encabezado se corrige al cerrar.

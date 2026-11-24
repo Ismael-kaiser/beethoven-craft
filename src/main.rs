@@ -7,6 +7,9 @@ fn main() -> eframe::Result {
     let abrir = std::env::args().skip(1).find(|a| !a.starts_with("--"));
     // Sin archivo arranca en el menú, que es una ventana más chica.
     let tam = if abrir.is_some() { toma_uno::ui::inicio::EDITOR } else { toma_uno::ui::inicio::MENU };
+    // Se dejan libres procesadores para la ventana y el sonido.
+    let n = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let _ = rayon::ThreadPoolBuilder::new().num_threads(n.saturating_sub(2).max(2)).build_global();
     let op = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Beethoven Craft")
