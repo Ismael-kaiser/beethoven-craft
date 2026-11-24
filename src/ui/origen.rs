@@ -223,7 +223,7 @@ impl App {
                 fade_out: 0.0,
                 invertido: false,
                 grupo: None,
-                velocidad: 1.0,
+                velocidad: 1.0, bus: None, color: None
             };
             self.p.pista(pista).unwrap().clips.push(clip);
             ids.push(id);

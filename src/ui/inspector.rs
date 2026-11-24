@@ -93,6 +93,7 @@ impl App {
                     ui.add(Label::new(RichText::new(crate::idioma::t(&q.nombre)).color(TEXT_DIM).size(13.0)).truncate());
                 });
                 self.perillas_clip(ui, id);
+                self.ruta_clip(ui, id);
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(crate::idioma::t("Velocidad")).color(TEXT_DIM));
                     let mut v = q.velocidad * 100.0;

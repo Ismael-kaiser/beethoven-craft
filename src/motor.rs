@@ -74,7 +74,21 @@ impl ClipRT {
     }
 }
 
+/// Un mezclador. Se llena mientras suenan las pistas y al final pasa por sus efectos.
+struct BusRT {
+    id: u64,
+    g: [f32; 2],
+    meta: [f32; 2],
+    /// Clips que llegan directo.
+    clips: Vec<ClipRT>,
+    cadena: Cadena,
+    pico: [f32; 2],
+    buf: Vec<f32>,
+}
+
 struct PistaRT {
+    /// Mezclador al que sale: su lugar en la lista.
+    bus: Option<usize>,
     id: u64,
     g: [f32; 2],
     meta: [f32; 2],
@@ -140,6 +154,7 @@ impl PistaRT {
 /// Todo lo que se arma fuera del hilo de audio antes de entregarlo al motor.
 pub struct Preparado {
     pistas: Vec<(PistaRT, Vec<Fx>)>,
+    buses: Vec<(BusRT, Vec<Fx>)>,
     fx_maestro: Vec<Fx>,
     g_maestro: f32,
     nuevos: HashMap<u64, FxRT>,
@@ -156,9 +171,12 @@ pub fn cuadros(s: f64) -> i64 {
 }
 
 pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparado {
-    let hay_solo = p.pistas.iter().any(|x| x.solo);
+    let hay_solo = p.pistas.iter().any(|x| x.solo) || p.buses.iter().any(|b| b.solo);
+    let bus_de = |id: Option<u64>| id.and_then(|id| p.buses.iter().position(|b| b.id == id));
+    // Los clips de cada mezclador, conforme se arman las pistas.
+    let mut de_bus: Vec<Vec<ClipRT>> = p.buses.iter().map(|_| vec![]).collect();
     let mut nuevos = HashMap::new();
-    for f in p.pistas.iter().flat_map(|t| &t.fx).chain(&p.fx_maestro) {
+    for f in p.pistas.iter().flat_map(|t| &t.fx).chain(p.buses.iter().flat_map(|b| &b.fx)).chain(&p.fx_maestro) {
         if !existentes.contains(&f.id) {
             nuevos.insert(
                 f.id,
@@ -170,13 +188,11 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
         .pistas
         .iter()
         .map(|t| {
-            let suena = !t.mudo && (!hay_solo || t.solo);
+            let bus = bus_de(t.bus);
+            let suena = !t.mudo && (!hay_solo || t.solo || bus.is_some_and(|b| p.buses[b].solo));
             let g = if suena { db(t.vol_db) } else { 0.0 };
             let meta = ganancias(g, t.pan);
-            let clips = t
-                .clips
-                .iter()
-                .filter_map(|c| {
+            let hacer = |c: &crate::modelo::Clip| {
                     Some(ClipRT {
                         inicio: cuadros(c.inicio),
                         // La versión estirada dura `1/velocidad`: el punto de arranque se corre igual.
@@ -188,8 +204,19 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
                         inv: c.invertido,
                         audio: almacen.get(&c.clave())?.clone(),
                     })
-                })
-                .collect();
+            };
+            let mut clips = vec![];
+            for c in &t.clips {
+                match bus_de(c.bus) {
+                    // Directo al mezclador: no pasa por el volumen ni los efectos de la pista, pero callarla sí lo calla.
+                    Some(b) => {
+                        if !t.mudo && (!hay_solo || t.solo || p.buses[b].solo) {
+                            de_bus[b].extend(hacer(c));
+                        }
+                    }
+                    None => clips.extend(hacer(c)),
+                }
+            }
             let mut eventos: Vec<(i64, bool, u8, u8)> = vec![];
             for (a, b, tecla, vel) in p.notas_de(t) {
                 eventos.push((a, true, tecla, vel));
@@ -203,6 +230,7 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
             // El instrumento se crea siempre aquí; si la pista ya sonaba, el motor conserva el suyo.
             let instr = t.instrumento.as_ref().map(|i| InstrRT::nuevo(i, muestra.clone()));
             let rt = PistaRT {
+                bus,
                 id: t.id,
                 g: meta,
                 meta,
@@ -221,8 +249,18 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
             (rt, t.fx.clone())
         })
         .collect();
+    let buses = p
+        .buses
+        .iter()
+        .zip(de_bus)
+        .map(|(b, clips)| {
+            let meta = ganancias(if b.mudo { 0.0 } else { db(b.vol_db) }, b.pan);
+            (BusRT { id: b.id, g: meta, meta, clips, cadena: Cadena::default(), pico: [0.0; 2], buf: vec![] }, b.fx.clone())
+        })
+        .collect();
     Preparado {
         pistas,
+        buses,
         fx_maestro: p.fx_maestro.clone(),
         g_maestro: db(p.maestro_db),
         nuevos,
@@ -234,6 +272,7 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
 #[derive(Default)]
 pub struct Motor {
     pistas: Vec<PistaRT>,
+    buses: Vec<BusRT>,
     maestro: Cadena,
     g_maestro: f32,
     meta_maestro: f32,
@@ -259,7 +298,7 @@ pub struct Motor {
 
 impl Motor {
     pub fn ids_fx(&self) -> Vec<u64> {
-        self.pistas.iter().flat_map(|p| &p.cadena.0).chain(&self.maestro.0).map(|f| f.id).collect()
+        self.pistas.iter().flat_map(|p| &p.cadena.0).chain(self.buses.iter().flat_map(|b| &b.cadena.0)).chain(&self.maestro.0).map(|f| f.id).collect()
     }
 
     /// Cambia al estado preparado conservando los efectos que ya sonaban. Devuelve lo viejo para soltarlo fuera.
@@ -269,6 +308,12 @@ impl Motor {
         let mut pistas_viejas = std::mem::take(&mut self.pistas);
         for p in &mut pistas_viejas {
             for f in p.cadena.0.drain(..) {
+                viejos.insert(f.id, f);
+            }
+        }
+        let mut buses_viejos = std::mem::take(&mut self.buses);
+        for b in &mut buses_viejos {
+            for f in b.cadena.0.drain(..) {
                 viejos.insert(f.id, f);
             }
         }
@@ -310,6 +355,16 @@ impl Motor {
             }
             self.pistas.push(p);
         }
+        for (mut b, fx) in n.buses {
+            b.cadena = cadena(&fx);
+            if let Some(v) = buses_viejos.iter_mut().find(|v| v.id == b.id) {
+                (b.g, b.pico) = (v.g, v.pico);
+                b.buf = std::mem::take(&mut v.buf);
+            }
+            // El espacio se aparta aquí, no en el hilo del sonido.
+            b.buf.resize(2 * BLOQUE, 0.0);
+            self.buses.push(b);
+        }
         for p in &mut self.pistas {
             p.automatizar(self.pos as f64 / SR as f64);
         }
@@ -320,11 +375,14 @@ impl Motor {
         if self.latencias() != antes {
             self.ir(self.pos);
         }
-        (viejos, pistas_viejas)
+        (viejos, pistas_viejas, buses_viejos)
     }
 
     fn latencias(&self) -> usize {
-        self.pistas.iter().map(|p| p.cadena.latencia()).sum::<usize>() * 1009 + self.maestro.latencia()
+        // Cambiar de mezclador también cambia lo que hay que adelantar.
+        let b: usize = self.buses.iter().map(|b| b.cadena.latencia()).sum();
+        let r: usize = self.pistas.iter().map(|p| p.bus.map_or(0, |i| self.buses[i].cadena.latencia() * 31)).sum();
+        self.pistas.iter().map(|p| p.cadena.latencia()).sum::<usize>() * 1009 + b * 10007 + r + self.maestro.latencia()
     }
 
     /// Salta a `pos`: limpia los efectos y precarga los que tienen retardo.
@@ -351,6 +409,29 @@ impl Motor {
                 t += n as i64;
             }
         }
+        // Los mezcladores con retardo: se les da por adelantado lo que les llegará.
+        for i in 0..self.buses.len() {
+            self.buses[i].cadena.limpiar();
+            self.buses[i].g = self.buses[i].meta;
+            let (mut t, fin) = (pos, pos + self.buses[i].cadena.latencia() as i64);
+            while t < fin {
+                let n = (fin - t).min(BLOQUE as i64) as usize;
+                let mut suma = [0f32; 2 * BLOQUE];
+                let suma = &mut suma[..2 * n];
+                self.buses[i].clips.iter().for_each(|c| c.sumar(t, suma));
+                for p in self.pistas.iter_mut().filter(|p| p.bus == Some(i)) {
+                    let b = &mut b[..2 * n];
+                    b.fill(0.0);
+                    p.fuente(t + p.cadena.latencia() as i64, b);
+                    p.cadena.procesar(b);
+                    for (o, f) in suma.chunks_exact_mut(2).zip(b.chunks_exact(2)) {
+                        (0..2).for_each(|k| o[k] += f[k] * p.g[k]);
+                    }
+                }
+                self.buses[i].cadena.procesar(suma);
+                t += n as i64;
+            }
+        }
         let mut falta = self.maestro.latencia();
         while falta > 0 {
             let n = falta.min(BLOQUE);
@@ -366,13 +447,22 @@ impl Motor {
         let n = out.len() / 2;
         self.tmp.resize(out.len(), 0.0);
         let t0 = self.pos_bus;
+        for b in &mut self.buses {
+            b.buf.resize(out.len(), 0.0);
+            b.buf.fill(0.0);
+            if self.tocando || precarga {
+                let t = t0 + b.cadena.latencia() as i64;
+                let BusRT { clips, buf, .. } = b;
+                clips.iter().for_each(|c| c.sumar(t, buf));
+            }
+        }
         for p in &mut self.pistas {
             if self.tocando {
                 p.automatizar(t0 as f64 / SR as f64);
             }
             let b = &mut self.tmp[..];
             b.fill(0.0);
-            let t = t0 + p.cadena.latencia() as i64;
+            let t = t0 + p.cadena.latencia() as i64 + p.bus.map_or(0, |i| self.buses[i].cadena.latencia() as i64);
             if self.tocando || precarga {
                 p.fuente(t, b);
             } else if let Some(i) = &mut p.instr {
@@ -388,7 +478,11 @@ impl Motor {
             }
             p.cadena.procesar(b);
             let paso = [(p.meta[0] - p.g[0]) / n as f32, (p.meta[1] - p.g[1]) / n as f32];
-            for (f, o) in b.chunks_exact(2).zip(out.chunks_exact_mut(2)) {
+            let destino = match p.bus {
+                Some(i) => &mut self.buses[i].buf[..],
+                None => &mut out[..],
+            };
+            for (f, o) in b.chunks_exact(2).zip(destino.chunks_exact_mut(2)) {
                 for k in 0..2 {
                     p.g[k] += paso[k];
                     let x = f[k] * p.g[k];
@@ -397,6 +491,20 @@ impl Motor {
                 }
             }
             p.g = p.meta;
+        }
+        for b in &mut self.buses {
+            let BusRT { buf, cadena, g, meta, pico, .. } = b;
+            cadena.procesar(buf);
+            let paso = [(meta[0] - g[0]) / n as f32, (meta[1] - g[1]) / n as f32];
+            for (f, o) in buf.chunks_exact(2).zip(out.chunks_exact_mut(2)) {
+                for k in 0..2 {
+                    g[k] += paso[k];
+                    let x = f[k] * g[k];
+                    pico[k] = pico[k].max(x.abs());
+                    o[k] += x;
+                }
+            }
+            *g = *meta;
         }
         self.pos_bus += n as i64;
     }
@@ -470,7 +578,7 @@ impl Motor {
 
     /// Picos desde la última lectura: por pista y del maestro.
     pub fn picos(&mut self) -> (HashMap<u64, [f32; 2]>, [f32; 2]) {
-        let m = self.pistas.iter_mut().map(|p| (p.id, std::mem::take(&mut p.pico))).collect();
+        let m = self.pistas.iter_mut().map(|p| (p.id, std::mem::take(&mut p.pico))).chain(self.buses.iter_mut().map(|b| (b.id, std::mem::take(&mut b.pico)))).collect();
         (m, std::mem::take(&mut self.pico_maestro))
     }
 }
@@ -504,6 +612,7 @@ pub fn cola(p: &Proyecto) -> f64 {
     p.pistas
         .iter()
         .flat_map(|t| &t.fx)
+        .chain(p.buses.iter().flat_map(|b| &b.fx))
         .chain(&p.fx_maestro)
         .filter(|f| f.activo)
         .map(|f| match f.tipo {

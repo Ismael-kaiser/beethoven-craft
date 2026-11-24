@@ -1099,3 +1099,50 @@ fn proyectos_del_menu() {
     assert_eq!((h.state().p.ancho, h.state().p.alto, h.state().p.fijo), (1080, 1920, true));
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// Un audio elegido se manda a un mezclador nuevo, se le pone nombre y sus efectos van aparte; y los clips se tiñen.
+#[test]
+fn mezclador_y_color_de_clips() {
+    use toma_uno::modelo::Clip;
+    use toma_uno::ui::Canal;
+    let mut h = arnes_corto();
+    let a = &mut h.state_mut().p;
+    let pista = a.nueva_pista("Pista de voz");
+    let mut ids = vec![];
+    for k in 0..2 {
+        let id = a.id();
+        let clip = Clip { id, ruta: format!("/no/{k}.wav").into(), nombre: format!("Toma {k}"), inicio: k as f64 * 6.0, desde: 0.0, dur: 5.0, total: 5.0, ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0, bus: None, color: None };
+        a.pista(pista).unwrap().clips.push(clip);
+        ids.push(id);
+    }
+    h.state_mut().clip = Some(ids[0]);
+    h.state_mut().seleccion = ids.iter().copied().collect();
+    pestana(&mut h, "Audio");
+    h.run_steps(4);
+    h.get_by_label("→ Por su pista").click();
+    h.run_steps(4);
+    foto(&mut h, "mezclador-menu");
+    h.get_by_label("+ Nuevo mezclador").click();
+    h.run_steps(4);
+    // Los dos elegidos van al nuevo, y el panel enseña sus efectos.
+    let b = h.state().p.buses[0].id;
+    assert!(ids.iter().all(|i| h.state_mut().p.clip(*i).unwrap().bus == Some(b)));
+    assert_eq!(h.state().canal, Canal::Bus(b));
+    let f = h.state_mut().p.nuevo_fx(toma_uno::efectos::TipoFx::Reverberacion);
+    h.state_mut().fx_de(Canal::Bus(b)).push(f);
+    h.state_mut().p.bus(b).unwrap().nombre = "Voces".into();
+    h.run_steps(4);
+    let t = &h.state().p;
+    assert!(t.pistas.iter().all(|p| p.fx.is_empty()) && t.buses[0].fx.len() == 1);
+    // Color: a los dos a la vez.
+    h.get_by_label("Color").click();
+    h.run_steps(4);
+    foto(&mut h, "color-menu");
+    h.get_by_label("Turquesa").click();
+    h.run_steps(4);
+    assert!(ids.iter().all(|i| h.state_mut().p.clip(*i).unwrap().color == Some([0x2f, 0x9c, 0x92])));
+    foto(&mut h, "mezclador");
+    h.state_mut().borrar_bus(b);
+    h.run_steps(3);
+    assert!(h.state_mut().p.clip(ids[0]).unwrap().bus.is_none());
+}

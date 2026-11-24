@@ -40,6 +40,8 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Canal {
     Pista(u64),
+    /// Mezclador.
+    Bus(u64),
     Maestro,
 }
 
@@ -474,7 +476,7 @@ impl App {
         if !self.p.pistas.iter().any(|p| p.armada) {
             let id = match self.canal {
                 Canal::Pista(id) => id,
-                Canal::Maestro => self.p.nueva_pista_grabacion(),
+                _ => self.p.nueva_pista_grabacion(),
             };
             self.p.armar(id);
         }
@@ -609,7 +611,7 @@ impl App {
             fade_out: 0.0,
             invertido: false,
             grupo: None,
-            velocidad: c.mov.velocidad,
+            velocidad: c.mov.velocidad, bus: None, color: None
         };
         let d = Destino2::PistaNueva { nombre: crate::idioma::t("Audio del video").into(), inicio: c.inicio, molde: Some(molde), con: vec![c.id] };
         self.leer_audio(c.ruta.clone(), d, "Leyendo el audio");
@@ -898,7 +900,7 @@ impl App {
             fade_out: 0.0,
             invertido: false,
             grupo: None,
-            velocidad: 1.0,
+            velocidad: 1.0, bus: None, color: None
         };
         let mut vincular: Vec<u64> = vec![];
         let pista = match destino {
@@ -1911,6 +1913,9 @@ impl App {
             if self.pestana != Pestana::Editor {
                 self.instrumento_ui(ui);
             }
+            if let Some(id) = self.clip.filter(|id| self.p.clip(*id).is_some()) {
+                Frame::new().inner_margin(Margin::symmetric(8, 4)).show(ui, |ui| self.ruta_clip(ui, id));
+            }
             self.panel_fx(ui)
         });
         if matches!(self.pestana, Pestana::Rack | Pestana::Piano) {
@@ -2190,7 +2195,7 @@ fn hilo_respaldo() -> Sender<Proyecto> {
 
 /// ¿Suenan igual? Lo de la imagen no cuenta.
 fn misma_mezcla(a: &Proyecto, b: &Proyecto) -> bool {
-    a.pistas == b.pistas && a.maestro_db == b.maestro_db && a.fx_maestro == b.fx_maestro && a.bpm == b.bpm && a.patrones == b.patrones && a.ajuste_ms == b.ajuste_ms && a.fin() == b.fin()
+    a.pistas == b.pistas && a.buses == b.buses && a.maestro_db == b.maestro_db && a.fx_maestro == b.fx_maestro && a.bpm == b.bpm && a.patrones == b.patrones && a.ajuste_ms == b.ajuste_ms && a.fin() == b.fin()
 }
 
 pub fn es_imagen(r: &Path) -> bool {

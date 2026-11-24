@@ -37,6 +37,12 @@ pub struct Clip {
     pub grupo: Option<u64>,
     #[serde(default = "uno")]
     pub velocidad: f64,
+    /// Mezclador al que va directo; `None`: suena por su pista.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bus: Option<u64>,
+    /// Color con que se tiñe en la línea de tiempo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 3]>,
 }
 
 fn uno() -> f64 {
@@ -521,6 +527,9 @@ pub struct ClipVideo {
     /// Efectos conectados por nodos.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nodos: Option<crate::nodos::Grafo>,
+    /// Color con que se tiñe en la línea de tiempo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 3]>,
 }
 
 impl ClipVideo {
@@ -602,6 +611,21 @@ pub struct Pista {
     pub bloqueada: bool,
     #[serde(default)]
     pub auto: Vec<Automatizacion>,
+    /// Mezclador al que sale; `None`: al maestro.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bus: Option<u64>,
+}
+
+/// Mezclador: junta lo que se le mande, con sus efectos, volumen y paneo, y sale al maestro.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Bus {
+    pub id: u64,
+    pub nombre: String,
+    pub vol_db: f32,
+    pub pan: f32,
+    pub mudo: bool,
+    pub solo: bool,
+    pub fx: Vec<Fx>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -612,6 +636,8 @@ pub struct Proyecto {
     pub capas: Vec<Capa>,
     pub maestro_db: f32,
     pub fx_maestro: Vec<Fx>,
+    #[serde(default)]
+    pub buses: Vec<Bus>,
     pub sig_id: u64,
     /// Formato del video exportado; lo fija el primer video importado.
     pub ancho: u32,
@@ -641,6 +667,7 @@ impl Proyecto {
             capas: una_capa(),
             maestro_db: 0.0,
             fx_maestro: vec![],
+            buses: vec![],
             sig_id: 1,
             ancho: 1920,
             alto: 1080,
@@ -689,8 +716,28 @@ impl Proyecto {
             patrones: vec![],
             bloqueada: false,
             auto: vec![],
+            bus: None,
         });
         id
+    }
+
+    pub fn nuevo_bus(&mut self, nombre: &str) -> u64 {
+        let id = self.id();
+        self.buses.push(Bus { id, nombre: nombre.into(), vol_db: 0.0, pan: 0.0, mudo: false, solo: false, fx: vec![] });
+        id
+    }
+
+    pub fn bus(&mut self, id: u64) -> Option<&mut Bus> {
+        self.buses.iter_mut().find(|b| b.id == id)
+    }
+
+    /// Quita un mezclador: lo que iba a él vuelve a su pista o al maestro.
+    pub fn quitar_bus(&mut self, id: u64) {
+        self.buses.retain(|b| b.id != id);
+        for p in &mut self.pistas {
+            p.bus = p.bus.filter(|b| *b != id);
+            p.clips.iter_mut().for_each(|c| c.bus = c.bus.filter(|b| *b != id));
+        }
     }
 
     /// Pista lista para cantar: armada y con ecualizador y compresor de voz (se pueden quitar o cambiar).
@@ -816,6 +863,7 @@ impl Proyecto {
             grupo: None,
             animado: false,
             nodos: None,
+            color: None,
         }
     }
 

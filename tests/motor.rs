@@ -176,6 +176,80 @@ fn plugins_del_daw() {
     assert!(nivel(&quieto, 0) < 1e-3 && nivel(&suena, 0) > 5e-3, "{} {}", nivel(&quieto, 0), nivel(&suena, 0));
 }
 
+// ---- mezcladores
+
+/// Un clip o una pista por un mezclador: su volumen y sus efectos, callar, solo, y que no se atrase.
+#[test]
+fn mezcladores() {
+    let x: Vec<f32> = seno(440.0, 0.5, N);
+    let rms = |y: &[f32]| (y.iter().map(|v| v * v).sum::<f32>() / y.len() as f32).sqrt();
+    let (p0, a, clip) = proyecto(x.clone());
+    let seco = mezcla(&p0, &a, 0.5);
+    // Sin tocar nada, pasar por un mezclador no cambia el sonido.
+    let con = |f: &dyn Fn(&mut Proyecto, u64)| {
+        let mut p = p0.clone();
+        let b = p.nuevo_bus("Voces");
+        f(&mut p, b);
+        mezcla(&p, &a, 0.5)
+    };
+    let por_clip = |p: &mut Proyecto, b: u64| p.clip(clip).unwrap().bus = Some(b);
+    let por_pista = |p: &mut Proyecto, b: u64| p.pistas[0].bus = Some(b);
+    let igual = |y: &[f32], z: &[f32]| y.iter().zip(z).all(|(a, b)| (a - b).abs() < 1e-5);
+    assert!(igual(&con(&por_clip), &seco) && igual(&con(&por_pista), &seco));
+    // El volumen del mezclador; el clip directo no pasa por el de la pista.
+    let baja = con(&|p, b| {
+        por_clip(p, b);
+        p.buses[0].vol_db = -6.0;
+        p.pistas[0].vol_db = -60.0;
+    });
+    assert!((rms(&baja) / rms(&seco) - 0.501).abs() < 0.01, "{}", rms(&baja) / rms(&seco));
+    let baja = con(&|p, b| {
+        por_pista(p, b);
+        p.buses[0].vol_db = -6.0;
+        p.pistas[0].vol_db = -6.0;
+    });
+    assert!((rms(&baja) / rms(&seco) - 0.251).abs() < 0.01, "la pista y luego el mezclador");
+    // Callarlo, y callar la pista del clip.
+    for f in [&(|p: &mut Proyecto, b: u64| { por_clip(p, b); p.buses[0].mudo = true; }) as &dyn Fn(&mut Proyecto, u64), &|p, b| { por_clip(p, b); p.pistas[0].mudo = true; }] {
+        assert!(rms(&con(f)) < 1e-5);
+    }
+    // Solo: lo que va a ese mezclador se oye y lo demás no.
+    let mut p = p0.clone();
+    let b = p.nuevo_bus("A");
+    let otra = p.nueva_pista("otra");
+    let mut c = p.clip(clip).unwrap().clone();
+    c.id = p.id();
+    c.bus = Some(b);
+    p.pista(otra).unwrap().clips.push(c);
+    let doble = mezcla(&p, &a, 0.5);
+    p.buses[0].solo = true;
+    let sola = mezcla(&p, &a, 0.5);
+    assert!((rms(&doble) / rms(&sola) - 2.0).abs() < 0.05 && igual(&sola, &seco));
+    // Un efecto con retardo en el mezclador no atrasa: todo sale a tiempo, también desde en medio.
+    for por in [&por_clip as &dyn Fn(&mut Proyecto, u64), &por_pista] {
+        let mut p = p0.clone();
+        let b = p.nuevo_bus("Limitado");
+        por(&mut p, b);
+        let f = p.nuevo_fx(TipoFx::Limitador);
+        p.buses[0].fx.push(Fx { p: vec![0.0, 0.0, 60.0], ..f });
+        assert!(crear(TipoFx::Limitador, &p.buses[0].fx[0].p).latencia() > 0);
+        for ini in [0i64, 7000] {
+            let mut y = vec![];
+            motor::mezclar_desde(&p, &a, ini, 8000, |_, b| { y.extend_from_slice(b); true });
+            let z = &x[ini as usize * 2..][..y.len().min(x.len() - ini as usize * 2)];
+            let dif = y.iter().zip(z).skip(400).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+            assert!(dif < 0.03, "a tiempo desde {ini}: {dif}");
+        }
+    }
+    // Quitarlo regresa todo a su pista.
+    let mut p = p0.clone();
+    let b = p.nuevo_bus("X");
+    por_clip(&mut p, b);
+    por_pista(&mut p, b);
+    p.quitar_bus(b);
+    assert!(p == Proyecto { sig_id: p.sig_id, ..p0.clone() });
+}
+
 // ---- mezcla
 
 fn audio(x: Vec<f32>) -> Arc<Audio> {
@@ -193,7 +267,7 @@ fn proyecto(x: Vec<f32>) -> (Proyecto, Almacen, u64) {
     let ruta = PathBuf::from("/x.wav");
     p.pista(pista).unwrap().clips.push(Clip {
         id, ruta: ruta.clone(), nombre: "x".into(), inicio: 0.0, desde: 0.0, dur: total, total,
-        ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0,
+        ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0, bus: None, color: None
     });
     (p, Almacen::from([(ruta, a)]), id)
 }

@@ -887,6 +887,8 @@ impl App {
                 Contenido::Forma(_) => (c(0x56331f), c(0x8a5432)),
                 Contenido::Color(_) => (c(0x3c3c46), c(0x5c5c6c)),
             };
+            let tinte = v.color.map(|[r, g, b]| Color32::from_rgb(r, g, b));
+            let (fondo, cinta) = tinte.map_or((fondo, cinta), |x| (mezcla(x, c(0x141414), 0.55), mezcla(x, c(0x202020), 0.25)));
             pr.rect_filled(rc, 5, fondo);
             let tit = Rect::from_min_size(rc.min, vec2(rc.width(), 17.0));
             let cuerpo = Rect::from_min_max(pos2(rc.left(), rc.top() + 17.0), rc.max);
@@ -901,6 +903,9 @@ impl App {
                     pm.image(tl.tex[k].id(), Rect::from_min_size(pos2(x, cuerpo.top()), tam), uv, Color32::from_gray(190));
                     x += tam.x;
                 }
+            }
+            if let Some(x) = tinte {
+                pr.rect_filled(cuerpo, CornerRadius { nw: 0, ne: 0, sw: 5, se: 5 }, x.gamma_multiply(0.3));
             }
             pr.rect_filled(tit, CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, cinta);
             for (tr, izq) in [(&v.entrada, true), (&v.salida, false)] {
@@ -975,6 +980,7 @@ impl App {
                         }
                     }
                 });
+                ui.menu_button(crate::idioma::t("Color del clip"), |ui| self.menu_color(ui, v.id));
                 ui.separator();
                 if ui.button(crate::idioma::t("Dividir en el cursor")).clicked() {
                     ac.push(Accion::Dividir(v.id, self.ahora(), false));
@@ -1112,6 +1118,7 @@ impl App {
                     });
                 }
             });
+            ui.menu_button(crate::idioma::t("Salida al mezclador"), |ui| self.menu_salida(ui, id));
             if ui.button(crate::idioma::t("Subir")).clicked() {
                 ac.push(Accion::SubirPista(i, -1));
             }
@@ -1174,6 +1181,7 @@ impl App {
             if !rc.intersects(carril) && self.linea.arrastre.as_ref().is_none_or(|a| a.id != q.id) {
                 continue;
             }
+            let col = q.color.map_or(col, |[r, g, b]| Color32::from_rgb(r, g, b));
             let gris = |x: Color32| if mudo { mezcla(x, c(0x404040), 0.75) } else { x };
             pr.rect_filled(rc, 5, gris(mezcla(col, c(0x141414), 0.62)));
             let tit = Rect::from_min_size(rc.min, vec2(rc.width(), 18.0));
@@ -1202,6 +1210,9 @@ impl App {
                 let falta = !self.almacen.contains_key(&q.clave());
                 nombre = crate::idioma::tf("[{} %{}] {}", &[&format!("{:.0}", q.velocidad * 100.0), &(if falta { "…" } else { "" }), &nombre]);
             }
+            if let Some(b) = q.bus.and_then(|b| self.p.bus(b)) {
+                nombre = format!("→ {} · {nombre}", b.nombre);
+            }
             titulo_clip(ui, tr, 20.0, &nombre, Color32::WHITE);
             self.marco(&pr, rc, q.id, q.grupo);
             if self.elegido(q.id) {
@@ -1220,7 +1231,7 @@ impl App {
                 self.tocar_clip(ui, &resp, rc, q.id, true, bloqueada, a_t, ac);
             }
             if resp.clicked() || resp.drag_started() {
-                self.canal = Canal::Pista(id);
+                self.canal_de_clip(q.id);
             }
             if resp.double_clicked() {
                 ac.push(Accion::Editar(q.id));
@@ -1238,6 +1249,8 @@ impl App {
                 if ui.button(crate::idioma::t("Separar voz e instrumental")).clicked() {
                     ac.push(Accion::Separar(q.id));
                 }
+                ui.menu_button(crate::idioma::t("Mandar al mezclador"), |ui| self.menu_bus_clip(ui, q.id));
+                ui.menu_button(crate::idioma::t("Color del clip"), |ui| self.menu_color(ui, q.id));
                 self.menu_vinculo(ui, q.id, q.grupo, ac);
                 ui.separator();
                 if ui.button(crate::idioma::t("Borrar")).clicked() {

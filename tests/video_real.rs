@@ -32,7 +32,7 @@ fn proyecto() -> (Proyecto, Almacen) {
     let (id, total) = (p.id(), a.dur());
     p.pista(t).unwrap().clips.push(Clip {
         id, ruta: v.clone(), nombre: "v".into(), inicio: 0.0, desde: 0.0, dur: total, total,
-        ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0,
+        ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0, bus: None, color: None
     });
     (p, Almacen::from([(v, a)]))
 }

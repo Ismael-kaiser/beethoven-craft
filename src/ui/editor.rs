@@ -92,6 +92,7 @@ impl App {
                 self.ir(tm);
             }
         }
+        let pista = self.p.pistas.iter().find(|p| p.clips.iter().any(|c| c.id == id)).map(|p| p.id);
         match accion {
             "" => {}
             "Dejar solo la selección" => {
@@ -99,13 +100,13 @@ impl App {
                     self.p.quitar_tramo(id, b, fin, false);
                     // El recorte de la izquierda conserva el resto, que pudo cambiar de id al dividir.
                     self.p.quitar_tramo(id, q.inicio, a, false);
-                    self.reelegir(a);
+                    self.reelegir(pista, a);
                 }
             }
             "Silenciar" | "Cortar y juntar" => {
                 if let Some((a, b)) = sel {
                     self.p.quitar_tramo(id, a, b, accion != "Silenciar");
-                    self.reelegir(q.inicio);
+                    self.reelegir(pista, q.inicio);
                 }
             }
             "Dividir" => {
@@ -131,9 +132,9 @@ impl App {
     }
 
     /// Tras una edición, vuelve a elegir el clip que empieza en `t` (dividir crea ids nuevos).
-    fn reelegir(&mut self, t: f64) {
+    fn reelegir(&mut self, pista: Option<u64>, t: f64) {
         self.editor.sel = None;
-        let Canal::Pista(p) = self.canal else { return };
+        let Some(p) = pista else { return };
         self.clip = self
             .p
             .pista(p)

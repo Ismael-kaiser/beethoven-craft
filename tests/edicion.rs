@@ -16,7 +16,7 @@ fn base() -> (Proyecto, [u64; 3]) {
         let id = p.id();
         p.pista(pista).unwrap().clips.push(Clip {
             id, ruta: "/v.mp4".into(), nombre: "v".into(), inicio: k as f64 * 4.0, desde: 2.0, dur: 4.0, total: 8.0,
-            ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0,
+            ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: None, velocidad: 1.0, bus: None, color: None
         });
         p.vincular(&[ids[k], id]);
     }
