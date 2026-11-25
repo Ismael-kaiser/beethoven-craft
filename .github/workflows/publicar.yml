@@ -23,8 +23,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            daw/target
-          key: windows-${{ hashFiles('Cargo.lock', 'daw/Cargo.lock') }}
+          key: windows-${{ hashFiles('Cargo.lock', 'daw-demo/Cargo.lock') }}
       - name: ffmpeg
         run: |
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ff.zip
@@ -39,12 +38,6 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$v" empaque\instalador.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Move-Item "Beethoven Craft-windows.zip" "dist\BeethovenCraft-$v-windows-portable.zip"
-      - name: El DAW arranca y dibuja
-        run: |
-          & "dist\Beethoven Craft\beethoven-daw.exe" --screenshot dist\daw.png --view score --demo --no-rack --no-browser --size 1300x800 | Out-Default
-          if (!(Test-Path dist\daw.png)) { exit 1 }
-        env:
-          BEETHOVEN_IDIOMA: es
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -70,8 +63,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            daw/target
-          key: linux-${{ hashFiles('Cargo.lock', 'daw/Cargo.lock') }}
+          key: linux-${{ hashFiles('Cargo.lock', 'daw-demo/Cargo.lock') }}
       - name: Compilar y empacar
         run: |
           sh empaque/empacar-linux.sh
@@ -95,8 +87,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            daw/target
-          key: mac-${{ hashFiles('Cargo.lock', 'daw/Cargo.lock') }}
+          key: mac-${{ hashFiles('Cargo.lock', 'daw-demo/Cargo.lock') }}
       - name: Compilar y empacar
         run: |
           zsh empaque/empacar.sh

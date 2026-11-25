@@ -2,6 +2,9 @@
 // En Windows, sin ventana de consola detrás de la app.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 fn main() -> eframe::Result {
+    if toma_uno::ia::mcp::puente() {
+        return Ok(());
+    }
     // Si algo falla, queda anotado en «Errores.log» (la app abierta desde el Finder no tiene dónde mostrarlo).
     let antes = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

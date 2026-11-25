@@ -3,13 +3,19 @@
 Compositor de video y audio en español (y en inglés), hecho en Rust. Son dos programas en una app:
 
 - **Beethoven Movie**: editor de video con animación, nodos, filtros y mezcla de sonido.
-- **Beethoven DAW**: estudio de música con partitura editable, ritmos, ideas, piano roll y plugins VST/CLAP.
+- **Beethoven DAW**: estudio de música con Playlist, Mixer, unos 195 instrumentos grabados, efectos en Lua y plugins VST3/CLAP.
 
 Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
 
 > *English: a free video editor (Beethoven Movie) and music studio (Beethoven DAW) in one app, written in Rust. The interface is available in Spanish and English. Docs are in Spanish for now.*
 
 ![Menú principal](docs/img/menu.jpg)
+
+## Novedades de la 0.12
+
+- **Beethoven DAW nuevo**, escrito desde cero. Las canciones del anterior (`.beethoven`) se abren con la 0.11.
+- **Asistente de IA** en Movie y en el DAW, con la IA que tú tengas.
+- **Vistas previas al instante** al meter un video.
 
 ## Novedades de la 0.11
 
@@ -43,7 +49,7 @@ Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
 |---|---|
 | ![Recuperar](docs/img/v11-recuperar.jpg) | ![Actualizar](docs/img/v11-actualizar.jpg) |
 
-Todo lo nuevo, en las [notas de la versión](https://github.com/Ismael-kaiser/beethoven-craft/releases/tag/v0.11.0).
+Todo lo nuevo, en las [notas de cada versión](https://github.com/Ismael-kaiser/beethoven-craft/releases).
 
 ## Beethoven Movie
 
@@ -59,7 +65,7 @@ Todo lo nuevo, en las [notas de la versión](https://github.com/Ismael-kaiser/be
 - **66 filtros** propios, ruedas de color, onda RGB, histograma y vectorscopio.
 - **Panel de archivos**: carpetas, subcarpetas, búsqueda, miniaturas y vista previa; todo se arrastra a las pistas.
 - **Clip vacío**: aplica efectos a todo lo que hay debajo, textos incluidos.
-- **Audio** con los plugins de Beethoven DAW: ecualizador de siete bandas, vocoder, moldeador estéreo y más.
+- **Audio** con ecualizador de siete bandas, vocoder, moldeador estéreo y más.
 - Consola de audio, instrumentos, grabación y separador de voz en tu propia máquina.
 - **Atajos de teclado** que se pueden cambiar todos.
 
@@ -67,19 +73,17 @@ Guía completa: [docs/movie.md](docs/movie.md)
 
 ## Beethoven DAW
 
-| Partitura | Ritmo |
-|---|---|
-| ![Partitura](docs/img/daw-partitura.jpg) | ![Ritmo](docs/img/daw-ritmo.jpg) |
-| **Ideas** | **Notas** |
-| ![Ideas](docs/img/daw-ideas.jpg) | ![Notas](docs/img/daw-notas.jpg) |
+El estudio de música, escrito desde cero para Beethoven Craft (carpeta `daw-demo/`, MIT o Apache-2.0).
 
-- Todo en pestañas, como un navegador: Arreglo, Ritmo, Notas, Mezcla, Partitura, Ideas y Exportar.
-- **Partitura**: se compone pintando notas en el pentagrama; es la misma música que el piano roll.
-- **Ritmo**: 16 ritmos listos (rock, cumbia, reggaeton, banda, corrido tumbado, trap…).
-- **Ideas**: acordes, progresiones por ánimo y generadores de bajo, arpegio, melodía y segunda voz.
-- Plugins **CLAP, VST3 y VST2**. Exporta WAV, FLAC, MP3, OGG, MIDI y MusicXML.
+- **La Playlist es el fondo**; el **Mixer** es otra pestaña o ventana; Ritmo, Piano roll e Instrumento son ventanas encima. Con el metal y el vidrio de Movie.
+- **Pistas de audio** (WAV, MP3, OGG, FLAC, M4A, video…), grabación, Mixer de 12 pistas con envíos y 25 efectos.
+- **Instrumentos grabados** nota por nota (banco MuseScore General, MIT), por familia: pianos, guitarras, cuerdas, orquesta, metales, maderas, coros, sintetizadores, baterías y percusión.
+- **Crear en Lua**: tus propios instrumentos y efectos, con editor dentro de la app; cada uno puede traer su carpeta con imágenes PNG y su propio logo.
+- **Plugins VST3 y CLAP**, SoundFont (.sf2 y .sf3), SFZ y audio suelto como instrumentos; teclados MIDI.
+- **Abre `.flp`** y MIDI; exporta WAV, pistas separadas, MP3, FLAC, OGG y M4A.
+- **Asistente de IA** que edita el proyecto (el mismo que en Movie).
 
-Guía completa: [docs/daw.md](docs/daw.md)
+Guía completa: [daw-demo/README.md](daw-demo/README.md)
 
 ## Instalar
 
@@ -120,9 +124,9 @@ Grabaciones, voces separadas y autoguardado van en la carpeta de videos del usua
 ## Licencia y créditos
 
 - **El código propio de Beethoven Craft**: [MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras.
-- **Lo que viene de Lemon Studio** (`daw/`, `crates/audio-fx`, y los archivos de Movie que dice [AVISOS.md](AVISOS.md)): [GPL-3.0 o posterior](LICENSE), como lo puso su autor.
+- **Lo que viene de Lemon Studio** (`crates/audio-fx` y los archivos de Movie que dice [AVISOS.md](AVISOS.md)): [GPL-3.0 o posterior](LICENSE), como lo puso su autor.
 - **La app completa**, porque incluye esas piezas, se reparte bajo GPL-3.0 o posterior.
 
-Beethoven DAW es una versión modificada de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio), y Movie usa piezas de EffectCraft, FilmCraft y AniCraft. Todos los créditos y licencias están en [AVISOS.md](AVISOS.md).
+Algunas piezas de Movie (efectos de audio, colores y controles) vienen de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio), y Movie usa piezas de EffectCraft, FilmCraft y AniCraft. Todos los créditos y licencias están en [AVISOS.md](AVISOS.md).
 
 Este proyecto no está afiliado a Lemon Studio, ArtCraft, FL Studio (Image-Line), DaVinci Resolve (Blackmagic Design) ni CapCut.

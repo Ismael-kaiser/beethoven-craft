@@ -66,11 +66,11 @@ def copias_viejas(carpeta):
 
 def main():
     total, cuantos = 0, 0
-    for c in ["target/release/deps", "target/release/examples", "daw/target/release/deps", "daw/target/release/examples"]:
+    for c in ["target/release/deps", "target/release/examples"]:
         for r in copias_viejas(os.path.join(RAIZ, c)):
             total += quitar(r)
             cuantos += 1
-    for c in ["target/debug", "daw/target/debug"]:
+    for c in ["target/debug"]:
         r = os.path.join(RAIZ, c)
         if os.path.isdir(r):
             total += quitar(r)

@@ -95,7 +95,7 @@ impl Proyecto {
         self.tramos().into_iter().find(|t| t.id == id)
     }
 
-    fn bloqueado(&self, c: Carril) -> bool {
+    pub fn bloqueado(&self, c: Carril) -> bool {
         match c {
             Carril::Video(i) => self.capas.get(i).is_some_and(|c| c.bloqueada),
             Carril::Audio(id) => self.pistas.iter().any(|p| p.id == id && p.bloqueada),

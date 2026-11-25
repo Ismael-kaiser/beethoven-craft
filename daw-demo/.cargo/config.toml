@@ -1,0 +1,3 @@
+# Comparte lo ya compilado de Movie: no se vuelve a compilar egui ni wgpu.
+[build]
+target-dir = "../target"

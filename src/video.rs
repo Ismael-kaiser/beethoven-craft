@@ -1062,16 +1062,43 @@ pub fn tira_imagen(ruta: &std::path::Path, razon: f64) -> Option<Tira> {
     (s.stdout.len() == ancho * alto * 4).then(|| Tira { paso: 1e9, ancho, alto, rgba: vec![s.stdout] })
 }
 
-pub fn tira(ruta: &std::path::Path, dur: f64, razon: f64) -> Option<Tira> {
+/// Las miniaturas de un video. Se entregan conforme salen, de la primera a la última; `false` para dejar de hacerlas.
+pub fn tira(ruta: &std::path::Path, dur: f64, razon: f64, mut entregar: impl FnMut(Tira) -> bool) {
+    use std::io::Read;
     let paso = (dur / 60.0).max(1.0);
     let alto = 40;
     let ancho = ((alto as f64 * razon / 2.0).round() as usize * 2).clamp(16, 120);
-    let s = medios::ffmpeg()
+    let mut q = vec![0u8; ancho * alto * 4];
+    // En uno largo, leerlo entero tarda más que saltar a cada cuadro.
+    if paso > 10.0 {
+        for i in 0..(dur / paso).ceil() as usize {
+            let t = (i as f64 * paso).min((dur - 1.0).max(0.0)).to_string();
+            let s = medios::ffmpeg().args(["-ss", &t, "-skip_frame", "nokey", "-i"]).arg(ruta).args(["-an", "-frames:v", "1", "-vf", &format!("scale={ancho}:{alto}"), "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"]).output();
+            // Si uno no se puede leer, se repite el anterior.
+            if let Ok(s) = s
+                && s.stdout.len() == q.len()
+            {
+                q = s.stdout;
+            } else if i == 0 {
+                return;
+            }
+            if !entregar(Tira { paso, ancho, alto, rgba: vec![q.clone()] }) {
+                return;
+            }
+        }
+        return;
+    }
+    let h = medios::ffmpeg()
         .args(["-skip_frame", "nokey", "-i"])
         .arg(ruta)
-        .args(["-an", "-vf", &format!("fps=1/{paso}:round=near,scale={ancho}:{alto}"), "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"])
-        .output()
-        .ok()?;
-    let rgba: Vec<Vec<u8>> = s.stdout.chunks_exact(ancho * alto * 4).map(|c| c.to_vec()).collect();
-    (!rgba.is_empty()).then_some(Tira { paso, ancho, alto, rgba })
+        .args(["-an", "-vf", &format!("fps=1/{paso}:round=near,scale={ancho}:{alto}"), "-pix_fmt", "rgba", "-f", "rawvideo", "-flush_packets", "1", "pipe:1"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    let Ok(mut h) = h else { return };
+    if let Some(mut s) = h.stdout.take() {
+        while s.read_exact(&mut q).is_ok() && entregar(Tira { paso, ancho, alto, rgba: vec![q.clone()] }) {}
+    }
+    let _ = h.kill();
+    let _ = h.wait();
 }

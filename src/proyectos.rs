@@ -50,7 +50,7 @@ fn nombre(r: &Path) -> String {
 }
 
 pub fn es_cancion(r: &Path) -> bool {
-    r.extension().is_some_and(|e| e == "beethoven" || e == "flp")
+    r.extension().is_some_and(|e| e == "bdaw" || e == "flp")
 }
 
 /// La carpeta de Movie (recientes, papelera) donde vive todo esto.
@@ -242,21 +242,19 @@ fn mover(de: &Path, a: &Path) -> Result<(), String> {
 }
 
 /// Las canciones que Beethoven DAW recuerda, de su archivo de ajustes (solo se lee).
+/// Las canciones de Beethoven DAW: los `.bdaw` de su carpeta (`Música/Beethoven DAW Demo`), sin su respaldo.
 pub fn canciones_del_daw() -> Vec<PathBuf> {
-    let var = |v: &str| std::env::var_os(v).map(PathBuf::from).filter(|p| p.is_absolute());
-    let dir = if cfg!(windows) {
-        var("APPDATA")
-    } else if cfg!(target_os = "macos") {
-        var("HOME").map(|h| h.join("Library/Application Support"))
-    } else {
-        var("XDG_CONFIG_HOME").or_else(|| var("HOME").map(|h| h.join(".config")))
-    };
-    let texto = dir.and_then(|d| std::fs::read_to_string(d.join("Beethoven DAW/settings.txt")).ok()).unwrap_or_default();
-    recientes_del_daw(&texto)
-}
-
-fn recientes_del_daw(t: &str) -> Vec<PathBuf> {
-    t.lines().filter_map(|l| l.strip_prefix("recent_project_")?.split_once('=')).map(|(_, v)| v.trim()).filter(|v| !v.is_empty()).map(PathBuf::from).collect()
+    let casa = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).filter(|p| p.is_absolute());
+    let Some(dir) = casa.map(|c| c.join("Music").join("Beethoven DAW Demo")) else { return vec![] };
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "bdaw") && p.file_stem().is_some_and(|n| n != "respaldo"))
+        .collect();
+    v.sort();
+    v
 }
 
 #[cfg(test)]
@@ -286,10 +284,10 @@ mod tests {
         let a = hacer(&l, "boda.bcraft", "a");
         hacer(&l, "Autoguardado.bcraft", "x");
         hacer(&l, "nota.txt", "x");
-        let c = hacer(&l, "cumbia.beethoven", "c");
+        let c = hacer(&l, "cumbia.bdaw", "c");
         l.anotar(&a);
         l.anotar(&a);
-        let v = l.listar(&[c.clone(), c.clone(), l.base.join("no está.beethoven")]);
+        let v = l.listar(&[c.clone(), c.clone(), l.base.join("no está.bdaw")]);
         assert_eq!(v.len(), 2, "{v:?}");
         assert_eq!(v.iter().find(|f| f.nombre == "cumbia").unwrap().tipo, Tipo::Cancion);
         l.quitar(&c);
@@ -352,9 +350,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(&l.base);
     }
 
-    #[test]
-    fn ajustes_del_daw() {
-        let t = "zoom=2\nrecent_project_1=/a/Mi canción.beethoven\nrecent_project_2=\nrecent_project_3=/b/x.flp\n";
-        assert_eq!(recientes_del_daw(t), [PathBuf::from("/a/Mi canción.beethoven"), PathBuf::from("/b/x.flp")]);
-    }
 }

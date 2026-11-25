@@ -6,17 +6,18 @@ set -e
 cd "$(dirname "$0")/.."
 cargo build --release
 # Beethoven DAW es otro proyecto de Cargo.
-(cd daw && cargo build --release -p beethoven_daw)
+(cd daw-demo && cargo build --release)
 
 T=dist/beethoven-craft
 rm -rf dist
 mkdir -p "$T"
 cp target/release/toma-uno "$T/beethoven-craft"
-cp daw/target/release/beethoven_daw "$T/beethoven-daw"
+cp target/release/beethoven-daw-demo "$T/beethoven-daw-demo"
+sh daw-demo/empaque/sonidos.sh && cp -R daw-demo/sonidos "$T/sonidos"
 cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE LICENSE-MIT LICENSE-APACHE AVISOS.md README.md "$T/"
+cp daw-demo/AVISOS.md "$T/AVISOS-DAW.md"
 mkdir -p "$T/recursos" && cp recursos/*.txt "$T/recursos/"
-cp daw/THIRD-PARTY-NOTICES.txt "$T/DAW-THIRD-PARTY-NOTICES.txt"
-cp daw/crates/os-app/assets/beethoven_daw.png "$T/beethoven-craft.png"
+cp empaque/icono.png "$T/beethoven-craft.png"
 cat > "$T/beethoven-craft.desktop" <<'FIN'
 [Desktop Entry]
 Type=Application

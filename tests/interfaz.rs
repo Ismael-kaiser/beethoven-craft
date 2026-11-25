@@ -1039,12 +1039,12 @@ fn proyectos_del_menu() {
         });
         toma_uno::archivo::guardar(&Proyecto::nuevo(), &d.join(format!("{n}.bcraft")), Some((320, 180, &q[..])), false).unwrap();
     }
-    std::fs::write(d.join("Cumbia.beethoven"), "x").unwrap();
+    std::fs::write(d.join("Cumbia.bdaw"), "x").unwrap();
     let mut h = Harness::builder().with_size([1180.0, 740.0]).with_step_dt(1.0 / 60.0).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
     h.state_mut().inicio.base = Some(d.clone());
     h.state_mut().inicio.mostrar();
     // La canción entra a la lista como si se hubiera abierto.
-    toma_uno::proyectos::Libro { base: d.clone() }.anotar(&d.join("Cumbia.beethoven"));
+    toma_uno::proyectos::Libro { base: d.clone() }.anotar(&d.join("Cumbia.bdaw"));
     h.run_steps(4);
     foto(&mut h, "menu-proyectos");
     let nombres = |h: &Harness<App>| {
@@ -1316,4 +1316,52 @@ fn llaves_al_animar() {
     h.run_steps(3);
     assert!(!momentos(&c(&h)).iter().any(|x| (x.0 - m).abs() < 0.02), "se movió de {m}");
     assert_eq!(momentos(&c(&h)).len(), n + 1);
+}
+
+/// Al meter un video, las miniaturas de efectos y las del clip salen solas, sin abrir el catálogo ni pedirlas.
+#[test]
+fn meter_un_video_pone_las_miniaturas() {
+    let ruta = std::env::temp_dir().join(format!("beethoven-mini-{}.mp4", std::process::id()));
+    let ok = toma_uno::medios::ffmpeg().args(["-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=30:d=20", "-g", "30", "-pix_fmt", "yuv420p"]).arg(&ruta).status();
+    assert!(ok.unwrap().success());
+    let mut h = arnes();
+    h.state_mut().inicio.visible = false;
+    h.run_steps(3);
+    assert!(h.state().muestras.is_empty());
+    let t = std::time::Instant::now();
+    h.state_mut().importar(ruta.clone());
+    let (mut primera, mut completas) = (None, None);
+    while t.elapsed().as_secs() < 60 && (primera.is_none() || completas.is_none()) {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        if primera.is_none() && h.state().tiras.get(&ruta).is_some_and(|x| x.is_some()) {
+            primera = Some(t.elapsed());
+        }
+        if completas.is_none() && h.state().muestras_listas() {
+            completas = Some(t.elapsed());
+        }
+    }
+    println!("primera miniatura del clip: {primera:?}; todas las de efectos: {completas:?}");
+    let _ = std::fs::remove_file(&ruta);
+    assert!(primera.is_some() && completas.is_some());
+}
+
+/// Las miniaturas de un video llegan de a una.
+#[test]
+fn la_tira_llega_de_a_poco() {
+    let ruta = std::env::temp_dir().join(format!("beethoven-tira-{}.mp4", std::process::id()));
+    let ok = toma_uno::medios::ffmpeg().args(["-y", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=10:d=660", "-g", "10", "-c:v", "mpeg4"]).arg(&ruta).status();
+    assert!(ok.unwrap().success());
+    // Corto: se lee entero. Largo: a saltos.
+    for (dur, tope) in [(40.0, 60), (660.0, 60)] {
+        let mut v = vec![];
+        toma_uno::video::tira(&ruta, dur, 16.0 / 9.0, |t| {
+            assert_eq!((t.rgba.len(), t.rgba[0].len()), (1, t.ancho * t.alto * 4));
+            v.push(t);
+            v.len() < tope
+        });
+        assert!((35..=60).contains(&v.len()), "{}", v.len());
+        assert!(v[1].rgba[0] != v[v.len() - 1].rgba[0]);
+    }
+    let _ = std::fs::remove_file(&ruta);
 }

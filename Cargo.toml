@@ -1,11 +1,11 @@
 [workspace]
 members = ["crates/audio-fx", "crates/craft-gpu", "crates/craft-trans"]
-# Beethoven DAW es otro proyecto de Cargo y se compila aparte.
-exclude = ["daw"]
+# Beethoven DAW (daw-demo) es otro proyecto de Cargo y se compila aparte (comparte target/).
+exclude = ["daw-demo"]
 
 [package]
 name = "toma-uno"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 license = "(MIT OR Apache-2.0) AND GPL-3.0-or-later"
 description = "Compositor de video y audio"
@@ -39,6 +39,8 @@ memmap2 = "0.9"
 bytemuck = "1"
 fontdue = "0.9"
 thread-priority = "1"
+ureq = "3"
+getrandom = "0.3"
 
 # Linux: eframe sin sus funciones por defecto no trae con qué abrir ventanas.
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -109,11 +109,12 @@ impl Estado {
     }
 }
 
-/// El programa de Beethoven DAW: junto a este (dentro del .app) o, al probar desde el código, en `daw/target/release`.
+/// El programa de Beethoven DAW (`daw-demo/`): junto a este (dentro del .app) o, al probar desde el código, en
+/// `target/release` (los dos proyectos comparten esa carpeta).
 pub fn programa_daw() -> Option<PathBuf> {
     let exe = std::env::consts::EXE_SUFFIX;
-    let junto = std::env::current_exe().ok()?.with_file_name(format!("beethoven-daw{exe}"));
-    let codigo = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("daw/target/release/beethoven_daw{exe}"));
+    let junto = std::env::current_exe().ok()?.with_file_name(format!("beethoven-daw-demo{exe}"));
+    let codigo = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("target/release/beethoven-daw-demo{exe}"));
     [junto, codigo].into_iter().find(|r| r.is_file())
 }
 

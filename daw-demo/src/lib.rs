@@ -1,0 +1,21 @@
+// Beethoven DAW Demo. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
+pub mod analizar;
+pub mod audio;
+pub mod banco;
+pub mod biblioteca;
+pub mod decodificar;
+pub mod flp;
+pub mod ia;
+pub mod idioma;
+pub mod interfaz;
+pub mod lua;
+pub mod midi;
+pub mod modelo;
+pub mod motor;
+pub mod muestrario;
+pub mod paquete;
+pub mod plugin;
+pub mod receta;
+pub mod teclados;
+pub mod ui;
+pub mod wav;

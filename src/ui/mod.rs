@@ -16,6 +16,7 @@ pub mod muestras;
 pub mod nodos;
 pub mod musica;
 pub mod origen;
+pub mod asistente;
 pub mod pestanas;
 pub mod proyecto;
 pub mod texto;
@@ -35,7 +36,7 @@ use eframe::egui::{self, *};
 use estilo::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -112,7 +113,7 @@ enum Evento {
     Separado { tarea: u64, ruta: PathBuf, res: Result<(PathBuf, PathBuf), String>, inicio: f64, molde: Option<Clip>, con: Vec<u64> },
     Estirado { clave: PathBuf, res: Result<Audio, String> },
     Congelado { clip: u64, t: f64, ruta: PathBuf, ok: bool },
-    Tira(PathBuf, Option<Tira>),
+    Tira(PathBuf, Tira),
     Muestra(String, Vec<u8>),
     Exportado { tarea: u64, ruta: PathBuf, res: Result<(), String> },
 }
@@ -161,6 +162,8 @@ struct GrabacionActiva {
 
 pub struct App {
     pub p: Proyecto,
+    /// El asistente de IA.
+    pub asistente: asistente::Asistente,
     /// Menú principal.
     pub inicio: inicio::Estado,
     /// Pestaña de animación.
@@ -223,6 +226,11 @@ pub struct App {
     pub muestras: HashMap<String, TextureHandle>,
     muestras_hechas: usize,
     muestras_pedidas: bool,
+    /// Los videos que había cuando se hicieron: con otros, se rehacen solas.
+    muestras_de: Vec<PathBuf>,
+    /// Sube con cada petición: la anterior se deja de hacer.
+    muestras_turno: Arc<AtomicU64>,
+    ctx: Context,
     /// Se está reproduciendo.
     suena: Arc<AtomicBool>,
     /// Cuándo se preparó el audio que sigue.
@@ -301,6 +309,7 @@ impl App {
         let p = Proyecto::nuevo();
         let canal = p.pistas.first().map_or(Canal::Maestro, |x| Canal::Pista(x.id));
         let mut a = App {
+            asistente: asistente::Asistente::nuevo(ctx, (!sin_dispositivo).then(|| carpeta().join("asistente.json"))),
             inicio: inicio::Estado::default(),
             anim: animacion::Estado::default(),
             atajos: Default::default(),
@@ -358,6 +367,9 @@ impl App {
             muestras: HashMap::new(),
             muestras_hechas: 0,
             muestras_pedidas: false,
+            muestras_de: vec![],
+            muestras_turno: Default::default(),
+            ctx: ctx.clone(),
             suena: Default::default(),
             audio_listo: Instant::now(),
             origen: None,
@@ -640,7 +652,7 @@ impl App {
     /// convertirlo); un video con sonido pregunta qué hacer con el audio. `lugar`: dónde se soltó (sin él, al final).
     pub fn importar_en(&mut self, ruta: PathBuf, lugar: Option<Lugar>) {
         self.importando += 1;
-        let tx = self.tx.clone();
+        let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
         std::thread::spawn(move || {
             let r = medios::sondear(&ruta);
             // Cada máquina es distinta: se prueba si su chip de video lee este archivo.
@@ -652,6 +664,7 @@ impl App {
                 (Ok(i), Some(a)) => Evento::SinChip(ruta, i, a, lugar),
                 (r, _) => Evento::Sondeado(ruta, r, lugar),
             });
+            ctx.request_repaint();
         });
     }
 
@@ -842,27 +855,42 @@ impl App {
         self.muestras_hechas >= crate::estilos::ESTILOS.len() + crate::filtros::FILTROS.len() + crate::nombres::EFECTOS.len() + crate::nombres::TRANSICIONES.len()
     }
 
+    /// El cuadro que se está viendo, si sirve de muestra: en uno casi negro no se ve nada.
+    fn base_muestras(&self) -> Option<Vec<u8>> {
+        let q = self.cuadro.as_ref().filter(|_| !self.p.video.is_empty())?;
+        let base = muestras::reducir(q.ancho, q.alto, &q.rgba);
+        (base.iter().map(|x| *x as u64).sum::<u64>() / base.len() as u64 >= 64 + 16).then_some(base)
+    }
+
     /// Rehace las miniaturas con el cuadro que se está viendo.
     pub fn pedir_muestras(&mut self) {
-        let base = match &self.cuadro {
-            Some(q) if !self.p.video.is_empty() => muestras::reducir(q.ancho, q.alto, &q.rgba),
-            _ => muestras::de_prueba(),
-        };
-        // En un cuadro casi negro no se ve nada.
-        let base = if base.iter().map(|x| *x as u64).sum::<u64>() / (base.len() as u64) < 64 + 16 { muestras::de_prueba() } else { base };
+        let base = self.base_muestras().unwrap_or_else(muestras::de_prueba);
         self.muestras_pedidas = true;
         self.muestras_hechas = 0;
-        let tx = self.tx.clone();
-        let suena = self.suena.clone();
+        let (tx, suena, ctx, turno) = (self.tx.clone(), self.suena.clone(), self.ctx.clone(), self.muestras_turno.clone());
+        let mio = turno.fetch_add(1, Relaxed) + 1;
         std::thread::spawn(move || {
             muestras::calcular(base, |k, q| {
-                // Las miniaturas no le quitan procesador a la reproducción.
-                while suena.load(Relaxed) {
-                    std::thread::sleep(Duration::from_millis(120));
+                // Al reproducir se va más despacio, para no quitarle procesador.
+                if suena.load(Relaxed) {
+                    std::thread::sleep(Duration::from_millis(4));
                 }
-                tx.send(Evento::Muestra(k, q)).is_ok()
+                let sigue = turno.load(Relaxed) == mio && tx.send(Evento::Muestra(k, q)).is_ok();
+                ctx.request_repaint();
+                sigue
             })
         });
+    }
+
+    /// Las miniaturas del catálogo con el video que se acaba de meter, sin tener que pedirlas.
+    fn muestras_al_dia(&mut self) {
+        let mut v: Vec<PathBuf> = self.p.video.iter().filter(|c| matches!(c.contenido, Contenido::Archivo | Contenido::Imagen)).map(|c| c.ruta.clone()).collect();
+        v.sort();
+        v.dedup();
+        if v != self.muestras_de && !v.is_empty() && self.base_muestras().is_some() {
+            self.muestras_de = v;
+            self.pedir_muestras();
+        }
     }
 
     fn importar_imagen(&mut self, ruta: PathBuf, info: Info) {
@@ -875,6 +903,21 @@ impl App {
         self.p.video.push(c);
     }
 
+    fn pedir_tira(&self, r: PathBuf, dur: f64, razon: f64, imagen: bool) {
+        let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+        std::thread::spawn(move || {
+            let entregar = |t| {
+                let sigue = tx.send(Evento::Tira(r.clone(), t)).is_ok();
+                ctx.request_repaint();
+                sigue
+            };
+            match imagen {
+                true => _ = video::tira_imagen(&r, razon).map(entregar),
+                false => video::tira(&r, dur, razon, entregar),
+            }
+        });
+    }
+
     /// Pide las miniaturas que falten.
     fn pedir_tiras(&mut self) {
         for c in self.p.video.iter().filter(|c| c.contenido == Contenido::Archivo) {
@@ -883,11 +926,7 @@ impl App {
             }
             if !self.tiras.contains_key(&c.ruta) {
                 self.tiras.insert(c.ruta.clone(), None);
-                let (tx, r, dur, razon) = (self.tx.clone(), c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64);
-                std::thread::spawn(move || {
-                    let t = video::tira(&r, dur, razon);
-                    let _ = tx.send(Evento::Tira(r, t));
-                });
+                self.pedir_tira(c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64, false);
             }
         }
         // Imágenes, y lo que solo está en los nodos.
@@ -895,11 +934,7 @@ impl App {
         for c in self.p.video.iter().chain(de_nodos).filter(|c| matches!(c.contenido, Contenido::Imagen | Contenido::Archivo)) {
             if !self.tiras.contains_key(&c.ruta) {
                 self.tiras.insert(c.ruta.clone(), None);
-                let (tx, r, dur, razon, imagen) = (self.tx.clone(), c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64, c.contenido == Contenido::Imagen);
-                std::thread::spawn(move || {
-                    let t = if imagen { video::tira_imagen(&r, razon) } else { video::tira(&r, dur, razon) };
-                    let _ = tx.send(Evento::Tira(r, t));
-                });
+                self.pedir_tira(c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64, c.contenido == Contenido::Imagen);
             }
         }
     }
@@ -922,15 +957,9 @@ impl App {
                     }
                 }
                 Evento::Tira(ruta, t) => {
-                    let lista = t.map(|t| TiraLista {
-                        paso: t.paso,
-                        tex: t
-                            .rgba
-                            .iter()
-                            .map(|q| ctx.load_texture("mini", ColorImage::from_rgba_unmultiplied([t.ancho, t.alto], q), TextureOptions::LINEAR))
-                            .collect(),
-                    });
-                    self.tiras.insert(ruta, lista);
+                    // Van llegando de a una.
+                    let l = self.tiras.entry(ruta).or_insert(None).get_or_insert_with(|| TiraLista { paso: t.paso, tex: vec![] });
+                    l.tex.extend(t.rgba.iter().map(|q| ctx.load_texture("mini", ColorImage::from_rgba_unmultiplied([t.ancho, t.alto], q), TextureOptions::LINEAR)));
                 }
                 Evento::Sondeado(ruta, Ok(info), lugar) => {
                     self.importando = self.importando.saturating_sub(1);
@@ -1537,6 +1566,10 @@ impl App {
         self.cuadrar_seleccion();
         self.eventos(&ctx);
         self.pedir_tiras();
+        // Listas desde antes de abrir el catálogo.
+        if !self.inicio.visible && !self.muestras_pedidas && !self.sin_dispositivo {
+            self.pedir_muestras();
+        }
         self.pedir_velocidades();
         if !self.inicio.visible {
             self.atender_teclado();
@@ -1592,6 +1625,10 @@ impl App {
                 _ => self.espacio_playlist(ui),
             }
             self.ventanas_ui(&ctx);
+        }
+        self.atender_ia();
+        if !self.inicio.visible {
+            self.ventana_asistente(&ctx);
         }
         self.cuadrar_seleccion();
         self.ventana_atajos(&ctx);
@@ -1720,6 +1757,9 @@ impl App {
                     self.canal = Canal::Pista(id);
                 }
             });
+            if ui.button(crate::idioma::t("ASISTENTE")).on_hover_text(crate::idioma::t("Dile a la IA qué quieres hacer con el video")).clicked() {
+                self.asistente.abierto = !self.asistente.abierto;
+            }
             ui.menu_button(crate::idioma::t("AYUDA"), |ui| {
                 if ui.button(crate::idioma::t("Acerca de Beethoven Craft")).clicked() {
                     self.acerca = true;
@@ -1845,6 +1885,9 @@ impl App {
                 None => self.textura = Some(ctx.load_texture("video", img, TextureOptions::LINEAR)),
             }
             self.cuadro = Some(q);
+            if !self.inicio.visible && (tocando || self.vista.pendientes == 0) {
+                self.muestras_al_dia();
+            }
         }
         if self.vista.pendientes > 0 {
             ctx.request_repaint_after(Duration::from_millis(12));

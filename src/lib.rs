@@ -1,5 +1,10 @@
 // Beethoven Craft. Creado por mixter-ha99. Copyright (C) 2026. SPDX-License-Identifier: MIT OR Apache-2.0
 pub mod actualizar;
+// Compartidos con Beethoven DAW Demo.
+#[path = "../daw-demo/src/analizar.rs"]
+pub mod analizar;
+#[path = "../daw-demo/src/ia/mod.rs"]
+pub mod ia;
 pub mod archivo;
 pub mod atajos;
 pub mod audio;
