@@ -18,7 +18,7 @@ if (Test-Path dist) { Remove-Item dist -Recurse -Force }
 New-Item -ItemType Directory -Force $T | Out-Null
 Copy-Item target\release\toma-uno.exe "$T\beethoven-craft.exe"
 Copy-Item daw\target\release\beethoven_daw.exe "$T\beethoven-daw.exe"
-Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, AVISOS.md, README.md $T
+Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, LICENSE-MIT, LICENSE-APACHE, AVISOS.md, README.md $T
 # Licencias de lo que viene adentro.
 New-Item -ItemType Directory -Force "$T\recursos" | Out-Null
 Copy-Item recursos\*.txt "$T\recursos"
