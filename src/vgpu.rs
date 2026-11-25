@@ -690,7 +690,7 @@ fn dibujar(m: &mut Mesa, c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize
     }
     let tam = [bw / b.scale, bh / b.scale];
     let pasado = composicion::pasado_de(c, f, b.scale);
-    for x in c.fx.iter().filter(|x| x.activo) {
+    for x in c.fx.iter().filter(|x| x.activo && !composicion::del_cuadro(&x.tipo)) {
         b = aplicar(m, b, x, tl, c.dur, p.fps, tam, pasado.as_ref())?;
     }
     if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
@@ -712,6 +712,23 @@ fn dibujar(m: &mut Mesa, c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize
     // Punto de la capa → punto del lienzo: escala, gira y pone el apoyo en su lugar.
     let (s, co) = giro.sin_cos();
     let mat = [ex * co, -ey * s, cx - (ex * co * ox - ey * s * oy), ex * s, ey * co, cy - (ex * s * ox + ey * co * oy)];
+    // Barras de cine, marcos, viñeta: del cuadro, después de mover y hacer zoom.
+    if c.fx.iter().any(|x| x.activo && composicion::del_cuadro(&x.tipo)) {
+        let mut l = if directo {
+            b
+        } else {
+            let v = m.vacia(w as u32, h as u32, k)?;
+            m.mover(&v, &b, mat, BlendMode::Normal, 1.0)
+        };
+        let tam = [p.ancho as f64, p.alto as f64];
+        for x in c.fx.iter().filter(|x| x.activo && composicion::del_cuadro(&x.tipo)) {
+            l = aplicar(m, l, x, tl, c.dur, p.fps, tam, None)?;
+        }
+        if l.offset != [0.0; 2] || (l.ancho() as usize, l.alto() as usize) != (w, h) {
+            l = m.recorte(&l, l.offset[0].round() as i64, l.offset[1].round() as i64, w as u32, h as u32);
+        }
+        return Some(Some(Dibujo { c: l, m: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0], op, directo: true }));
+    }
     Some(Some(Dibujo { c: b, m: mat, op, directo }))
 }
 

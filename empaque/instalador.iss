@@ -38,3 +38,5 @@ Name: "{group}\Beethoven Craft"; Filename: "{app}\beethoven-craft.exe"; IconFile
 Name: "{autodesktop}\Beethoven Craft"; Filename: "{app}\beethoven-craft.exe"; IconFilename: "{app}\icono.ico"; Tasks: escritorio
 [Run]
 Filename: "{app}\beethoven-craft.exe"; Description: "{cm:LaunchProgram,Beethoven Craft}"; Flags: nowait postinstall skipifsilent
+; Al actualizar desde la app (instalador en silencio), se vuelve a abrir sola.
+Filename: "{app}\beethoven-craft.exe"; Flags: nowait; Check: WizardSilent

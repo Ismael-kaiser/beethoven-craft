@@ -681,7 +681,7 @@ fn fila(ui: &mut Ui, ancho: f32, n: &str, ayuda: &str, tex: Option<&TextureHandl
 }
 
 /// Categoría en la fila de categorías: chiquita, para que quepan varias por renglón.
-fn chip(ui: &mut Ui, n: &str, on: bool) -> Response {
+pub fn chip(ui: &mut Ui, n: &str, on: bool) -> Response {
     let g = ui.painter().layout_no_wrap(n.into(), fuente(12.0), TEXT);
     let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 12.0, 19.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, n));

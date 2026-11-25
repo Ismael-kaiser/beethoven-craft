@@ -274,6 +274,18 @@ impl App {
                 cerrar = true;
             }
             ui.add_space(10.0);
+            ui.label(RichText::new(t("Actualizaciones")).color(TEXT_DIM));
+            let mut si = crate::actualizar::buscar_al_abrir(&carpeta());
+            if ui.checkbox(&mut si, t("Buscar versiones nuevas al abrir")).changed() && !self.sin_dispositivo {
+                crate::actualizar::poner_buscar_al_abrir(&carpeta(), si);
+            }
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tf("Tienes la {}", &[&crate::actualizar::version()])).size(12.5).color(TEXT_FAINT));
+                if ui.small_button(t("Buscar ahora")).clicked() {
+                    self.buscar_version(true);
+                }
+            });
+            ui.add_space(10.0);
             if ui.button(t("Listo")).clicked() {
                 cerrar = true;
             }
@@ -402,6 +414,11 @@ impl App {
         }
         if nav(ui, &tabler::SETTINGS, "Configuración", false, 0).clicked() {
             self.inicio.config = true;
+        }
+        if self.nueva.is_some() {
+            ui.add_space(10.0);
+            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
+            self.insignia_nueva(ui, r);
         }
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
             ui.label(RichText::new(t("Creado por mixter-ha99")).size(12.5).color(TEXT_FAINT));

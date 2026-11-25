@@ -150,3 +150,36 @@ fn estilos_en_la_tarjeta() {
         println!("{ms:6.1} ms  {n:28} {}", if fuera.is_empty() { String::new() } else { format!("procesador: {fuera:?}") });
     }
 }
+
+/// Las barras de cine son del cuadro: con zoom al clip, se quedan del mismo alto (en la tarjeta y en el procesador).
+#[test]
+fn barras_de_cine_no_hacen_zoom() {
+    use toma_uno::composicion::{componer_cpu, fx_nuevo};
+    use toma_uno::modelo::*;
+    let alto_barra = |rgba: &[u8], w: usize, h: usize| (0..h).take_while(|y| {
+        let i = (y * w + w / 2) * 4;
+        rgba[i] < 20 && rgba[i + 1] < 20 && rgba[i + 2] < 20
+    }).count();
+    let hacer = |esc: f64| {
+        let mut p = Proyecto::nuevo();
+        (p.ancho, p.alto) = (640, 360);
+        let mut c = p.nuevo_video("c".into(), Contenido::Color([0.8, 0.8, 0.8, 1.0]), 0.0, 2.0);
+        c.fx.push(fx_nuevo(7, "bc:barras").unwrap());
+        c.mov.escala = Prop::num(esc);
+        p.video.push(c);
+        p
+    };
+    let (w, h) = (640, 360);
+    let cpu: Vec<usize> = [100.0, 150.0].iter().map(|e| alto_barra(&componer_cpu(&hacer(*e), 1.0, w, h, &mut Fija), w, h)).collect();
+    println!("procesador: barras {cpu:?}");
+    assert!(cpu[0] > 5, "debía haber barras");
+    assert_eq!(cpu[0], cpu[1], "en el procesador las barras crecieron con el zoom");
+    if toma_uno::vgpu::gpu().is_some() {
+        let gpu: Vec<usize> = [100.0, 150.0].iter().map(|e| {
+            let v = toma_uno::vgpu::componer(&hacer(*e), 1.0, w, h, &mut Fija, toma_uno::vgpu::Salida::Rgba).expect("en la tarjeta");
+            alto_barra(&v, w, h)
+        }).collect();
+        println!("tarjeta: barras {gpu:?}");
+        assert!((gpu[0] as i64 - gpu[1] as i64).abs() <= 1, "en la tarjeta las barras crecieron con el zoom");
+    }
+}

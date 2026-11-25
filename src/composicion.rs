@@ -580,6 +580,33 @@ pub fn pasado_de(c: &ClipVideo, f: &dyn Fuente, escala: f64) -> Option<Pasado> {
 }
 
 /// El clip ya con efectos y movimiento, en un lienzo transparente de `w` × `h`.
+/// Efectos que son del cuadro (la pantalla), no de la imagen: van después de mover y hacer zoom, para que las barras
+/// de cine o un marco se queden quietos aunque el video crezca.
+pub fn del_cuadro(tipo: &str) -> bool {
+    matches!(tipo, "bc:barras" | "bc:marco" | "bc:visor" | "bc:rollo" | "bc:redondo" | "bc:apertura" | "bc:persianas" | "ec.stylize.ccvignette")
+}
+
+/// Los efectos del cuadro de un clip, sobre su imagen ya movida (del tamaño del lienzo).
+fn efectos_del_cuadro(c: &ClipVideo, tl: f64, p: &Proyecto, img: Image, w: usize, h: usize) -> Image {
+    let tam = [p.ancho as f64, p.alto as f64];
+    let mut b = ec::Buf { img, offset: [0.0; 2], scale: h as f64 / p.alto.max(1) as f64 };
+    for x in c.fx.iter().filter(|x| x.activo && del_cuadro(&x.tipo)) {
+        b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, None);
+    }
+    // Si alguno lo movió o lo cambió de tamaño, de vuelta al lienzo.
+    if b.offset == [0.0; 2] && (b.img.width as usize, b.img.height as usize) == (w, h) {
+        return b.img;
+    }
+    let mut o = Image::new(w as u32, h as u32);
+    let (dx, dy) = (-b.offset[0].round() as i64, -b.offset[1].round() as i64);
+    o.data.par_chunks_mut(w).enumerate().for_each(|(y, fila)| {
+        for (x, q) in fila.iter_mut().enumerate() {
+            *q = b.img.get(x as i64 + dx, y as i64 + dy);
+        }
+    });
+    o
+}
+
 fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<Image> {
     let tl = t - c.inicio;
     let mut b = imagen_de(c, t, p, w, h, f)?;
@@ -601,12 +628,13 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
     }
     let tam = [bw / b.scale, bh / b.scale];
     let pasado = pasado_de(c, f, b.scale);
-    for x in c.fx.iter().filter(|x| x.activo) {
+    for x in c.fx.iter().filter(|x| x.activo && !del_cuadro(&x.tipo)) {
         b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, pasado.as_ref());
     }
     if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
         b = crate::nodos::evaluar(g, b, tl, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, pasado.as_ref()));
     }
+    let de_cuadro = c.fx.iter().any(|x| x.activo && del_cuadro(&x.tipo));
     let m = &c.mov;
     let esc = (m.escala.en(tl).num() / 100.0).max(0.0001);
     let giro = m.giro.en(tl).num().to_radians();
@@ -624,10 +652,11 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
     let op = (m.opacidad.en(tl).num() / 100.0).clamp(0.0, 1.0) as f32;
     // Sin mover ni estirar, la imagen sirve tal cual: no se copia.
     if ex == 1.0 && ey == 1.0 && giro == 0.0 && ox == cx && oy == cy && (b.img.width as usize, b.img.height as usize) == (w, h) {
+        let mut img = if de_cuadro { efectos_del_cuadro(c, tl, p, b.img, w, h) } else { b.img };
         if op < 1.0 {
-            b.img.data.par_iter_mut().for_each(|q| *q = q.map(|v| v * op));
+            img.data.par_iter_mut().for_each(|q| *q = q.map(|v| v * op));
         }
-        return Some(b.img);
+        return Some(img);
     }
     let mut o = Image::new(w as u32, h as u32);
     if ex == 1.0 && ey == 1.0 && giro == 0.0 && cx == cx.round() && cy == cy.round() && (ox - cx).fract() == 0.0 && (oy - cy).fract() == 0.0 {
@@ -657,6 +686,9 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
                 *q = acc.map(|v| v / (n * n) as f32);
             }
         });
+    }
+    if de_cuadro {
+        o = efectos_del_cuadro(c, tl, p, o, w, h);
     }
     if op < 1.0 {
         o.data.par_iter_mut().for_each(|q| *q = q.map(|v| v * op));

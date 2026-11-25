@@ -20,6 +20,27 @@ fn pestana(h: &mut Harness<App>, n: &str) {
     clic(h, r.left() + 40.0, r.center().y);
 }
 
+/// Al soltar un video con sonido se pregunta qué hacer con el audio: «Todo junto». Si no se pregunta (imagen, sonido
+/// solo, varios archivos), no hace nada.
+fn todo_junto(h: &mut Harness<App>) {
+    for _ in 0..60 {
+        h.run_steps(1);
+        if h.state().preguntar.is_some() || h.state().convertir.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    h.run_steps(2);
+    if h.state().convertir.is_some() {
+        h.get_by_label("Usar el original").click();
+        h.run_steps(3);
+    }
+    if h.state().preguntar.is_some() {
+        h.get_by_label("Todo junto").click();
+        h.run_steps(3);
+    }
+}
+
 fn foto(h: &mut Harness<App>, n: &str) {
     if let Ok(c) = std::env::var("CAPTURAS") {
         h.render().unwrap().save(format!("{c}/{n}.png")).unwrap();
@@ -780,6 +801,7 @@ fn panel_de_archivos() {
             h.event(eframe::egui::Event::PointerButton { pos: c, button: eframe::egui::PointerButton::Primary, pressed, modifiers: Default::default() });
         }
         h.run_steps(30);
+        todo_junto(h);
     };
     doble(&mut h, "entrevista.mp4");
     doble(&mut h, "playa.mp4");
@@ -947,7 +969,7 @@ fn ajustes_del_proyecto() {
     let mut h = arnes_corto();
     let d = carpeta_de_prueba("ajustes");
     h.state_mut().poner_archivos(&[d.join("entrevista.mp4")], 0.0, None, None);
-    h.run_steps(3);
+    todo_junto(&mut h);
     h.state_mut().abrir_ajustes_proyecto();
     h.run_steps(3);
     h.get_by_label("Vertical · 1080×1920").click();

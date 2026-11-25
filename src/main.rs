@@ -2,6 +2,19 @@
 // En Windows, sin ventana de consola detrás de la app.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 fn main() -> eframe::Result {
+    // Si algo falla, queda anotado en «Errores.log» (la app abierta desde el Finder no tiene dónde mostrarlo).
+    let antes = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        use std::io::Write;
+        let dir = toma_uno::ui::carpeta();
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("Errores.log")) {
+            let cuando = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            let hilo = std::thread::current().name().unwrap_or("sin nombre").to_string();
+            let _ = writeln!(f, "--- {cuando} (segundos desde 1970) · versión {} · hilo {hilo}\n{info}\n{}\n", env!("CARGO_PKG_VERSION"), std::backtrace::Backtrace::force_capture());
+        }
+        antes(info);
+    }));
     // `--mudo` abre la app sin mandar sonido (para probar).
     toma_uno::tiempos::marca("main");
     let mudo = std::env::args().any(|a| a == "--mudo");

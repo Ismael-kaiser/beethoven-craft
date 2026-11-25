@@ -101,10 +101,13 @@ pub enum AudioVideo {
 }
 
 enum Evento {
-    Sondeado(PathBuf, Result<Info, String>),
+    Sondeado(PathBuf, Result<Info, String>, Option<Lugar>),
     /// El chip de video no lee este archivo: se pregunta si convertirlo.
-    SinChip(PathBuf, Info, crate::convertir::Aviso),
-    Convertido { tarea: u64, res: Result<PathBuf, String> },
+    SinChip(PathBuf, Info, crate::convertir::Aviso, Option<Lugar>),
+    Convertido { tarea: u64, res: Result<PathBuf, String>, lugar: Option<Lugar> },
+    /// Respuesta de GitHub sobre versiones nuevas. `a_mano`: lo pidió la persona (se avisa aunque no haya).
+    Version(Result<Option<crate::actualizar::Nueva>, String>, bool),
+    Descargada { tarea: u64, res: Result<PathBuf, String> },
     Audio { tarea: u64, ruta: PathBuf, res: Result<Audio, String>, destino: Destino2 },
     Separado { tarea: u64, ruta: PathBuf, res: Result<(PathBuf, PathBuf), String>, inicio: f64, molde: Option<Clip>, con: Vec<u64> },
     Estirado { clave: PathBuf, res: Result<Audio, String> },
@@ -170,7 +173,14 @@ pub struct App {
     /// Versión del proyecto que ya está en el historial, y si difiere de lo guardado (con la versión en que se vio).
     v_historial: u64,
     sucio: std::cell::Cell<(u64, bool)>,
-    respaldo: Sender<Proyecto>,
+    respaldo: Sender<(Proyecto, crate::recuperacion::Sesion)>,
+    /// Lo que quedó de una sesión que se cerró de golpe: se ofrece recuperarlo al abrir.
+    pub recuperar: Option<crate::recuperacion::Pendiente>,
+    /// Una versión nueva publicada, y si se está mostrando su ventana.
+    pub nueva: Option<crate::actualizar::Nueva>,
+    pub ver_nueva: bool,
+    /// Bajando la actualización.
+    bajando: bool,
     ultimo: Proyecto,
     deshacer: Vec<Foto>,
     rehacer: Vec<Foto>,
@@ -234,9 +244,9 @@ pub struct App {
     rx: Receiver<Evento>,
     tareas: HashMap<u64, Tarea>,
     sig_tarea: u64,
-    pub preguntar: Option<(PathBuf, Info)>,
+    pub preguntar: Option<(PathBuf, Info, Option<Lugar>)>,
     /// Video que el chip no lee, esperando a que la persona decida si se convierte.
-    pub convertir: Option<(PathBuf, Info, crate::convertir::Aviso)>,
+    pub convertir: Option<(PathBuf, Info, crate::convertir::Aviso, Option<Lugar>)>,
     /// Muestra de cada letra en el apartado Texto (`None`: no se pudo leer).
     letras_tex: HashMap<String, Option<TextureHandle>>,
     /// La ventana de agregar una letra.
@@ -299,6 +309,17 @@ impl App {
             v_historial: 0,
             sucio: Default::default(),
             respaldo: hilo_respaldo(),
+            nueva: None,
+            ver_nueva: false,
+            bajando: false,
+            // Primero se aparta lo que haya quedado de una sesión que se cerró mal; luego esta sesión deja su marca.
+            recuperar: if sin_dispositivo {
+                None
+            } else {
+                let r = crate::recuperacion::pendiente(&carpeta());
+                crate::recuperacion::anotar(&carpeta(), &Default::default());
+                r
+            },
             ultimo: p.clone(),
             guardado: p.clone(),
             p,
@@ -375,6 +396,10 @@ impl App {
         crate::tiempos::marca("estado de la app");
         if !sin_dispositivo {
             a.archivos.cargar();
+            // ¿Hay versión nueva? En segundo plano; si no hay internet, no pasa nada.
+            if crate::actualizar::buscar_al_abrir(&carpeta()) {
+                a.buscar_version(false);
+            }
         }
         crate::tiempos::marca("panel de archivos");
         // La salida de audio se abre al entrar al editor (`ui`): el menú no la necesita y así aparece antes.
@@ -605,6 +630,12 @@ impl App {
     }
 
     pub fn importar(&mut self, ruta: PathBuf) {
+        self.importar_en(ruta, None);
+    }
+
+    /// Importa un archivo: en segundo plano se lee y se prueba si el chip de video lo sabe leer (si no, se ofrece
+    /// convertirlo); un video con sonido pregunta qué hacer con el audio. `lugar`: dónde se soltó (sin él, al final).
+    pub fn importar_en(&mut self, ruta: PathBuf, lugar: Option<Lugar>) {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let r = medios::sondear(&ruta);
@@ -614,18 +645,20 @@ impl App {
                 _ => None,
             };
             let _ = tx.send(match (r, aviso) {
-                (Ok(i), Some(a)) => Evento::SinChip(ruta, i, a),
-                (r, _) => Evento::Sondeado(ruta, r),
+                (Ok(i), Some(a)) => Evento::SinChip(ruta, i, a, lugar),
+                (r, _) => Evento::Sondeado(ruta, r, lugar),
             });
         });
     }
 
     /// Ya se sabe qué es el archivo: se mete al proyecto (con video y audio, primero se pregunta cómo).
-    fn sondeado(&mut self, ruta: PathBuf, info: Info) {
-        if es_imagen(&ruta) {
+    fn sondeado(&mut self, ruta: PathBuf, info: Info, lugar: Option<Lugar>) {
+        if info.video.is_some() && info.audio && !es_imagen(&ruta) {
+            self.preguntar = Some((ruta, info, lugar));
+        } else if let Some(l) = lugar {
+            self.poner_ya(&ruta, &info, l, AudioVideo::Junto);
+        } else if es_imagen(&ruta) {
             self.importar_imagen(ruta, info);
-        } else if info.video.is_some() && info.audio {
-            self.preguntar = Some((ruta, info));
         } else if info.video.is_some() {
             self.importar_video(ruta, info, AudioVideo::Junto);
         } else {
@@ -635,12 +668,12 @@ impl App {
     }
 
     /// Hace la copia en H.264 y, al terminar, la importa como cualquier otro video.
-    fn convertir_e_importar(&mut self, ruta: PathBuf, info: Info) {
+    fn convertir_e_importar(&mut self, ruta: PathBuf, info: Info, lugar: Option<Lugar>) {
         let (tarea, av, ca) = self.tarea("Convirtiendo video");
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let res = crate::convertir::convertir(&ruta, &carpeta().join("Convertidos"), info.dur, &av, &ca);
-            let _ = tx.send(Evento::Convertido { tarea, res });
+            let _ = tx.send(Evento::Convertido { tarea, res, lugar });
         });
     }
 
@@ -858,7 +891,7 @@ impl App {
     fn eventos(&mut self, ctx: &Context) {
         while let Ok(e) = self.rx.try_recv() {
             match e {
-                Evento::Sondeado(_, Err(e)) => self.avisar(e, true),
+                Evento::Sondeado(_, Err(e), _) => self.avisar(e, true),
                 Evento::Muestra(k, q) => {
                     let img = ColorImage::from_rgba_unmultiplied([muestras::AN, muestras::AL], &q);
                     self.muestras_hechas += 1;
@@ -880,12 +913,30 @@ impl App {
                     });
                     self.tiras.insert(ruta, lista);
                 }
-                Evento::Sondeado(ruta, Ok(info)) => self.sondeado(ruta, info),
-                Evento::SinChip(ruta, info, aviso) => self.convertir = Some((ruta, info, aviso)),
-                Evento::Convertido { tarea, res } => {
+                Evento::Sondeado(ruta, Ok(info), lugar) => self.sondeado(ruta, info, lugar),
+                Evento::Version(r, a_mano) => match r {
+                    Ok(Some(n)) => {
+                        self.nueva = Some(n);
+                        self.ver_nueva |= a_mano;
+                    }
+                    Ok(None) if a_mano => self.avisar(crate::idioma::tf("Tienes la versión más nueva ({})", &[&crate::actualizar::version()]), false),
+                    Err(e) if a_mano => self.avisar(e, true),
+                    _ => {}
+                },
+                Evento::Descargada { tarea, res } => {
+                    self.tareas.remove(&tarea);
+                    self.bajando = false;
+                    match res.and_then(|r| crate::actualizar::instalar(&r)) {
+                        Ok(()) => {}
+                        Err(e) => self.avisar(e, true),
+                    }
+                }
+                Evento::SinChip(ruta, info, aviso, lugar) => self.convertir = Some((ruta, info, aviso, lugar)),
+                Evento::Convertido { tarea, res, lugar } => {
                     let cancelada = self.tareas.remove(&tarea).is_some_and(|t| t.cancelar.load(Relaxed));
                     match res {
-                        Ok(r) => self.importar(r),
+                        // La copia sigue el mismo camino: luego pregunta qué hacer con el audio.
+                        Ok(r) => self.importar_en(r, lugar),
                         Err(_) if cancelada => {}
                         Err(e) => self.avisar(e, true),
                     }
@@ -1075,7 +1126,8 @@ impl App {
         }
         // Respaldo por si la app se cierra de golpe, en su propio hilo.
         if !self.sin_dispositivo {
-            let _ = self.respaldo.send(self.p.clone());
+            let s = crate::recuperacion::Sesion { ruta: self.ruta.clone(), sin_guardar: self.sin_guardar() };
+            let _ = self.respaldo.send((self.p.clone(), s));
         }
     }
 
@@ -1095,6 +1147,9 @@ impl App {
             Ok(()) => {
                 self.guardado = self.p.clone();
                 self.sucio.set((0, false));
+                if !self.sin_dispositivo {
+                    crate::recuperacion::anotar(&carpeta(), &crate::recuperacion::Sesion { ruta: Some(ruta.clone()), sin_guardar: false });
+                }
                 self.avisar(crate::idioma::tf("Guardado en {}", &[&(ruta.display())]), false);
                 if !self.sin_dispositivo {
                     inicio::anotar(&ruta);
@@ -2241,9 +2296,137 @@ impl App {
         CentralPanel::default().frame(Frame::new().fill(Color32::BLACK)).show(ui, |ui| self.preview(ui));
     }
 
+    /// Pregunta a GitHub en segundo plano si hay versión nueva.
+    pub fn buscar_version(&mut self, a_mano: bool) {
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(Evento::Version(crate::actualizar::buscar(), a_mano));
+        });
+    }
+
+    /// Botón amarillo «Actualizar a 0.12.0» (en la barra de pestañas y en el menú).
+    pub fn insignia_nueva(&mut self, ui: &mut Ui, r: Rect) {
+        let Some(n) = &self.nueva else { return };
+        let txt = crate::idioma::tf("↑ Actualizar a {}", &[&n.version]);
+        let g = ui.painter().layout_no_wrap(txt.clone(), fuente(13.0), COLORED_DARK);
+        let caja = Rect::from_center_size(r.center(), g.size() + vec2(16.0, 6.0));
+        let resp = ui.interact(caja, Id::new("insignia-nueva"), Sense::click());
+        resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &txt));
+        encendido(ui.painter(), caja, 8, if resp.hovered() { HIGHLIGHT } else { MAIN });
+        ui.painter().galley(caja.center() - g.size() / 2.0, g, COLORED_DARK);
+        if resp.on_hover_text(crate::idioma::t("Hay una versión nueva de Beethoven Craft")).clicked() {
+            self.ver_nueva = true;
+        }
+    }
+
+    /// Ventana de la versión nueva: qué trae y botón para actualizar (baja, revisa e instala; luego se reabre sola).
+    fn dialogo_actualizar(&mut self, ctx: &Context) {
+        let Some(n) = self.nueva.clone().filter(|_| self.ver_nueva) else { return };
+        let (mut ir, mut cerrar) = (false, false);
+        let sin_guardar = self.sin_guardar();
+        Modal::new(Id::new("actualizar")).show(ctx, |ui| {
+            ui.set_width(480.0);
+            ui.heading(crate::idioma::t("Hay una versión nueva"));
+            ui.label(RichText::new(format!("{} → {}", crate::actualizar::version(), n.version)).color(MAIN).size(17.0));
+            if n.peso > 0 {
+                ui.label(RichText::new(crate::idioma::tf("Descarga de {}", &[&peso(n.peso)])).color(TEXT_DIM).size(12.5));
+            }
+            if !n.notas.trim().is_empty() {
+                ui.add_space(6.0);
+                Frame::new().fill(SUNKEN).corner_radius(8).inner_margin(10.0).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                        ui.label(RichText::new(&n.notas).size(13.5));
+                    });
+                });
+            }
+            ui.add_space(6.0);
+            if sin_guardar {
+                ui.label(RichText::new(crate::idioma::t("La app se cierra y se vuelve a abrir: primero se guarda tu proyecto.")).size(12.5).color(c(0xffb74d)));
+            } else {
+                ui.label(RichText::new(crate::idioma::t("La app se cierra y se vuelve a abrir sola.")).size(12.5).color(TEXT_FAINT));
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if self.bajando {
+                    ui.add(Spinner::new().color(MAIN));
+                    ui.label(crate::idioma::t("Bajando…"));
+                } else {
+                    let t = if sin_guardar { "Guardar y actualizar" } else { "Actualizar ahora" };
+                    if ui.add_sized([190.0, 32.0], Button::new(RichText::new(crate::idioma::t(t)).color(MAIN))).clicked() {
+                        ir = true;
+                    }
+                    if ui.add_sized([110.0, 32.0], Button::new(crate::idioma::t("Más tarde"))).clicked() {
+                        cerrar = true;
+                    }
+                }
+            });
+        });
+        if cerrar {
+            self.ver_nueva = false;
+        }
+        if ir {
+            if sin_guardar {
+                self.menu_guardar(false);
+                if self.sin_guardar() {
+                    // No se guardó (canceló el diálogo): no se actualiza.
+                    return;
+                }
+            }
+            self.bajando = true;
+            let (tarea, av, ca) = self.tarea("Bajando la actualización");
+            let tx = self.tx.clone();
+            std::thread::spawn(move || {
+                let res = crate::actualizar::descargar(&n, &av, &ca);
+                let _ = tx.send(Evento::Descargada { tarea, res });
+            });
+        }
+    }
+
+    /// La sesión anterior se cerró de golpe: se ofrece abrir lo que quedó en el autoguardado.
+    fn dialogo_recuperar(&mut self, ctx: &Context) {
+        let Some(r) = self.recuperar.clone() else { return };
+        let (mut abrir, mut cerrar) = (false, false);
+        Modal::new(Id::new("recuperar")).show(ctx, |ui| {
+            ui.set_width(460.0);
+            ui.heading(crate::idioma::t("Recuperar tu trabajo"));
+            ui.add_space(4.0);
+            ui.label(crate::idioma::t("Beethoven Craft se cerró de forma inesperada, pero tu último trabajo quedó a salvo."));
+            ui.add_space(6.0);
+            let nombre = r.ruta.as_ref().map_or_else(|| crate::idioma::t("Proyecto sin guardar").to_string(), |p| nombre_de(p));
+            let hace = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs()).saturating_sub(r.cuando);
+            Frame::new().fill(SUNKEN).corner_radius(8).inner_margin(10.0).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(&nombre).strong().color(MAIN).size(16.0));
+                ui.label(RichText::new(crate::idioma::tf("Guardado hace {}", &[&cuanto(hace as f64)])).color(TEXT_DIM));
+            });
+            ui.add_space(6.0);
+            ui.label(RichText::new(crate::idioma::tf("Si no lo abres ahora, queda en la carpeta {}.", &[&r.archivo.parent().map_or(String::new(), |p| p.display().to_string())])).size(12.5).color(TEXT_FAINT));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.add_sized([170.0, 32.0], Button::new(RichText::new(crate::idioma::t("Recuperar")).color(MAIN))).clicked() {
+                    abrir = true;
+                }
+                if ui.add_sized([120.0, 32.0], Button::new(crate::idioma::t("Ahora no"))).clicked() {
+                    cerrar = true;
+                }
+            });
+        });
+        if abrir {
+            self.recuperar = None;
+            self.abrir(r.archivo.clone());
+            // Se sigue guardando en su archivo de siempre, y queda como «sin guardar» hasta que lo guardes.
+            self.ruta = r.ruta.clone();
+            self.guardado = Proyecto::nuevo();
+            self.avisar(crate::idioma::t("Trabajo recuperado: guárdalo cuando quieras"), false);
+        } else if cerrar {
+            self.recuperar = None;
+        }
+    }
+
     /// El chip de video no lee el archivo: qué pasa si se convierte y qué pasa si no.
     fn dialogo_convertir(&mut self, ctx: &Context) {
-        let Some((ruta, info, aviso)) = self.convertir.clone() else { return };
+        let Some((ruta, info, aviso, lugar)) = self.convertir.clone() else { return };
         #[derive(PartialEq)]
         enum Que {
             Convertir,
@@ -2298,8 +2481,8 @@ impl App {
         let Some(que) = que else { return };
         self.convertir = None;
         match que {
-            Que::Convertir => self.convertir_e_importar(ruta, info),
-            Que::Original => self.sondeado(ruta, info),
+            Que::Convertir => self.convertir_e_importar(ruta, info, lugar),
+            Que::Original => self.sondeado(ruta, info, lugar),
             Que::Nada => {}
         }
     }
@@ -2398,7 +2581,9 @@ impl App {
         self.dialogo_proyecto(ctx);
         self.dialogo_convertir(ctx);
         self.dialogo_fuente(ctx);
-        if let Some((ruta, info)) = self.preguntar.clone() {
+        self.dialogo_recuperar(ctx);
+        self.dialogo_actualizar(ctx);
+        if let Some((ruta, info, lugar)) = self.preguntar.clone() {
             let mut elegido = None;
             let mut cerrar = false;
             Modal::new(Id::new("importar")).show(ctx, |ui| {
@@ -2430,7 +2615,12 @@ impl App {
                 }
             });
             if let Some(m) = elegido {
-                self.importar_video(ruta, info, m);
+                match lugar {
+                    Some(l) => {
+                        self.poner_ya(&ruta, &info, l, m);
+                    }
+                    None => self.importar_video(ruta, info, m),
+                }
                 cerrar = true;
             }
             if cerrar {
@@ -2483,6 +2673,7 @@ impl App {
                     inicio::logo(ui, r);
                     ui.vertical(|ui| {
                         ui.heading(crate::idioma::t("Beethoven Craft"));
+                        ui.label(RichText::new(crate::idioma::tf("Versión {}", &[&crate::actualizar::version()])).color(TEXT_DIM));
                         ui.label(crate::idioma::t("Compositor de video y audio."));
                         ui.label(RichText::new(crate::idioma::t("Creado por mixter-ha99")).color(MAIN).size(17.0));
                     });
@@ -2493,9 +2684,14 @@ impl App {
                 ui.label(crate::idioma::t("Efectos de video: EffectCraft; transiciones: FilmCraft; curvas de animación: AniCraft; del equipo de ArtCraft (MIT o Apache-2.0)."));
                 ui.label(crate::idioma::t("Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Íconos Tabler (MIT). Video y audio: ffmpeg."));
                 ui.add_space(8.0);
-                if ui.button(crate::idioma::t("Cerrar")).clicked() {
-                    self.acerca = false;
-                }
+                ui.horizontal(|ui| {
+                    if ui.button(crate::idioma::t("Buscar actualizaciones")).clicked() {
+                        self.buscar_version(true);
+                    }
+                    if ui.button(crate::idioma::t("Cerrar")).clicked() {
+                        self.acerca = false;
+                    }
+                });
             });
         }
     }
@@ -2514,8 +2710,8 @@ impl Foto {
 }
 
 /// Guarda el respaldo sin detener la ventana: siempre el más nuevo, y no más de uno cada tres segundos.
-fn hilo_respaldo() -> Sender<Proyecto> {
-    let (tx, rx) = unbounded::<Proyecto>();
+fn hilo_respaldo() -> Sender<(Proyecto, crate::recuperacion::Sesion)> {
+    let (tx, rx) = unbounded::<(Proyecto, crate::recuperacion::Sesion)>();
     std::thread::spawn(move || {
         while let Ok(mut p) = rx.recv() {
             std::thread::sleep(Duration::from_millis(1200));
@@ -2523,7 +2719,10 @@ fn hilo_respaldo() -> Sender<Proyecto> {
                 p = n;
             }
             let _ = std::fs::create_dir_all(carpeta());
-            let _ = crate::archivo::guardar(&p, &carpeta().join("Autoguardado.bcraft"), None, false);
+            if crate::archivo::guardar(&p.0, &carpeta().join("Autoguardado.bcraft"), None, false).is_ok() {
+                // La marca dice si hay algo que solo está aquí.
+                crate::recuperacion::anotar(&carpeta(), &p.1);
+            }
             std::thread::sleep(Duration::from_millis(1800));
         }
     });
@@ -2539,6 +2738,14 @@ fn misma_mezcla(a: &Proyecto, b: &Proyecto) -> bool {
 pub fn cuanto(s: f64) -> String {
     let s = s.max(1.0).round() as u64;
     if s < 60 { format!("{s} s") } else if s % 60 == 0 { format!("{} min", s / 60) } else { format!("{} min {} s", s / 60, s % 60) }
+}
+
+/// Dónde se soltó un archivo: segundo, pista de video (o la primera libre) y pista de audio (solo su sonido).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Lugar {
+    pub t: f64,
+    pub capa: Option<usize>,
+    pub pista: Option<u64>,
 }
 
 /// Recuadro de un clip en la vista previa.
@@ -2604,6 +2811,13 @@ fn boton_rec(ui: &mut Ui, on: bool) -> Response {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _: &mut eframe::Frame) {
         App::ui(self, ui);
+    }
+
+    /// Se cierra bien: la marca de sesión se quita y no se ofrecerá recuperar nada.
+    fn on_exit(&mut self) {
+        if !self.sin_dispositivo {
+            crate::recuperacion::cerrada_bien(&carpeta());
+        }
     }
 }
 

@@ -410,9 +410,11 @@ impl App {
     /// Flotando encima de todo: se mueve de donde no hay nada y se estira de las orillas.
     fn ventana_archivos(&mut self, ui: &mut Ui) {
         let pantalla = ui.ctx().content_rect();
-        let [x, y, w, h] = self.archivos.rec.lugar.unwrap_or([pantalla.left() + 24.0, pantalla.top() + 96.0, 330.0, (pantalla.height() - 150.0).clamp(340.0, 620.0)]);
+        let nuevo = [pantalla.left() + 24.0, pantalla.top() + 90.0, 760.0f32.min(pantalla.width() - 60.0), (pantalla.height() - 150.0).clamp(380.0, 560.0)];
+        // Las ventanas guardadas de antes eran una columna angosta: se abren con el tamaño nuevo.
+        let [x, y, w, h] = self.archivos.rec.lugar.filter(|l| l[2] >= 500.0).unwrap_or(nuevo);
         let sombra = Shadow { offset: [0, 8], blur: 24, spread: 0, color: Color32::from_black_alpha(140) };
-        let marco = Frame::new().fill(WINDOW_TITLE).corner_radius(10.0).inner_margin(Margin::symmetric(9, 8)).stroke(Stroke::new(1.0, BUTTON_HI)).shadow(sombra);
+        let marco = Frame::new().fill(WINDOW_BODY).corner_radius(10.0).inner_margin(Margin::symmetric(8, 8)).stroke(Stroke::new(1.0, c(0x151515))).shadow(sombra);
         let r = Window::new("archivos")
             .id(Id::new("ventana-archivos"))
             .title_bar(false)
@@ -420,7 +422,7 @@ impl App {
             .resizable(true)
             .default_pos(pos2(x, y))
             .default_size(vec2(w, h))
-            .min_size(vec2(230.0, 320.0))
+            .min_size(vec2(300.0, 340.0))
             .constrain_to(pantalla)
             .show(ui.ctx(), |ui| {
                 ui.set_min_size(ui.available_size());
@@ -434,71 +436,114 @@ impl App {
 
     fn ui_archivos(&mut self, ui: &mut Ui) {
         ui.set_min_width(ui.available_width());
-        // Cabecera
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 2.0;
-            let a = &mut self.archivos;
-            if boton_color(ui, &tabler::ARROW_LEFT, false, "Carpeta anterior", if a.atras.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
-                a.volver(true);
+        // Ancha (en su ventana): lugares siempre a la izquierda, lista al centro y vista a la derecha.
+        let amplio = !self.archivos.rec.anclado && ui.available_width() >= 540.0;
+        // Barra de herramientas sobre una placa de metal.
+        let (placa, _) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::hover());
+        relieve(ui.painter(), placa, 7, c(0x3a3a3a), false, false);
+        let mut cab = ui.new_child(UiBuilder::new().max_rect(placa.shrink2(vec2(5.0, 4.0))).layout(Layout::left_to_right(Align::Center)));
+        self.cabecera_archivos(&mut cab, amplio);
+        ui.add_space(5.0);
+        if !amplio {
+            self.ruta_ui(ui);
+            if self.archivos.rec.carpeta.is_none() {
+                return self.lugares_ui(ui);
             }
-            if boton_color(ui, &tabler::CARET_RIGHT, false, "Carpeta siguiente", if a.adelante.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
-                a.volver(false);
-            }
-            if boton_color(ui, &tabler::CARET_UP, false, "Subir una carpeta", if a.rec.carpeta.is_none() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
-                a.subir();
-            }
-            if boton_color(ui, &tabler::FOLDERS, a.rec.carpeta.is_none(), "Lugares y favoritos", GLYPH, 24.0).clicked() {
-                a.ir_a(None);
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if boton_color(ui, &tabler::X, false, "Cerrar el panel de archivos", GLYPH, 24.0).clicked() {
-                    self.archivos.rec.abierto = false;
-                }
-                let a = &mut self.archivos;
-                if boton_color(ui, &tabler::LAYOUT_ROWS, a.rec.anclado, if a.rec.anclado { "Que flote en su ventana" } else { "Pegar a la izquierda" }, GLYPH, 24.0).clicked() {
-                    a.rec.anclado = !a.rec.anclado;
-                }
-                if boton_color(ui, &tabler::GRID_DOTS, a.rec.cuadricula, "Ver como cuadrícula", GLYPH, 24.0).clicked() {
-                    a.rec.cuadricula = !a.rec.cuadricula;
-                }
-                let r = boton_color(ui, &tabler::ADJUSTMENTS_HORIZONTAL, false, "Orden y qué se muestra", GLYPH, 24.0);
-                Popup::menu(&r).show(|ui| {
-                    ui.set_min_width(190.0);
-                    ui.label(RichText::new(t("Ordenar por")).color(TEXT_FAINT).size(13.0));
-                    for (o, n) in Orden::TODOS {
-                        if ui.selectable_label(a.orden == o, t(n)).clicked() {
-                            a.orden = o;
-                            a.reordenar();
-                        }
-                    }
-                    ui.separator();
-                    ui.checkbox(&mut a.rec.todos, t("Mostrar todos los archivos"));
-                    if let Some(c) = a.rec.carpeta.clone() {
-                        let ya = a.rec.favoritos.contains(&c);
-                        if ui.button(t(if ya { "Quitar esta carpeta de favoritos" } else { "Agregar esta carpeta a favoritos" })).clicked() {
-                            if ya { a.rec.favoritos.retain(|f| *f != c) } else { a.rec.favoritos.push(c) }
-                        }
-                    }
-                });
-            });
-        });
-        self.ruta_ui(ui);
-        if self.archivos.rec.carpeta.is_none() {
-            return self.lugares_ui(ui);
         }
-        ui.add(TextEdit::singleline(&mut self.archivos.buscar).hint_text(t("Buscar aquí y en subcarpetas…")).desired_width(f32::INFINITY));
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
-            for (f, n) in [(None, "Todo"), (Some(Tipo::Video), "Video"), (Some(Tipo::Audio), "Audio"), (Some(Tipo::Imagen), "Imagen")] {
-                if biblioteca::pastilla(ui, n, self.archivos.filtro == f).clicked() {
-                    self.archivos.filtro = f;
-                }
+        if amplio {
+            Panel::left("archivos-lado").frame(Frame::new().fill(c(0x232323)).corner_radius(6).inner_margin(Margin::symmetric(4, 4))).resizable(true).default_size(176.0).size_range(140.0..=260.0).show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                self.lugares_ui(ui);
+            });
+            if self.archivos.rec.carpeta.is_none() {
+                let r = ui.available_rect_before_wrap();
+                ui.painter().text(r.center(), Align2::CENTER_CENTER, t("Elige un lugar a la izquierda"), fuente(15.0), TEXT_FAINT);
+                return;
+            }
+        }
+        // Buscar y filtros.
+        ui.horizontal(|ui| {
+            ui.add(TextEdit::singleline(&mut self.archivos.buscar).hint_text(t("Buscar aquí y en subcarpetas…")).desired_width(if amplio { 220.0 } else { f32::INFINITY }));
+            if amplio {
+                self.filtros_archivos(ui);
             }
         });
-        ui.add_space(3.0);
-        Panel::bottom("archivos-vista").frame(Frame::NONE).resizable(true).default_size(210.0).size_range(110.0..=(ui.available_height() - 110.0).max(120.0)).show(ui, |ui| self.vista_ui(ui));
+        if !amplio {
+            ui.horizontal_wrapped(|ui| self.filtros_archivos(ui));
+        }
+        ui.add_space(4.0);
+        let vista_der = amplio && ui.available_width() >= 620.0;
+        if vista_der {
+            Panel::right("archivos-vista-der").frame(Frame::new().inner_margin(Margin { left: 8, ..Default::default() })).resizable(true).default_size(250.0).size_range(200.0..=380.0).show(ui, |ui| self.vista_ui(ui));
+        } else {
+            Panel::bottom("archivos-vista").frame(Frame::NONE).resizable(true).default_size(210.0).size_range(110.0..=(ui.available_height() - 110.0).max(120.0)).show(ui, |ui| self.vista_ui(ui));
+        }
         let filas = self.archivos.filas();
         if self.archivos.rec.cuadricula { self.cuadricula_ui(ui, &filas) } else { self.lista_ui(ui, &filas) }
+    }
+
+    /// Atrás, adelante, subir, lugares; en la ventana ancha también la ruta. A la derecha: orden, cuadrícula, pegar y
+    /// cerrar.
+    fn cabecera_archivos(&mut self, ui: &mut Ui, amplio: bool) {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        let a = &mut self.archivos;
+        if boton_color(ui, &tabler::ARROW_LEFT, false, "Carpeta anterior", if a.atras.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+            a.volver(true);
+        }
+        if boton_color(ui, &tabler::CARET_RIGHT, false, "Carpeta siguiente", if a.adelante.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+            a.volver(false);
+        }
+        if boton_color(ui, &tabler::CARET_UP, false, "Subir una carpeta", if a.rec.carpeta.is_none() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+            a.subir();
+        }
+        if !amplio && boton_color(ui, &tabler::FOLDERS, a.rec.carpeta.is_none(), "Lugares y favoritos", GLYPH, 24.0).clicked() {
+            a.ir_a(None);
+        }
+        let derecha = 4.0 * 27.0;
+        if amplio {
+            let mut u = ui.new_child(UiBuilder::new().max_rect(Rect::from_min_max(ui.cursor().min + vec2(6.0, 0.0), pos2(ui.max_rect().right() - derecha, ui.max_rect().bottom()))).layout(Layout::left_to_right(Align::Center)));
+            self.ruta_ui(&mut u);
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if boton_color(ui, &tabler::X, false, "Cerrar el panel de archivos", GLYPH, 24.0).clicked() {
+                self.archivos.rec.abierto = false;
+            }
+            let a = &mut self.archivos;
+            if boton_color(ui, &tabler::LAYOUT_ROWS, a.rec.anclado, if a.rec.anclado { "Que flote en su ventana" } else { "Pegar a la izquierda" }, GLYPH, 24.0).clicked() {
+                a.rec.anclado = !a.rec.anclado;
+            }
+            if boton_color(ui, &tabler::GRID_DOTS, a.rec.cuadricula, "Ver como cuadrícula", GLYPH, 24.0).clicked() {
+                a.rec.cuadricula = !a.rec.cuadricula;
+            }
+            let r = boton_color(ui, &tabler::ADJUSTMENTS_HORIZONTAL, false, "Orden y qué se muestra", GLYPH, 24.0);
+            Popup::menu(&r).show(|ui| {
+                ui.set_min_width(190.0);
+                ui.label(RichText::new(t("Ordenar por")).color(TEXT_FAINT).size(13.0));
+                for (o, n) in Orden::TODOS {
+                    if ui.selectable_label(a.orden == o, t(n)).clicked() {
+                        a.orden = o;
+                        a.reordenar();
+                    }
+                }
+                ui.separator();
+                ui.checkbox(&mut a.rec.todos, t("Mostrar todos los archivos"));
+                if let Some(c) = a.rec.carpeta.clone() {
+                    let ya = a.rec.favoritos.contains(&c);
+                    if ui.button(t(if ya { "Quitar esta carpeta de favoritos" } else { "Agregar esta carpeta a favoritos" })).clicked() {
+                        if ya { a.rec.favoritos.retain(|f| *f != c) } else { a.rec.favoritos.push(c) }
+                    }
+                }
+            });
+        });
+    }
+
+    fn filtros_archivos(&mut self, ui: &mut Ui) {
+        ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
+        for (f, n) in [(None, "Todo"), (Some(Tipo::Video), "Video"), (Some(Tipo::Audio), "Audio"), (Some(Tipo::Imagen), "Imagen")] {
+            if biblioteca::chip(ui, t(n), self.archivos.filtro == f).clicked() {
+                self.archivos.filtro = f;
+            }
+        }
     }
 
     /// «Videos › Viaje › Día 1»: cada parte se puede abrir.
@@ -554,6 +599,7 @@ impl App {
         };
         let mut ir = None;
         let mut quitar = None;
+        let actual = self.archivos.rec.carpeta.clone();
         ScrollArea::vertical().id_salt("archivos-lugares").auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
             let mut grupo = |ui: &mut Ui, titulo: &str, v: Vec<(String, PathBuf, &'static tabler::TablerIcon)>, fav: bool| {
@@ -561,15 +607,19 @@ impl App {
                     return;
                 }
                 ui.add_space(6.0);
-                ui.label(RichText::new(t(titulo)).color(MAIN).size(13.0));
+                ui.label(RichText::new(t(titulo).to_uppercase()).color(TEXT_FAINT).size(11.0));
                 for (n, r, ic) in v {
                     let (rc, resp) = ui.allocate_exact_size(vec2(ui.available_width(), FILA), Sense::click());
                     resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &n));
-                    if resp.hovered() {
+                    let aqui = actual.as_deref() == Some(r.as_path());
+                    if aqui {
+                        ui.painter().rect_filled(rc, 5, MAIN.gamma_multiply(0.14));
+                        ui.painter().rect_filled(Rect::from_min_size(rc.min + vec2(0.0, 4.0), vec2(3.0, rc.height() - 8.0)), 1, MAIN);
+                    } else if resp.hovered() {
                         ui.painter().rect_filled(rc, 5, BUTTON);
                     }
                     icono(ui.painter(), ic, Rect::from_center_size(pos2(rc.left() + 14.0, rc.center().y), Vec2::splat(16.0)), MAIN);
-                    ui.painter_at(rc).text(pos2(rc.left() + 30.0, rc.center().y), Align2::LEFT_CENTER, &n, fuente(14.5), TEXT);
+                    ui.painter_at(rc).text(pos2(rc.left() + 30.0, rc.center().y), Align2::LEFT_CENTER, &n, fuente(14.0), if aqui { MAIN } else { TEXT });
                     if resp.clicked() {
                         ir = Some(r.clone());
                     }
@@ -607,9 +657,34 @@ impl App {
 
     fn lista_ui(&mut self, ui: &mut Ui, filas: &[(usize, Result<Entrada, String>)]) {
         ui.spacing_mut().item_spacing.y = 1.0;
+        // Encabezado de columnas: clic ordena por esa columna.
+        let con_fecha = ui.available_width() > 430.0;
+        let (enc, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+        degradado(ui.painter(), enc, 4, c(0x363636), c(0x2a2a2a));
+        ui.painter().hline(enc.x_range(), enc.bottom() - 0.5, Stroke::new(1.0, Color32::from_black_alpha(140)));
+        let columnas = [(Orden::Nombre, "Nombre", enc.left() + 8.0, Align2::LEFT_CENTER), (Orden::Fecha, "Fecha", enc.right() - 92.0, Align2::RIGHT_CENTER), (Orden::Tamano, "Duración / peso", enc.right() - 8.0, Align2::RIGHT_CENTER)];
+        for (o, n, x, al) in columnas {
+            if o == Orden::Fecha && !con_fecha {
+                continue;
+            }
+            let on = self.archivos.orden == o;
+            let r = ui.painter().text(pos2(x, enc.center().y), al, format!("{}{}", t(n), if on { " ▾" } else { "" }), fuente(12.0), if on { MAIN } else { TEXT_DIM });
+            let rr = ui.interact(r.expand(3.0), Id::new(("orden-col", o as u8)), Sense::click());
+            rr.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, tf("Ordenar por {}", &[&t(n)])));
+            if rr.clicked() && !on {
+                self.archivos.orden = o;
+                self.archivos.reordenar();
+            }
+        }
+        ui.add_space(2.0);
         ScrollArea::vertical().id_salt(("archivos-lista", &self.archivos.rec.carpeta)).auto_shrink([false, false]).show_rows(ui, FILA, filas.len(), |ui, vis| {
-            for (nivel, f) in &filas[vis] {
+            let desde = vis.start;
+            for (k, (nivel, f)) in filas[vis].iter().enumerate() {
                 let (rc, resp) = ui.allocate_exact_size(vec2(ui.available_width(), FILA), Sense::click_and_drag());
+                // Renglones alternados: se sigue la fila con la vista.
+                if (desde + k) % 2 == 1 {
+                    ui.painter().rect_filled(rc, 0, Color32::from_white_alpha(4));
+                }
                 let x = rc.left() + 4.0 + *nivel as f32 * 13.0;
                 let e = match f {
                     Ok(e) => e,
@@ -624,8 +699,11 @@ impl App {
                 let dir = e.tipo == Tipo::Carpeta;
                 let abierta = dir && a.abiertas.contains(&e.ruta);
                 let on = a.elegidos.contains(&e.ruta);
-                if on || resp.hovered() {
-                    ui.painter().rect_filled(rc, 5, if on { mezcla(BUTTON, MAIN, 0.28) } else { BUTTON });
+                if on {
+                    ui.painter().rect_filled(rc, 4, MAIN.gamma_multiply(0.16));
+                    ui.painter().rect_filled(Rect::from_min_size(rc.min + vec2(0.0, 3.0), vec2(3.0, rc.height() - 6.0)), 1, MAIN);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(rc, 4, BUTTON);
                 }
                 // Flecha para ver la subcarpeta aquí mismo
                 let fl = Rect::from_center_size(pos2(x + 6.0, rc.center().y), Vec2::splat(18.0));
@@ -670,6 +748,10 @@ impl App {
                 if rc.width() > 215.0 && !dato.is_empty() {
                     fin = ui.painter().text(pos2(fin, rc.center().y), Align2::RIGHT_CENTER, dato, fuente(12.0), if on { TEXT } else { TEXT_FAINT }).left() - 6.0;
                 }
+                if rc.width() > 430.0 {
+                    fin = fin.min(rc.right() - 180.0);
+                    ui.painter().text(pos2(rc.right() - 92.0, rc.center().y), Align2::RIGHT_CENTER, fecha_corta(e.fecha), fuente(12.0), TEXT_FAINT);
+                }
                 let f = fuente(14.5);
                 let n = recortado(ui, &e.nombre, &f, fin - tx);
                 ui.painter_at(rc).text(pos2(tx, rc.center().y), Align2::LEFT_CENTER, n, f, if e.tipo == Tipo::Otro { TEXT_FAINT } else { TEXT });
@@ -700,7 +782,10 @@ impl App {
                         let a = &mut self.archivos;
                         a.pedir_mini(e);
                         let on = a.elegidos.contains(&e.ruta);
-                        ui.painter().rect_filled(rc, 6, if on { mezcla(BUTTON, MAIN, 0.28) } else if resp.hovered() { BUTTON } else { SUNKEN });
+                        ui.painter().rect_filled(rc, 6, if on { MAIN.gamma_multiply(0.14) } else if resp.hovered() { BUTTON } else { c(0x262626) });
+                        if on || resp.hovered() {
+                            ui.painter().rect_stroke(rc, 6, Stroke::new(if on { 2.0 } else { 1.0 }, if on { MAIN } else { BUTTON_HI }), StrokeKind::Inside);
+                        }
                         let im = Rect::from_min_max(rc.min + vec2(4.0, 4.0), pos2(rc.right() - 4.0, rc.bottom() - 22.0));
                         match a.minis.get(&e.ruta) {
                             Some(MiniLista { tex: Some(x), .. }) => {
@@ -1010,39 +1095,79 @@ impl App {
                     Err(_) => self.avisar(t("No pude leer los subtítulos"), true),
                 },
                 Tipo::Carpeta | Tipo::Otro => self.avisar(t("Ese archivo no se puede poner en las pistas"), false),
+                // Un video solo (no a una pista de sonido): se revisa en segundo plano y pregunta por el audio.
+                Tipo::Video if rutas.len() == 1 && pista.is_none() => self.importar_en(r.clone(), Some(Lugar { t: t0, capa, pista })),
                 _ => {
                     let Ok(info) = medios::sondear(r) else {
                         self.avisar(t("No pude leer ese archivo"), true);
                         continue;
                     };
-                    let dur = if es_imagen(r) { 5.0 } else { info.dur };
-                    if let Some(p) = pista {
-                        self.canal = Canal::Pista(p);
-                    }
-                    let solo_sonido = pista.is_some() && info.audio;
-                    let capa = match capa {
-                        Some(c) => c,
-                        None => {
-                            let ocupada = self.p.video.iter().any(|c| c.capa == 0 && c.inicio < t0 + dur && c.fin() > t0);
-                            if info.video.is_some() && !solo_sonido && ocupada { self.capa_libre(t0, dur) } else { 0 }
-                        }
-                    };
-                    // El sonido, a una pista con ese tramo libre: así no tapa el que ya está.
-                    if info.audio && pista.is_none() {
-                        let libre = |p: &Pista| p.instrumento.is_none() && !p.bloqueada && !p.armada && !p.clips.iter().any(|c| c.inicio < t0 + dur && c.inicio + c.dur > t0);
-                        let id = self.p.pistas.iter().find(|p| libre(p)).map(|p| p.id).unwrap_or_else(|| self.p.nueva_pista("Audio"));
-                        self.canal = Canal::Pista(id);
-                    }
-                    let antes = self.p.video.is_empty();
-                    self.poner_medio_info(r, &info, t0, if solo_sonido { None } else { Some(capa) }, None, false);
-                    if antes {
-                        self.linea.encuadrar = true;
-                    }
-                    t0 += dur;
+                    t0 += self.poner_ya(r, &info, Lugar { t: t0, capa, pista }, AudioVideo::Junto);
                 }
             }
         }
     }
+
+    /// Pone un archivo ya leído donde se soltó. Con `Separado`, el video va solo y su sonido se separa en voz e
+    /// instrumental. Da cuánto dura lo que se puso.
+    pub fn poner_ya(&mut self, r: &Path, info: &Info, l: Lugar, modo: AudioVideo) -> f64 {
+        let (t0, capa, pista) = (l.t, l.capa, l.pista);
+        let dur = if es_imagen(r) { 5.0 } else { info.dur };
+        if let Some(p) = pista {
+            self.canal = Canal::Pista(p);
+        }
+        let solo_sonido = pista.is_some() && info.audio;
+        let capa = match capa {
+            Some(c) => c,
+            None => {
+                let ocupada = self.p.video.iter().any(|c| c.capa == 0 && c.inicio < t0 + dur && c.fin() > t0);
+                if info.video.is_some() && !solo_sonido && ocupada { self.capa_libre(t0, dur) } else { 0 }
+            }
+        };
+        let separar = modo == AudioVideo::Separado && info.video.is_some() && info.audio && !solo_sonido;
+        // El sonido, a una pista con ese tramo libre: así no tapa el que ya está.
+        if info.audio && pista.is_none() && !separar {
+            let libre = |p: &Pista| p.instrumento.is_none() && !p.bloqueada && !p.armada && !p.clips.iter().any(|c| c.inicio < t0 + dur && c.inicio + c.dur > t0);
+            let id = self.p.pistas.iter().find(|p| libre(p)).map(|p| p.id).unwrap_or_else(|| self.p.nueva_pista("Audio"));
+            self.canal = Canal::Pista(id);
+        }
+        let antes = self.p.video.is_empty();
+        let sin_audio = Info { audio: info.audio && !separar, ..info.clone() };
+        self.poner_medio_info(r, &sin_audio, t0, if solo_sonido { None } else { Some(capa) }, None, false);
+        if separar {
+            let con: Vec<u64> = self.clip.into_iter().collect();
+            self.separar(r.to_path_buf(), t0, None, con);
+        }
+        if antes {
+            self.linea.encuadrar = true;
+        }
+        dur
+    }
+}
+
+/// Fecha de un archivo para la lista: «hoy», «ayer» o día/mes/año.
+fn fecha_corta(f: std::time::SystemTime) -> String {
+    let dias = |x: std::time::SystemTime| x.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() / 86_400) as i64;
+    let (d, hoy) = (dias(f), dias(std::time::SystemTime::now()));
+    if d <= 0 {
+        return String::new();
+    }
+    match hoy - d {
+        0 => return t("hoy").into(),
+        1 => return t("ayer").into(),
+        _ => {}
+    }
+    // Días desde 1970 a año, mes y día (calendario civil).
+    let z = d + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let dia = doy - (153 * mp + 2) / 5 + 1;
+    let mes = if mp < 10 { mp + 3 } else { mp - 9 };
+    let ano = yoe + era * 400 + i64::from(mes <= 2);
+    format!("{dia:02}/{mes:02}/{ano}")
 }
 
 /// Abre el explorador del sistema con el archivo elegido.
