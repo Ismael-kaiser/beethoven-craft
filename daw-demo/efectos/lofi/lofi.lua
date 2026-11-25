@@ -10,7 +10,9 @@ return {
   },
   sonido = function(e, c)
     local s = 0.005 + seno(0.45) * c.flota * 0.003
-    local polvo = pasaaltos(maximo(abs(ruido()) - 0.998, 0) * 300, 800) * c.polvo
+    -- El polvo es del disco: solo se oye mientras suena algo.
+    local gira = minimo(seguidor(maximo(abs(e.izq), abs(e.der)), 0.005, 0.25) * 40, 1)
+    local polvo = pasaaltos(maximo(abs(ruido()) - 0.998, 0) * 300, 800) * c.polvo * gira
     local function f(x)
       x = retardo(x, s, 0, 0.012)
       x = retener(x, 44100 - c.viejo * 32000)

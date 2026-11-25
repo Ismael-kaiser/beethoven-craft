@@ -61,7 +61,7 @@ return {
         local g = 1 - math.exp(-6.2832 * math.min(c.corte * 2 ^ (env * c.abre), 16000) / (sr * 2))
         local k, d = c.filo * 4, 1 + c.empuje * 3
         for _ = 1, 2 do
-          local u = tanh((o - k * z4) * d)
+          local u = tanh(o * d - k * z4)
           z1 = z1 + g * (u - tanh(z1))
           z2 = z2 + g * (tanh(z1) - tanh(z2))
           z3 = z3 + g * (tanh(z2) - tanh(z3))

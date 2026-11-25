@@ -376,6 +376,7 @@ pub struct Receta {
     pub medidas: Vec<(String, usize)>,
     /// Corre Lua en vivo, y lo que mide desde ahí.
     pub vivo: bool,
+    pub sostiene: bool,
     pub medidas_vivo: Vec<String>,
 }
 
@@ -434,6 +435,7 @@ impl Receta {
             tablas: vec![],
             medidas: vec![],
             vivo: false,
+            sostiene: false,
             medidas_vivo: vec![],
         }
     }

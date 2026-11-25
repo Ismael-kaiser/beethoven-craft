@@ -2,7 +2,7 @@ local equipo = incluir("equipo")
 
 -- Congelar: detiene el sonido en un instante y lo deja sonando, por frecuencias.
 return {
-  nombre = { es = "Congelador espectral", en = "Spectral freeze" }, tipo = "efecto", grupo = "Espacio",
+  nombre = { es = "Congelador espectral", en = "Spectral freeze" }, tipo = "efecto", sostiene = true, grupo = "Espacio",
   controles = { { "hielo", { es = "Congelar", en = "Freeze" }, 0, 1, 0 }, { "difuso", { es = "Difuminar", en = "Blur" }, 0, 0.995, 0.6 }, { "mezcla", "Mezcla", 0, 1, 0.6 } },
   presets = { { nombre = { es = "Nube", en = "Cloud" }, difuso = 0.95, mezcla = 0.7 }, { nombre = { es = "Detenido", en = "Frozen" }, hielo = 1, difuso = 0.8, mezcla = 1 } },
   vivo = function(v)

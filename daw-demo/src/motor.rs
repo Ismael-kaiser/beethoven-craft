@@ -127,6 +127,13 @@ struct EfectoE {
 }
 
 struct PistaE {
+    /// Cuadros seguidos sin que le entre nada, y qué tan fuerte sonó su cola en este rato y en el anterior.
+    quieta: u32,
+    rato: u32,
+    cola: [f32; 2],
+    /// Su cola no baja: se calla hasta que entre algo.
+    sin_fin: bool,
+    tapa: f32,
     /// Lo que espera para salir parejo con las más tardadas, y lo que espera además para llegar a la general junto con los
     /// envíos.
     espera: Espera,
@@ -344,6 +351,11 @@ impl Escena {
             let gan = balance(if calla { 0.0 } else { m.volumen }, m.pan);
             let eq = m.eq.iter().any(|x| *x != 0.0).then(|| eq_de_pista(&m.eq, sr));
             pistas.push(PistaE {
+                quieta: 0,
+                rato: 0,
+                cola: [0.0; 2],
+                sin_fin: false,
+                tapa: 1.0,
                 espera: Espera::default(),
                 junta: Espera::default(),
                 eq,
@@ -445,6 +457,7 @@ impl Escena {
                 }
             }
             p.callada = o.callada;
+            (p.quieta, p.rato, p.cola, p.sin_fin, p.tapa) = (o.quieta, o.rato, o.cola, o.sin_fin, o.tapa);
             for (i, e) in p.efectos.iter_mut().enumerate() {
                 if let Some(x) = o.efectos.get_mut(i).filter(|x| matches!((&x.receta, &e.receta), (Some(a), Some(b)) if Arc::ptr_eq(a, b))) {
                     std::mem::swap(&mut e.mem, &mut x.mem);
@@ -604,7 +617,19 @@ pub struct Externo {
     pub lateral: [Buf; 2],
 }
 
+/// Qué pasa con las colas al parar.
+#[derive(Clone, Copy, PartialEq)]
+enum Corte {
+    /// Suena normal.
+    No,
+    /// Se paró: todo baja en un momento.
+    Baja(f32),
+    /// Ya bajó: los efectos no suenan hasta que haya algo que tocar.
+    Callado,
+}
+
 pub struct Motor {
+    corte: Corte,
     pub externo: Option<Box<Externo>>,
     escena: Box<Escena>,
     ordenes: Receiver<Orden>,
@@ -633,6 +658,7 @@ impl Motor {
         let (oidos, oidas) = bounded(64);
         let estado = Arc::new(Estado::default());
         let m = Motor {
+            corte: Corte::No,
             externo: None,
             escena: Box::new(e),
             ordenes: recibe,
@@ -683,6 +709,12 @@ impl Motor {
                     if !t {
                         self.soltar_todo();
                     }
+                    // Al parar las colas bajan rápido; al tocar, todo vuelve.
+                    self.corte = match (t, self.tocando) {
+                        (false, true) => Corte::Baja(1.0),
+                        (false, false) => self.corte,
+                        _ => Corte::No,
+                    };
                     self.tocando = t;
                     self.acabo = false;
                 }
@@ -753,6 +785,12 @@ impl Motor {
 
     fn soltar_todo(&mut self) {
         for c in &mut self.escena.canales {
+            // Lo que su guion de notas tenía apretado también se suelta.
+            while c.llegan.len() < EVENTOS
+                && let Some((tono, _)) = c.sueltan.pop()
+            {
+                c.llegan.push(EvPlugin::Suelta { tono });
+            }
             c.voces.iter_mut().for_each(|v| v.d.puerta = false);
         }
     }
@@ -797,6 +835,7 @@ impl Motor {
     }
 
     fn sonar_directo(&mut self, i: usize, tono: u8, fuerza: f32, dur: Option<f64>) {
+        self.corte = Corte::No;
         let c = &mut self.escena.canales[i];
         let tono = c.fija.unwrap_or(tono);
         self.reloj += 1;
@@ -1098,7 +1137,15 @@ impl Motor {
                 continue;
             }
             p.callada = p.callada.saturating_add(n as u32);
-            for (ranura, e) in p.efectos.iter_mut().enumerate() {
+            // Lo que le entra, antes de sus efectos.
+            let entra_algo = p.mezcla.iter().any(|b| b[..n].iter().any(|x| x.abs() > 1e-5));
+            if entra_algo {
+                (p.quieta, p.rato, p.cola, p.sin_fin) = (0, 0, [0.0; 2], false);
+            } else {
+                p.quieta = p.quieta.saturating_add(n as u32);
+            }
+            let callado = self.corte == Corte::Callado;
+            for (ranura, e) in p.efectos.iter_mut().enumerate().filter(|(_, e)| !callado || e.plugin.is_some()) {
                 for v in &e.vinculos {
                     v.mover(&mut e.meta);
                 }
@@ -1157,6 +1204,28 @@ impl Motor {
                 }
                 junta(&mut p.mezcla);
             }
+            // Una cola que no baja no es una cola: un silbido, un ruido. Se calla sola hasta que entre algo.
+            if p.quieta as f32 > *sr && !p.efectos.is_empty() && !p.efectos.iter().any(|e| e.receta.as_ref().is_some_and(|r| r.sostiene)) {
+                p.cola[1] = p.mezcla.iter().flat_map(|b| &b[..n]).fold(p.cola[1], |m, x| m.max(x.abs()));
+                p.rato += n as u32;
+                if p.rato as f32 > *sr * 1.5 {
+                    p.sin_fin |= p.cola[1] > 1e-4 && p.cola[0] > 0.0 && p.cola[1] > p.cola[0] * 0.97;
+                    (p.cola, p.rato) = ([p.cola[1], 0.0], 0);
+                }
+            }
+            let tapa = if p.sin_fin { 0.0 } else { 1.0 };
+            if p.tapa != tapa || tapa == 0.0 {
+                let paso = (tapa - p.tapa).clamp(-1.0, 1.0) * k.min(0.2);
+                for j in 0..n {
+                    let g = (p.tapa + paso * j as f32 / n as f32).clamp(0.0, 1.0);
+                    p.mezcla[0][j] *= g;
+                    p.mezcla[1][j] *= g;
+                }
+                p.tapa += paso;
+                if (p.tapa - tapa).abs() < 1e-3 {
+                    p.tapa = tapa;
+                }
+            }
             if let Some(q) = &p.eq {
                 for l in 0..2 {
                     for (c, z) in q.iter().zip(&mut p.eq_mem[l]) {
@@ -1211,6 +1280,24 @@ impl Motor {
                     }
                 }
             }
+        }
+        // Al parar: todo baja en unos tres décimos de segundo y los efectos olvidan lo que traían.
+        if let Corte::Baja(g) = self.corte {
+            let paso = 1.0 / (0.3 * *sr);
+            for j in 0..n {
+                let h = (g - paso * j as f32).max(0.0);
+                pistas[0].mezcla[0][j] *= h;
+                pistas[0].mezcla[1][j] *= h;
+            }
+            let g = g - paso * n as f32;
+            self.corte = if g > 0.0 { Corte::Baja(g) } else { Corte::Callado };
+            if g <= 0.0 {
+                for e in pistas.iter_mut().flat_map(|p| &mut p.efectos) {
+                    e.mem.fill(0.0);
+                }
+            }
+        } else if self.corte == Corte::Callado {
+            pistas[0].mezcla.iter_mut().for_each(|b| b[..n].fill(0.0));
         }
         // Limitador: baja de golpe y se recupera en ~100 ms.
         let vuelve = 1.0 - (-1.0 / (0.1 * *sr)).exp();

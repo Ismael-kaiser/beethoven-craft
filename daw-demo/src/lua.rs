@@ -63,6 +63,8 @@ pub struct Ficha {
     pub huella: Option<String>,
     /// No se ofrece en las listas.
     pub oculto: bool,
+    /// Suena sin fin a propósito: el motor no lo apaga aunque no le entre nada.
+    pub sostiene: bool,
     /// Corre mientras suena, y lo que deja ver desde ahí.
     pub vivo: bool,
     pub medidas: Vec<String>,
@@ -543,6 +545,7 @@ pub fn ficha_de(t: &Table) -> mlua::Result<Ficha> {
         muestras,
         huella: t.get::<Option<String>>("huella")?,
         oculto: t.get::<Option<bool>>("oculto")?.unwrap_or(false),
+        sostiene: t.get::<Option<bool>>("sostiene")?.unwrap_or(false),
         vivo: t.get::<Option<Function>>("vivo")?.is_some(),
         medidas: t.get::<Option<Vec<String>>>("medidas")?.unwrap_or_default().into_iter().take(MAX_MEDIDAS).collect(),
     })
@@ -653,6 +656,7 @@ fn armar_(fuente: &str, sr: f32, a: &Archivos) -> mlua::Result<(Ficha, Option<Re
     r.tablas = tablas.take();
     r.nombrar_medidas(&medidas.borrow());
     r.vivo = f.vivo;
+    r.sostiene = f.sostiene;
     r.medidas_vivo = f.medidas.clone();
     if r.memoria * voces > MAX_MEMORIA {
         return Err(mlua::Error::runtime(tr("el sonido pide demasiada memoria: baja las voces o los retardos")));

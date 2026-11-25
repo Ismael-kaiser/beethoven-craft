@@ -7,6 +7,7 @@ Beethoven DAW:
 • Afinador de voz, quita ruido, arpegiador y acordes en vivo.
 • Controladores: mueve cualquier perilla con el nivel, un LFO o una fórmula.
 • El Mixer empareja las pistas cuyos efectos se tardan.
+• Corregido: algunos efectos se quedaban sonando al detener o al acabar el clip.
 • Corregido: los instrumentos VST3 y CLAP salían en silencio dentro de un proyecto.
 
 Haz y comparte plugins:

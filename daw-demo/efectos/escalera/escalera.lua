@@ -10,13 +10,15 @@ return {
   presets = { { nombre = { es = "Bajo gordo", en = "Fat bass" }, corte = 380, filo = 0.6, empuje = 0.6 }, { nombre = { es = "Canta solo", en = "Self-oscillating" }, corte = 900, filo = 1.08 }, { nombre = { es = "Guau al tocar", en = "Auto wah" }, corte = 350, filo = 0.7, sigue = 0.8 } },
   vivo = function(v)
     local z = { { 0.0, 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.0, 0.0 } }
-    local env, fase = 0.0, 0.0
+    local env, fase, hay = 0.0, 0.0, 0.0
+    local apaga = math.exp(-1 / (v.sr * 0.25))
     local dos = v.sr * 2
     local function paso(x, e, g, k, d)
       -- Dos pasadas por muestra: la resonancia fuerte no se sale de control.
       local y = e[4]
       for _ = 1, 2 do
-        local u = tanh((x - k * y) * d)
+        -- La saturación empuja lo que entra, no la resonancia: si no, silbaría solo.
+        local u = tanh(x * d - k * y)
         e[1] = e[1] + g * (u - tanh(e[1]))
         e[2] = e[2] + g * (tanh(e[1]) - tanh(e[2]))
         e[3] = e[3] + g * (tanh(e[2]) - tanh(e[3]))
@@ -28,6 +30,8 @@ return {
     return function(l, r, c, m)
       local a = math.abs(l) + math.abs(r)
       env = env + (a - env) * (a > env and 0.01 or 0.0006)
+      -- Con mucha resonancia canta solo, pero nada más mientras haya sonido.
+      hay = a > 0.0005 and 1.0 or hay * apaga
       local oct = c.sigue * env * 5
       if c.negras > 0.05 then
         fase = (fase + m.bpm / 60 / c.negras / v.sr) % 1
@@ -36,7 +40,8 @@ return {
       local f = math.min(math.max(c.corte * 2 ^ oct, 20), 18000)
       local g = 1 - math.exp(-6.2832 * f / dos)
       local d = 1 + c.empuje * 4
-      return paso(l, z[1], g, c.filo * 4, d) * (1 + c.filo), paso(r, z[2], g, c.filo * 4, d) * (1 + c.filo)
+      local s = (1 + c.filo) * math.min(1, hay * 4)
+      return paso(l, z[1], g, c.filo * 4, d) * s, paso(r, z[2], g, c.filo * 4, d) * s
     end
   end,
   interfaz = equipo.rack{ tinte = "#2c2c30", color = "#ff9a52", metal = "#b4b7bd", grafica = false, aguja = function(c, m) return equipo.vu(m.nivel), "VU" end, claves = { "corte", "filo", "empuje", "sigue", "negras", "hondo" } },
