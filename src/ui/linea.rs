@@ -100,7 +100,7 @@ pub enum Que {
 
 pub const AYUDA_VACIO: &str = "No tiene imagen: los efectos, estilos y colores que le pongas se aplican a todo lo que está debajo, también a los textos";
 pub const CAB: f32 = 212.0;
-const REGLA: f32 = 30.0;
+const REGLA: f32 = 34.0;
 const ORILLA: f32 = 7.0;
 
 /// Forma de onda del tramo visible de un clip.
@@ -321,12 +321,30 @@ impl App {
         // Regla
         let regla = Rect::from_min_size(pos2(izq, todo.top()), vec2(ancho, REGLA));
         let cab = Rect::from_min_size(todo.min, vec2(CAB, REGLA));
-        // La regla como una tira de metal: más clara arriba, con filo de luz y sombra abajo.
+        // La regla como la carátula de un reloj: acero oscuro, minutería de riel e índices aplicados, bajo un cristal.
         let barra = Rect::from_min_max(todo.min, regla.max);
-        degradado(ui.painter(), barra, 0, c(0x2e2e2e), c(0x1f1f1f));
-        ui.painter().hline(barra.x_range(), barra.top() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(22)));
-        ui.painter().hline(barra.x_range(), barra.bottom() + 1.0, Stroke::new(2.0, Color32::from_black_alpha(90)));
-        ui.painter().text(cab.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, tiempo(t), fuente(16.0), MAIN);
+        degradado(ui.painter(), barra, 0, c(0x363636), c(0x1c1c1c));
+        ui.painter().hline(barra.x_range(), barra.top() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(30)));
+        ui.painter().hline(barra.x_range(), barra.bottom() + 1.0, Stroke::new(2.0, Color32::from_black_alpha(110)));
+        {
+            // La ventanilla del tiempo, biselada y con su lupa; y la esfera de segundos con su engrane, que avanza con el cursor.
+            let p = ui.painter();
+            let v = Rect::from_min_size(pos2(cab.left() + 6.0, cab.top() + 4.0), vec2(96.0, REGLA - 8.0));
+            p.rect_filled(v.expand(1.5), 6, Color32::from_black_alpha(140));
+            degradado(p, v.expand(1.0), 6, c(0x8a8a8a), c(0x4a4a4a));
+            hueco(p, v.shrink(0.5), 5, c(0x0c0c0c));
+            p.text(v.center(), Align2::CENTER_CENTER, tiempo(t), barlow(16.0), MAIN);
+            degradado_en(p, Rect::from_min_max(v.min + vec2(1.5, 1.5), pos2(v.right() - 1.5, v.top() + v.height() * 0.48)), CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, Color32::from_white_alpha(46), Color32::from_white_alpha(10));
+            let o = pos2(cab.right() - 22.0, cab.center().y);
+            let (re, giro) = (REGLA / 2.0 - 4.0, (t * 0.8) as f32);
+            engrane(p, o - vec2(re * 1.75, -1.0), re * 0.72, 16, -giro * 1.6, Color32::from_rgb(0x8c, 0x76, 0x35));
+            p.circle_filled(o - vec2(re * 1.75, -1.0), 2.2, Color32::from_rgb(0xc2, 0x2f, 0x4e));
+            p.circle_filled(o - vec2(re * 1.75 + 0.6, -0.2), 0.8, Color32::from_white_alpha(170));
+            esfera(p, o, re, t, if self.grab.is_some() { RECORD } else { MAIN });
+            // Un segundo engrane, más chico, que gira al revés; y el tornillo que los sujeta.
+            engrane(p, o - vec2(re * 2.95, 1.5), re * 0.46, 11, giro * 2.5, Color32::from_rgb(0x84, 0x86, 0x8c));
+            tornillo(p, o - vec2(re * 2.95, 1.5), 2.4, 0.7, true);
+        }
         let pasos = [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0];
         let paso = pasos.into_iter().find(|p| p * zoom >= 70.0).unwrap_or(600.0);
         let pr = ui.painter_at(Rect::from_min_max(regla.min, todo.max));
@@ -341,13 +359,20 @@ impl App {
                 pr.rect_filled(Rect::from_min_max(pos2(x, regla.bottom()), pos2(a_x((k + 1.0) * paso), todo.bottom())), 0, GRID_ALT);
             }
             pr.vline(x, regla.bottom()..=todo.bottom(), Stroke::new(1.0, GRID_BAR));
-            // Marca grande: de arriba abajo de la regla, con su sombra.
-            pr.vline(x, regla.top() + 3.0..=regla.bottom(), Stroke::new(1.0, c(0x8a8a8a)));
-            pr.vline(x + 1.0, regla.top() + 3.0..=regla.bottom(), Stroke::new(1.0, Color32::from_black_alpha(120)));
+            // Índice aplicado en la marca grande; entre marcas, la minutería: una más larga a la mitad y rayitas finas.
+            indice(&pr, x, regla.bottom() - 13.0, regla.bottom() - 4.0, 3.0, c(0xd2d2d2));
             for j in 1..sub as i32 {
                 let xs = a_x((k + j as f32 as f64 / sub) * paso);
-                let alto = if sub == 4.0 && j == 2 { 9.0 } else { 5.0 };
-                pr.vline(xs, regla.bottom() - alto..=regla.bottom(), Stroke::new(1.0, c(0x5c5c5c)));
+                let largo = sub == 4.0 && j == 2;
+                pr.vline(xs, regla.bottom() - if largo { 11.0 } else { 9.0 }..=regla.bottom() - 4.5, Stroke::new(if largo { 1.4 } else { 1.0 }, c(0xa8a8a8)));
+            }
+            if paso * zoom / sub >= 22.0 {
+                for j in 0..(sub * 5.0) as i32 {
+                    if j % 5 != 0 {
+                        let xs = a_x((k + j as f64 / (sub * 5.0)) * paso);
+                        pr.vline(xs, regla.bottom() - 7.0..=regla.bottom() - 4.5, Stroke::new(0.8, c(0x808080)));
+                    }
+                }
             }
             let s = k * paso;
             // Con mucho acercamiento, minutos:segundos:cuadro; si no, minutos:segundos.
@@ -360,6 +385,11 @@ impl App {
             pr.text(pos2(x + 4.0, regla.top() + 4.0), Align2::LEFT_TOP, txt, barlow(12.5), RULER_TEXT);
             k += 1.0;
         }
+        // El riel de la minutería y el cristal de la carátula.
+        for y in [regla.bottom() - 4.0, regla.bottom() - 9.5] {
+            pr.hline(regla.x_range(), y, Stroke::new(0.7, Color32::from_white_alpha(38)));
+        }
+        degradado(ui.painter(), Rect::from_min_max(barra.min, pos2(barra.right(), barra.top() + REGLA * 0.42)), 0, Color32::from_white_alpha(22), Color32::from_white_alpha(4));
         // Barra de preparación, abajo de la regla: naranja lo que cuesta y aún no está hecho; verde lo listo para verse
         // fluido. Se va llenando sola en pausa.
         for (a, b, listo) in self.vista.preparado() {
@@ -396,8 +426,10 @@ impl App {
             if que == Que::Todo {
                 // Separador entre imagen y sonido.
                 let (s, _) = ui.allocate_exact_size(vec2(CAB + ancho, 7.0), Sense::hover());
-                ui.painter().rect_filled(s, 0, c(0x191919));
-                ui.painter().hline(s.x_range(), s.center().y, Stroke::new(1.0, MAIN.gamma_multiply(0.35)));
+                // Una ranura con su filete dorado.
+                degradado(ui.painter(), s, 0, c(0x121212), c(0x262626));
+                ui.painter().hline(s.x_range(), s.center().y - 0.5, Stroke::new(1.2, mezcla(DEEP, Color32::BLACK, 0.35)));
+                ui.painter().hline(s.x_range(), s.center().y - 1.3, Stroke::new(0.6, HIGHLIGHT.gamma_multiply(0.5)));
             }
             for i in 0..self.p.pistas.len() {
                 let y = self.fila_audio(ui, i, ancho, &a_x, &a_t, &mut acciones);
@@ -519,13 +551,18 @@ impl App {
             // Línea con un poco de resplandor.
             pr.vline(x, regla.bottom()..=todo.bottom(), Stroke::new(4.0, col.gamma_multiply(0.18)));
             pr.vline(x, regla.top() + 16.0..=todo.bottom(), Stroke::new(1.5, col));
-            // Cabeza de metal que se agarra: una placa con punta.
-            let (y0, y1, y2) = (regla.top() + 2.0, regla.top() + 13.0, regla.top() + 19.0);
-            let cabeza = vec![pos2(x - 7.0, y0), pos2(x + 7.0, y0), pos2(x + 7.0, y1), pos2(x, y2), pos2(x - 7.0, y1)];
-            pr.add(Shape::convex_polygon(cabeza.iter().map(|q| *q + vec2(0.0, 1.5)).collect(), Color32::from_black_alpha(110), Stroke::NONE));
-            pr.add(Shape::convex_polygon(cabeza, mezcla(col, Color32::BLACK, 0.15), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.55))));
-            let brillo = Rect::from_min_max(pos2(x - 6.0, y0 + 1.0), pos2(x + 6.0, y0 + 6.0));
-            degradado(&pr, brillo, 1, mezcla(col, Color32::WHITE, 0.55), col);
+            // Cabeza como manecilla facetada: un lado en luz y el otro en sombra, con un rubí.
+            let (y0, y1, y2) = (regla.top() + 2.0, regla.top() + 12.0, regla.bottom() + 1.0);
+            let cabeza = [pos2(x - 7.0, y0), pos2(x + 7.0, y0), pos2(x + 7.0, y1), pos2(x, y2), pos2(x - 7.0, y1)];
+            pr.add(Shape::convex_polygon(cabeza.iter().map(|q| *q + vec2(0.0, 1.5)).collect(), Color32::from_black_alpha(120), Stroke::NONE));
+            pr.add(Shape::convex_polygon(vec![cabeza[0], pos2(x, y0), cabeza[3], cabeza[4]], mezcla(col, Color32::WHITE, 0.35), Stroke::NONE));
+            pr.add(Shape::convex_polygon(vec![pos2(x, y0), cabeza[1], cabeza[2], cabeza[3]], mezcla(col, Color32::BLACK, 0.28), Stroke::NONE));
+            pr.add(Shape::closed_line(cabeza.to_vec(), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.62))));
+            let rubi = pos2(x, y0 + 5.5);
+            pr.circle_filled(rubi, 3.4, mezcla(col, Color32::BLACK, 0.6));
+            pr.circle_filled(rubi, 2.7, Color32::from_rgb(0x9c, 0x14, 0x36));
+            pr.circle_filled(rubi - vec2(0.3, 0.4), 1.7, Color32::from_rgb(0xe0, 0x3a, 0x62));
+            pr.circle_filled(rubi - vec2(0.9, 1.0), 0.8, Color32::from_white_alpha(210));
             // Al arrastrarlo, el tiempo exacto al lado.
             if rr.dragged() || rr.is_pointer_button_down_on() {
                 let s = t.max(0.0);
@@ -567,8 +604,10 @@ impl App {
         let px_vis = (mapa.width() + 290.0) as f64;
         let vis = px_vis / self.linea.zoom;
         let v = Rect::from_min_max(pos2(x(self.linea.x0), mapa.top()), pos2(x((self.linea.x0 + vis).min(fin)).max(x(self.linea.x0) + 8.0), mapa.bottom()));
-        p.rect_filled(v, 4, Color32::from_white_alpha(28));
-        p.rect_stroke(v, 4, Stroke::new(1.0, MAIN.gamma_multiply(0.7)), StrokeKind::Inside);
+        // La parte que se ve, bajo una lupa de vidrio.
+        p.rect_filled(v, 4, Color32::from_white_alpha(20));
+        vidrio(&p, v, 4, MAIN, false);
+        p.rect_stroke(v, 4, Stroke::new(1.0, MAIN.gamma_multiply(0.8)), StrokeKind::Inside);
         p.vline(x(self.ahora()), mapa.y_range(), Stroke::new(1.0, MAIN));
         let t_de = |px: f32| ((px - mapa.left()) / mapa.width()) as f64 * fin;
         // Fuera del recuadro: clic lo centra ahí. Dentro: arrastrar lo desplaza.
@@ -703,9 +742,7 @@ impl App {
                     let capa = self.capa_libre(c.inicio, c.dur);
                     let mut d = c;
                     (d.id, d.capa, d.grupo) = (self.p.id(), capa, None);
-                    for f in &mut d.fx {
-                        f.id = self.p.id();
-                    }
+                    self.p.renumerar(&mut d);
                     self.clip = Some(d.id);
                     self.p.video.push(d);
                 }
@@ -956,7 +993,11 @@ impl App {
     /// Marco del clip: elegido, o pareja de uno elegido.
     fn marco(&self, pr: &Painter, rc: Rect, id: u64, grupo: Option<u64>) {
         if self.elegido(id) {
+            for (e, a) in [(3.0, 0.10), (1.5, 0.20)] {
+                pr.rect_stroke(rc.expand(e), 6 + e as u8, Stroke::new(1.5, MAIN.gamma_multiply(a)), StrokeKind::Middle);
+            }
             pr.rect_stroke(rc, 6, Stroke::new(2.0, MAIN), StrokeKind::Inside);
+            pr.rect_stroke(rc.shrink(2.0), 5, Stroke::new(1.0, HIGHLIGHT.gamma_multiply(0.35)), StrokeKind::Inside);
         } else if grupo.is_some() && self.seleccion.iter().any(|x| self.p.tramo_de(*x).is_some_and(|t| t.grupo == grupo)) {
             pr.rect_stroke(rc, 6, Stroke::new(1.5, MAIN.gamma_multiply(0.55)), StrokeKind::Inside);
         }
@@ -1011,6 +1052,8 @@ impl App {
         if capa % 2 == 1 {
             pr.rect_filled(carril, 0, Color32::from_white_alpha(5));
         }
+        // Carril metido: sombra arriba, como la ranura de una platina.
+        degradado(&pr, Rect::from_min_size(carril.min, vec2(carril.width(), 6.0)), 0, Color32::from_black_alpha(70), Color32::from_black_alpha(0));
         pr.hline(carril.x_range(), carril.bottom() - 0.5, Stroke::new(1.0, c(0x161616)));
         // Filo de luz debajo de la ranura: separa las pistas como un tablero.
         pr.hline(carril.x_range(), carril.bottom() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(7)));
@@ -1097,6 +1140,11 @@ impl App {
             // Lo que tiene el clip, en etiquetas de colores a la derecha del nombre.
             let nfx = v.fx.iter().filter(|f| f.activo).count();
             let mut tags: Vec<(String, Color32)> = vec![];
+            let clase = v.clase.and_then(|k| self.p.clases.iter().find(|x| x.id == k)).cloned();
+            if let Some(k) = &clase {
+                let [r, g, b] = k.color;
+                tags.push((k.nombre.clone(), mezcla(Color32::from_rgb(r, g, b), Color32::WHITE, 0.35)));
+            }
             if nfx > 0 {
                 tags.push((crate::idioma::tf("FX {}", &[&nfx]), TAG_FX));
             }
@@ -1120,6 +1168,7 @@ impl App {
                 pr.rect_filled(rc, 6, Color32::from_black_alpha(90));
             }
             let resp = ui.interact(rc.intersect(carril), Id::new(("video", v.id)), Sense::click_and_drag());
+            resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, crate::idioma::tf("Clip de video {}", &[&i])));
             if resp.contains_pointer() {
                 soltado_en = Some(v.id);
                 if DragAndDrop::has_payload_of_type::<Soltar>(ui.ctx()) {
@@ -1152,6 +1201,8 @@ impl App {
                         }
                     }
                 });
+                let n = clase.as_ref().map_or(crate::idioma::t("Agregar a una clase").to_string(), |k| crate::idioma::tf("Clase «{}»", &[&k.nombre]));
+                ui.menu_button(n, |ui| self.menu_clase(ui, v.id));
                 ui.menu_button(crate::idioma::t("Color del clip"), |ui| self.menu_color(ui, v.id));
                 ui.separator();
                 if ui.button(crate::idioma::t("Dividir en el cursor")).clicked() {
@@ -1340,6 +1391,8 @@ impl App {
         if elegida {
             pr.rect_filled(carril, 0, Color32::from_white_alpha(4));
         }
+        // Carril metido: sombra arriba, como la ranura de una platina.
+        degradado(&pr, Rect::from_min_size(carril.min, vec2(carril.width(), 6.0)), 0, Color32::from_black_alpha(70), Color32::from_black_alpha(0));
         pr.hline(carril.x_range(), carril.bottom() - 0.5, Stroke::new(1.0, c(0x161616)));
         // Filo de luz debajo de la ranura: separa las pistas como un tablero.
         pr.hline(carril.x_range(), carril.bottom() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(7)));
@@ -1632,8 +1685,17 @@ fn cabecera(ui: &Ui, r: Rect, clave: &str, elegida: bool, col: Color32) {
     // Franja del color de la pista, pegada a la orilla izquierda.
     let franja = Rect::from_min_max(caja.min + vec2(1.0, 1.0), pos2(caja.left() + 5.0, caja.bottom() - 1.0));
     degradado_en(p, franja, CornerRadius { nw: 5, sw: 5, ne: 0, se: 0 }, mezcla(col, Color32::WHITE, 0.25), mezcla(col, Color32::BLACK, 0.2));
+    // Vidrio sobre la mitad de arriba de la placa.
+    degradado_en(p, Rect::from_min_max(caja.min + vec2(5.0, 1.0), pos2(caja.right() - 1.0, caja.top() + caja.height() * 0.44)), CornerRadius { nw: 0, ne: 5, sw: 0, se: 0 }, Color32::from_white_alpha(30), Color32::from_white_alpha(7));
     let placa = Rect::from_min_max(caja.min + vec2(8.0, 4.0), pos2(caja.left() + 40.0, caja.bottom() - 4.0));
-    hueco(p, placa, 5, if elegida { c(0x2a2a2a) } else { c(0x222222) });
+    // Marco pulido de la clave, con sus tornillos azulados.
+    degradado(p, placa.expand(0.8), 6, c(0x747474), c(0x404040));
+    hueco(p, placa.shrink(0.3), 5, if elegida { c(0x2a2a2a) } else { c(0x1c1c1c) });
+    if placa.height() > 44.0 {
+        for (o, g) in [(pos2(placa.left() + 5.5, placa.top() + 5.5), 0.5), (pos2(placa.right() - 5.5, placa.top() + 5.5), 2.1), (pos2(placa.left() + 5.5, placa.bottom() - 5.5), 1.3), (pos2(placa.right() - 5.5, placa.bottom() - 5.5), 2.8)] {
+            tornillo(p, o, 2.2, g, true);
+        }
+    }
     p.text(placa.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, clave, barlow(17.0), Color32::from_black_alpha(160));
     p.text(placa.center(), Align2::CENTER_CENTER, clave, barlow(17.0), if elegida { MAIN } else { TEXT_DIM });
     if elegida {
@@ -1726,19 +1788,22 @@ fn clip_fondo(p: &Painter, rc: Rect, fondo: Color32) {
     degradado(p, rc, 6, mezcla(fondo, Color32::WHITE, 0.1), mezcla(fondo, Color32::BLACK, 0.28));
 }
 
-/// Encima del contenido: el brillo de cristal (sin desenfoques, casi no cuesta), un filo de luz arriba y el borde.
+/// Encima del contenido: un vidrio grueso, con su brillo, su luz de abajo y dos destellos en diagonal.
 fn clip_cristal(p: &Painter, rc: Rect, col: Color32) {
-    let rr = CornerRadius::same(6);
-    let arriba = Rect::from_min_max(rc.min, pos2(rc.right(), rc.top() + rc.height() * 0.42));
-    p.with_clip_rect(arriba.intersect(p.clip_rect())).rect_filled(rc, rr, Color32::from_white_alpha(16));
-    // Reflejo abajo, como la luz que atraviesa el cristal.
-    let abajo = Rect::from_min_max(pos2(rc.left(), rc.bottom() - 5.0), rc.max);
-    p.with_clip_rect(abajo.intersect(p.clip_rect())).rect_filled(rc, rr, translucido(mezcla(col, Color32::WHITE, 0.5), 28));
-    if rc.width() > 12.0 {
-        p.hline(rc.left() + 5.0..=rc.right() - 5.0, rc.top() + 0.75, Stroke::new(1.0, Color32::from_white_alpha(120)));
+    // El brillo termina donde la cinta del nombre: un solo filo.
+    vidrio_en(p, rc, 6, col, false, 18.0);
+    // Destellos: dos franjas inclinadas, como la luz de una ventana en el cristal.
+    if rc.width() > 90.0 {
+        let (h, sesgo) = (rc.height(), rc.height() * 0.55);
+        for (x, w, a) in [(0.10, 0.5, 13u8), (0.10 + 0.62 * h / rc.width(), 0.16, 9)] {
+            let x0 = rc.left() + rc.width().min(420.0) * x + sesgo;
+            let w = h * w;
+            let q = vec![pos2(x0, rc.top() + 1.0), pos2(x0 + w, rc.top() + 1.0), pos2(x0 + w - sesgo, rc.bottom() - 1.0), pos2(x0 - sesgo, rc.bottom() - 1.0)];
+            if q[1].x < rc.right() - 4.0 {
+                p.add(Shape::convex_polygon(q, Color32::from_white_alpha(a), Stroke::NONE));
+            }
+        }
     }
-    p.rect_stroke(rc, rr, Stroke::new(1.0, Color32::from_white_alpha(28)), StrokeKind::Inside);
-    p.rect_stroke(rc, rr, Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.7)), StrokeKind::Outside);
 }
 
 /// Etiquetas de colores pegadas a la derecha de `r`, de derecha a izquierda mientras quepan junto al nombre. Da lo que

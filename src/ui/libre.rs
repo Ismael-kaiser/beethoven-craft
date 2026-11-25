@@ -194,9 +194,10 @@ impl App {
                     Modo::Mover => {}
                 }
                 ui.separator();
-                let on = self.anim.auto;
+                let aqui = self.espacio == Espacio::Animacion;
+                let on = if aqui { self.anim.grabar } else { self.anim.auto };
                 if ui.add(Button::new(RichText::new(t("Grabar llaves")).size(13.5).color(if on { RECORD } else { TEXT })).fill(if on { RECORD.gamma_multiply(0.22) } else { BUTTON })).on_hover_text(t("Con esto prendido, cualquier cambio pone una llave en el cursor")).clicked() {
-                    self.anim.auto = !on;
+                    if aqui { self.anim.grabar = !on } else { self.anim.auto = !on }
                 }
                 ui.menu_button(RichText::new(t("◆ Nueva llave")).size(13.5).color(MAIN), |ui| {
                     ui.set_min_width(210.0);

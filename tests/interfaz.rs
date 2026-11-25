@@ -624,9 +624,7 @@ fn pestana_animacion() {
     h.state_mut().hacer_atajo("borrar");
     assert_eq!(c(&h).mov.y.claves.len(), n, "borra el cuadro clave, no el clip");
     // Grabar: cambiar un valor sin animar pone cuadros clave.
-    h.get_by_label("Grabar claves").click();
-    h.run_steps(2);
-    assert!(h.state().anim.auto);
+    assert!(h.state().anim.grabar, "en Animación viene prendido");
     h.state_mut().ir(1.0);
     h.run_steps(2);
     foto(&mut h, "anim-pistas");
@@ -707,7 +705,8 @@ fn pestana_nodos() {
     let antes = g(&h).unwrap().cables.clone();
     let r = h.get_by_label("En el lienzo: Fusionar").rect();
     let e = h.get_by_label("En el lienzo: Clip").rect();
-    let (a, b) = (eframe::egui::pos2(e.right(), e.top() + 13.0 * e.width() / 150.0), eframe::egui::pos2(r.left(), r.top() + (26.0 + 22.0 * 2.5) * r.width() / 150.0));
+    use toma_uno::ui::nodos::{ANCHO, CABEZA, MINI, PUERTO};
+    let (a, b) = (eframe::egui::pos2(e.right(), e.top() + CABEZA / 2.0 * e.width() / ANCHO), eframe::egui::pos2(r.left(), r.top() + (CABEZA + MINI + 10.0 + PUERTO * 2.5) * r.width() / ANCHO));
     h.hover_at(a);
     h.run_steps(2);
     h.drag_at(a);
@@ -1167,4 +1166,154 @@ fn mezclador_y_color_de_clips() {
     h.state_mut().borrar_bus(b);
     h.run_steps(3);
     assert!(h.state_mut().p.clip(ids[0]).unwrap().bus.is_none());
+}
+
+/// Nodos con otro clip y una imagen: se eligen de las tarjetas, se ven en su nodo y se cambian.
+#[test]
+fn nodos_con_clips() {
+    use toma_uno::modelo::Contenido;
+    use toma_uno::nodos::Clase;
+    let d = carpeta_de_prueba("nodos-clips");
+    let ff = |args: &[&str], n: &str| {
+        let r = d.join(n);
+        assert!(std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i"]).args(args).arg(&r).status().unwrap().success());
+        r
+    };
+    let a = ff(&["mandelbrot=s=640x360:r=24", "-t", "2", "-pix_fmt", "yuv420p", "-g", "6"], "fractal.mp4");
+    let b = ff(&["gradients=s=640x360:r=24:c0=0x2244aa:c1=0xee8833:n=3:seed=4", "-t", "2", "-pix_fmt", "yuv420p", "-g", "6"], "degradado.mp4");
+    let foto_ = ff(&["cellauto=s=320x180:rule=110,scale=320:180,format=rgb24", "-frames:v", "1"], "imagen.png");
+    let mut h = arnes_corto();
+    h.run_steps(3);
+    {
+        let p = &mut h.state_mut().p;
+        (p.ancho, p.alto, p.fps) = (640, 360, 24.0);
+        for (i, (r, k)) in [(a, Contenido::Archivo), (b, Contenido::Archivo), (foto_, Contenido::Imagen)].into_iter().enumerate() {
+            let mut c = p.nuevo_video(r, k, i as f64 * 2.0, 2.0);
+            (c.ancho, c.alto, c.fps, c.total) = (640, 360, 24.0, 2.0);
+            p.video.push(c);
+        }
+    }
+    let id = h.state().p.video[0].id;
+    h.state_mut().clip = Some(id);
+    h.state_mut().linea.encuadrar = true;
+    pestana(&mut h, "Nodos");
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+    h.get_by_label("Nodo degradado").click();
+    h.run_steps(4);
+    let g = |h: &Harness<App>| h.state().p.video.iter().find(|c| c.id == id).unwrap().nodos.clone().unwrap();
+    let m = g(&h).nodos.iter().find(|n| n.clase == Clase::Medio).unwrap().clone();
+    assert!(m.medio.as_ref().unwrap().ruta.ends_with("degradado.mp4") && g(&h).llega(m.id, toma_uno::nodos::SALIDA));
+    // Un efecto solo a ese clip.
+    h.state_mut().nodos.elegido = Some(m.id);
+    h.state_mut().nodos.seccion = 3;
+    h.state_mut().nodos.buscar = "prisma".into();
+    h.run_steps(4);
+    h.get_by_label("Nodo Prisma").click();
+    h.run_steps(4);
+    h.state_mut().nodos.buscar.clear();
+    h.state_mut().nodos.seccion = 0;
+    let e = g(&h).nodos.iter().find(|n| n.fx.tipo == "bc:prisma").unwrap().id;
+    assert!(g(&h).cables.iter().any(|c| c.de == m.id && c.a == e));
+    h.state_mut().nodos.elegido = Some(m.id);
+    for _ in 0..30 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+    foto(&mut h, "nodos-clips");
+    // Cambiar de qué sale.
+    h.get_by_label("Usar imagen").click();
+    h.run_steps(4);
+    assert!(g(&h).nodo(m.id).unwrap().medio.as_ref().unwrap().contenido == Contenido::Imagen);
+    // Pasarse a otro clip con la tira de arriba.
+    h.get_by_label("Nodos del clip imagen").click();
+    h.run_steps(4);
+    assert_eq!(h.state().clip, Some(h.state().p.video[2].id));
+    foto(&mut h, "nodos-tira");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// Animar como se espera: elegir un objeto, moverlo y que se guarden sus llaves solas; el botón, el doble clic y «con clic».
+#[test]
+fn llaves_al_animar() {
+    use eframe::egui::{pos2, vec2};
+    use toma_uno::animaciones::momentos;
+    use toma_uno::modelo::*;
+    let mut h = arnes_corto();
+    h.state_mut().poner_forma(TipoForma::Estrella);
+    let id = h.state().p.video[0].id;
+    h.state_mut().animar(id);
+    h.state_mut().p.clip_video(id).unwrap().contenido = Contenido::Forma(Forma { tipo: TipoForma::Estrella, color: [1.0, 0.75, 0.1, 1.0], tam: [45.0, 45.0], ..Default::default() });
+    h.run_steps(4);
+    let c = |h: &Harness<App>| h.state().p.video.iter().find(|c| c.id == id).unwrap().clone();
+    // Nada se anima solo por abrir.
+    assert!(momentos(&c(&h)).is_empty());
+    // En el segundo 2, arrastrarlo en la imagen.
+    h.state_mut().ir(2.0);
+    h.run_steps(4);
+    let o = h.get_by_label("Imagen").rect().center();
+    h.hover_at(o);
+    h.run_steps(2);
+    h.drag_at(o);
+    h.run_steps(2);
+    for k in 1..=8 {
+        h.hover_at(o + vec2(14.0 * k as f32, -5.0 * k as f32));
+        h.run_steps(1);
+    }
+    h.drop_at(o + vec2(112.0, -40.0));
+    h.run_steps(4);
+    let x = c(&h);
+    assert_eq!(x.mov.x.claves.len(), 2, "{:?}", x.mov.x.claves);
+    assert!(x.mov.x.claves[0].0 == 0.0 && x.mov.x.claves[0].1.num() == 0.0 && (x.mov.x.claves[1].0 - 2.0).abs() < 0.02 && x.mov.x.claves[1].1.num() > 5.0);
+    // Un cambio de color en el segundo 3 también.
+    h.state_mut().ir(3.0);
+    h.run_steps(3);
+    if let Contenido::Forma(f) = &mut h.state_mut().p.clip_video(id).unwrap().contenido {
+        f.color = [0.2, 0.5, 1.0, 1.0];
+    }
+    h.run_steps(3);
+    assert_eq!(c(&h).extra["color"].claves.len(), 2);
+    // Deshacer lo quita y no pone nada nuevo.
+    h.state_mut().hacer_atajo("deshacer");
+    h.run_steps(4);
+    assert!(c(&h).extra.is_empty() && c(&h).mov.x.claves.len() == 2, "{:?}", c(&h).extra);
+    // El botón guarda todo el objeto en el cursor.
+    h.state_mut().ir(4.0);
+    h.run_steps(3);
+    h.get_by_label("Guardar llave").click();
+    h.run_steps(4);
+    let x = c(&h);
+    assert!(x.mov.giro.clave_en(4.0).is_some() && x.mov.opacidad.clave_en(4.0).is_some() && x.extra["color"].clave_en(4.0).is_some());
+    // «Con clic»: un clic en la barra del objeto guarda una llave ahí.
+    h.get_by_label("◆ Con clic").click();
+    h.run_steps(3);
+    let n = momentos(&c(&h)).len();
+    let y = h.get_by_label("Guardar llave").rect().bottom() + 24.0 + 24.0;
+    clic(&mut h, 700.0, y);
+    h.run_steps(4);
+    assert_eq!(momentos(&c(&h)).len(), n + 1, "{:?}", momentos(&c(&h)).iter().map(|m| m.0).collect::<Vec<_>>());
+    h.get_by_label("Elementos").click();
+    h.run_steps(5);
+    for _ in 0..12 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+    foto(&mut h, "anim-llaves");
+    // Arrastrar esa llave las mueve todas juntas.
+    let m = momentos(&c(&h)).into_iter().map(|m| m.0).find(|t| !c(&h).mov.x.claves[..1].iter().any(|k| (k.0 - t).abs() < 0.02) && (t - 2.0).abs() > 0.1 && (t - 4.0).abs() > 0.1).unwrap();
+    let p = pos2(700.0, y);
+    h.hover_at(p);
+    h.run_steps(2);
+    h.drag_at(p);
+    h.run_steps(2);
+    for k in 1..=6 {
+        h.hover_at(p + vec2(6.0 * k as f32, 0.0));
+        h.run_steps(1);
+    }
+    h.drop_at(p + vec2(36.0, 0.0));
+    h.run_steps(3);
+    assert!(!momentos(&c(&h)).iter().any(|x| (x.0 - m).abs() < 0.02), "se movió de {m}");
+    assert_eq!(momentos(&c(&h)).len(), n + 1);
 }

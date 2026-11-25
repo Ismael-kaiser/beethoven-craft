@@ -132,8 +132,17 @@ impl App {
         let mut borrar = false;
         let mut vel = None;
         let mut latir = false;
+        // Su clase: nombre, color, cuántos clips y qué efectos comparte.
+        let clase = self.p.video.iter().find(|c| c.id == id).and_then(|c| c.clase).and_then(|k| self.p.clases.iter().find(|x| x.id == k)).cloned();
+        let hermanos = clase.as_ref().map_or(0, |k| self.p.video.iter().filter(|c| c.clase == Some(k.id)).count());
         let Some(c) = self.p.video.iter_mut().find(|c| c.id == id) else { return };
         let t = (ahora - c.inicio).clamp(0.0, c.dur);
+        // Los controles enseñan el valor de este momento, también de lo animado (color, tamaño…).
+        let base = c.clone();
+        let visto = base.en_su_momento(t);
+        if !base.extra.is_empty() {
+            (c.contenido, c.mov.recorte) = (visto.contenido.clone(), visto.mov.recorte);
+        }
         Frame::new().inner_margin(Margin::symmetric(8, 5)).show(ui, |ui| {
             ui.horizontal(|ui| {
                 let n = match &c.contenido {
@@ -263,6 +272,15 @@ impl App {
                 });
                 ui.add_space(4.0);
                 ui.label(RichText::new(crate::idioma::t("Efectos de video")).size(16.0));
+                if let Some(k) = &clase {
+                    let [r, g, b] = k.color;
+                    let col = mezcla(Color32::from_rgb(r, g, b), Color32::WHITE, 0.2);
+                    Frame::new().fill(mezcla(col, c_gris(), 0.82)).stroke(Stroke::new(1.0, mezcla(col, c_gris(), 0.4))).corner_radius(6).inner_margin(6.0).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new(crate::idioma::tf("● Clase «{}» · {} clips", &[&k.nombre, &hermanos])).color(col));
+                        ui.label(RichText::new(crate::idioma::t("Los efectos que pongas o cambies aquí les pasan a todos.")).size(12.5).color(TEXT_DIM));
+                    });
+                }
                 if c.fx.is_empty() {
                     ui.label(RichText::new(crate::idioma::t("Arrastra uno desde la biblioteca al clip")).color(TEXT_FAINT));
                 }
@@ -277,6 +295,10 @@ impl App {
                             }
                             if ui.add(Label::new(RichText::new(nombres::efecto(&f.tipo)).size(15.5)).sense(Sense::click())).clicked() {
                                 abierto = !abierto;
+                            }
+                            if let Some(k) = clase.as_ref().filter(|k| k.fx.contains(&f.id)) {
+                                let [r, g, b] = k.color;
+                                ui.label(RichText::new("●").size(13.0).color(Color32::from_rgb(r, g, b))).on_hover_text(crate::idioma::tf("De la clase «{}»", &[&k.nombre]));
                             }
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if boton_color(ui, &tabler::X, false, "Quitar efecto", TEXT_DIM, 22.0).clicked() {
@@ -295,6 +317,7 @@ impl App {
                 }
             });
         });
+        crate::animaciones::devolver_campos(c, &visto, &base, t);
         if let Some(i) = quitar_fx {
             c.fx.remove(i);
         }

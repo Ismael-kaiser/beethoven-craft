@@ -118,10 +118,7 @@ impl Proyecto {
             // Al recortar por la izquierda, las animaciones se quedan en su cuadro.
             if d.abs() > 1e-9 && entro.abs() > 1e-9 {
                 let corre = entro / c.mov.velocidad.max(0.01);
-                let m = &mut c.mov;
-                for p in m.props_mut().into_iter().chain(c.fx.iter_mut().flat_map(|f| f.p.values_mut())) {
-                    p.correr(-corre);
-                }
+                c.animables().for_each(|p| p.correr(-corre));
             }
             return;
         }

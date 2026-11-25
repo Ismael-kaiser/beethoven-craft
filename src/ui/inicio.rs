@@ -393,6 +393,17 @@ impl App {
                 ui.spacing_mut().item_spacing.y = 1.0;
                 ui.label(RichText::new("Beethoven").font(barlow(21.0)).color(TEXT));
                 ui.label(RichText::new("Craft").font(barlow(21.0)).color(MAIN));
+                // La versión, en una pastillita hundida; clic abre «Acerca de».
+                ui.add_space(4.0);
+                let txt = format!("v{}", crate::actualizar::version());
+                let g = ui.painter().layout_no_wrap(txt.clone(), barlow(12.0), TEXT_DIM);
+                let (r, resp) = ui.allocate_exact_size(g.size() + vec2(12.0, 4.0), Sense::click());
+                resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, tf("Versión {}", &[&crate::actualizar::version()])));
+                hueco(ui.painter(), r, 6, if resp.hovered() { c(0x2a2a2a) } else { c(0x161616) });
+                ui.painter().galley(r.center() - g.size() / 2.0, g, if resp.hovered() { MAIN } else { TEXT_DIM });
+                if resp.on_hover_text(t("Acerca de Beethoven Craft")).clicked() {
+                    self.acerca = true;
+                }
             });
         });
         ui.add_space(24.0);
@@ -421,7 +432,10 @@ impl App {
             self.insignia_nueva(ui, r);
         }
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-            ui.label(RichText::new(t("Creado por mixter-ha99")).size(12.5).color(TEXT_FAINT));
+            let r = ui.add(Label::new(RichText::new(t("Creado por mixter-ha99")).size(12.5).color(TEXT_FAINT)).sense(Sense::click()));
+            if r.on_hover_text(t("Acerca de Beethoven Craft")).clicked() {
+                self.acerca = true;
+            }
             if self.ruta.is_some() || self.sin_guardar() {
                 ui.add_space(8.0);
                 let n = self.ruta.as_deref().map_or(t("Proyecto sin nombre").into(), nombre_de);

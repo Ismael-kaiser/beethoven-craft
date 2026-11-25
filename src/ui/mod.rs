@@ -890,6 +890,18 @@ impl App {
                 });
             }
         }
+        // Imágenes, y lo que solo está en los nodos.
+        let de_nodos = self.p.video.iter().flat_map(|c| &c.nodos).flat_map(|g| &g.nodos).filter_map(|n| n.medio.as_deref());
+        for c in self.p.video.iter().chain(de_nodos).filter(|c| matches!(c.contenido, Contenido::Imagen | Contenido::Archivo)) {
+            if !self.tiras.contains_key(&c.ruta) {
+                self.tiras.insert(c.ruta.clone(), None);
+                let (tx, r, dur, razon, imagen) = (self.tx.clone(), c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64, c.contenido == Contenido::Imagen);
+                std::thread::spawn(move || {
+                    let t = if imagen { video::tira_imagen(&r, razon) } else { video::tira(&r, dur, razon) };
+                    let _ = tx.send(Evento::Tira(r, t));
+                });
+            }
+        }
     }
 
     fn eventos(&mut self, ctx: &Context) {
@@ -1098,6 +1110,10 @@ impl App {
         if self.aplicado.as_deref() == Some(&self.p) {
             return;
         }
+        self.p.video.iter_mut().for_each(|c| c.ordenar_campos());
+        if let Some(a) = self.aplicado.clone().filter(|_| !self.p.clases.is_empty()) {
+            self.p.igualar_clases(&a);
+        }
         // Un cambio de imagen no vuelve a preparar el sonido.
         if !self.aplicado.as_deref().is_some_and(|a| misma_mezcla(a, &self.p)) {
             let ids = self.motor.lock().unwrap().ids_fx();
@@ -1150,6 +1166,8 @@ impl App {
             a.push(Foto::de(&std::mem::replace(&mut self.p, q)));
             self.p.sig_id = self.p.sig_id.max(self.ultimo.sig_id);
             self.ultimo = self.p.clone();
+            // Deshacer no es animar.
+            self.anim.callar = true;
         }
     }
 
@@ -1470,6 +1488,7 @@ impl App {
             "clave" => self.clave_de_todo(),
             "clave_antes" => self.saltar_clave(-1),
             "clave_despues" => self.saltar_clave(1),
+            "auto" if self.espacio == Espacio::Animacion => self.anim.grabar = !self.anim.grabar,
             "auto" => self.anim.auto = !self.anim.auto,
             "copiar_claves" if animando => self.copiar_claves(),
             "pegar_claves" if animando => self.pegar_claves(),
@@ -1868,13 +1887,12 @@ impl App {
             ui.painter().rect_stroke(r.shrink(6.0), 8, Stroke::new(2.0, MAIN), StrokeKind::Inside);
         }
         // En la pestaña de animación lo hace ella, con todo lo que cambie.
-        let antes = (self.anim.auto && self.espacio != Espacio::Animacion).then(|| self.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id).cloned())).flatten();
         self.mover_en_vista(ui, d);
         self.escribir_en_vista(ui, d);
         self.camino(ui, d);
         self.barra_libre(ui, r);
-        if let Some(a) = antes {
-            self.claves_automaticas(&a);
+        if self.anim.auto && self.espacio != Espacio::Animacion {
+            self.claves_automaticas();
         }
         ui.painter().rect_filled(barra, 0, WINDOW_TITLE);
         let mut u = ui.new_child(UiBuilder::new().max_rect(barra.shrink2(vec2(8.0, 3.0))).layout(Layout::left_to_right(Align::Center)));
@@ -1939,6 +1957,7 @@ impl App {
         }
         let (pw, ph) = (self.p.ancho as usize, self.p.alto as usize);
         let t = ahora - c.inicio;
+        let c = &*c.en_su_momento(t);
         // Dónde está el dibujo dentro del cuadro, antes de moverlo (en píxeles del cuadro).
         let (fw, fh) = (pw as f32, ph as f32);
         let r = match &c.contenido {
@@ -2689,6 +2708,11 @@ impl App {
                         ui.label(RichText::new(crate::idioma::tf("Versión {}", &[&crate::actualizar::version()])).color(TEXT_DIM));
                         ui.label(crate::idioma::t("Compositor de video y audio."));
                         ui.label(RichText::new(crate::idioma::t("Creado por mixter-ha99")).color(MAIN).size(17.0));
+                        ui.label(RichText::new(crate::idioma::tf("En GitHub: {}", &[&"Ismael-kaiser"])).color(TEXT_DIM));
+                        let url = format!("https://github.com/{}", crate::actualizar::REPO);
+                        if ui.button(crate::idioma::t("Ver el proyecto en GitHub")).on_hover_text(&url).clicked() {
+                            ui.ctx().open_url(OpenUrl::new_tab(&url));
+                        }
                     });
                 });
                 ui.add_space(6.0);

@@ -153,10 +153,11 @@ pub const DEFS: [Def; 76] = [
 ];
 
 /// Los que no están en el catálogo de efectos: la mezcla de color y los nodos.
-pub const DEFS_NODO: [Def; 4] = [
+pub const DEFS_NODO: [Def; 5] = [
     Def { id: "nodo:fusionar", nombre: "Fusionar", grupo: "Nodos", ctl: &[O("modo", "Modo", &["Normal", "Multiplicar", "Pantalla", "Superponer", "Luz suave", "Luz dura", "Sumar", "Aclarar", "Oscurecer", "Diferencia", "Tono", "Color"]), n("opacidad", "Opacidad", 0.0, 100.0, 100.0, "%")] },
     Def { id: "nodo:mascara", nombre: "Máscara", grupo: "Nodos", ctl: &[O("forma", "Forma", &["Elipse", "Rectángulo", "Degradado"]), n("x", "Posición X", -100.0, 100.0, 0.0, "%"), n("y", "Posición Y", -100.0, 100.0, 0.0, "%"), n("ancho", "Ancho", 1.0, 400.0, 70.0, "%"), n("alto", "Alto", 1.0, 300.0, 70.0, "%"), n("giro", "Giro", -180.0, 180.0, 0.0, "°"), n("suave", "Suavidad", 0.0, 100.0, 30.0, "%"), n("fuerza", "Fuerza", 0.0, 100.0, 100.0, "%"), O("invertir", "Invertir", &["No", "Sí"])] },
     Def { id: "nodo:calificador", nombre: "Calificador de color", grupo: "Nodos", ctl: &[n("tono", "Tono", 0.0, 360.0, 20.0, "°"), n("ancho", "Amplitud", 1.0, 360.0, 50.0, "°"), n("sat_min", "Saturación desde", 0.0, 100.0, 15.0, "%"), n("sat_max", "Saturación hasta", 0.0, 100.0, 100.0, "%"), n("luz_min", "Brillo desde", 0.0, 100.0, 0.0, "%"), n("luz_max", "Brillo hasta", 0.0, 100.0, 100.0, "%"), n("suave", "Suavidad", 0.0, 100.0, 15.0, "%"), O("invertir", "Invertir", &["No", "Sí"])] },
+    Def { id: "nodo:medio", nombre: "Clip o imagen", grupo: "Nodos", ctl: &[O("ajuste", "Ajuste", &["Llenar", "Completo", "Estirar"]), n("escala", "Escala", 1.0, 400.0, 100.0, "%"), n("x", "Posición X", -100.0, 100.0, 0.0, "%"), n("y", "Posición Y", -100.0, 100.0, 0.0, "%"), n("opacidad", "Opacidad", 0.0, 100.0, 100.0, "%"), n("desde", "Empezar en", 0.0, 600.0, 0.0, "s"), O("final", "Al terminar", &["Se queda quieto", "Se repite"])] },
     Def { id: "nodo:fondo", nombre: "Color", grupo: "Nodos", ctl: &[C("color", "Color", [0.1, 0.1, 0.1, 1.0])] },
 ];
 

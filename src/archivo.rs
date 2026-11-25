@@ -43,6 +43,7 @@ fn crc(b: &[u8]) -> u32 {
 pub fn medios(p: &Proyecto) -> Vec<PathBuf> {
     let mut v: BTreeSet<PathBuf> = BTreeSet::new();
     v.extend(p.video.iter().filter(|c| matches!(c.contenido, Contenido::Archivo | Contenido::Imagen)).map(|c| c.ruta.clone()));
+    v.extend(p.video.iter().flat_map(|c| &c.nodos).flat_map(|g| &g.nodos).filter_map(|n| n.medio.as_ref()).filter(|c| matches!(c.contenido, Contenido::Archivo | Contenido::Imagen)).map(|c| c.ruta.clone()));
     v.extend(p.pistas.iter().flat_map(|t| &t.clips).map(|c| c.ruta.clone()));
     v.extend(p.pistas.iter().filter_map(|t| match &t.instrumento {
         Some(Instrumento::Muestra { ruta, .. }) => Some(ruta.clone()),
@@ -52,6 +53,7 @@ pub fn medios(p: &Proyecto) -> Vec<PathBuf> {
 }
 
 fn cambiar(p: &mut Proyecto, de: &Path, a: &Path) {
+    p.video.iter_mut().flat_map(|c| &mut c.nodos).flat_map(|g| &mut g.nodos).filter_map(|n| n.medio.as_mut()).filter(|c| c.ruta == de).for_each(|c| c.ruta = a.into());
     p.video.iter_mut().filter(|c| c.ruta == de).for_each(|c| c.ruta = a.into());
     for t in &mut p.pistas {
         t.clips.iter_mut().filter(|c| c.ruta == de).for_each(|c| c.ruta = a.into());

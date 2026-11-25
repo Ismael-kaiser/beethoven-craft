@@ -185,3 +185,55 @@ fn efecto_animado_y_guardado() {
     }
     assert!(serde_json::from_value::<Movimiento>(j).unwrap() == Movimiento::default());
 }
+
+/// Color, tamaño de letra y recorte también se animan: se ven en el cuadro, y editarlos en su momento va a su llave.
+#[test]
+fn campos_animados() {
+    use toma_uno::animaciones::{devolver_campos, grabar_cambios, guardar_llave, momentos, quitar_todo};
+    let mut p = proyecto();
+    let id = poner(&mut p, Contenido::Color([1.0, 0.0, 0.0, 1.0]), 0, 4.0);
+    // Cambiar el color en el segundo 2: el de antes queda al principio.
+    let antes = p.clip_video(id).unwrap().clone();
+    p.clip_video(id).unwrap().contenido = Contenido::Color([0.0, 0.0, 1.0, 1.0]);
+    assert!(grabar_cambios(&antes, p.clip_video(id).unwrap(), 2.0));
+    let px = |p: &Proyecto, t: f64| cuadro(p, t)[..3].to_vec();
+    assert!(px(&p, 0.0)[0] > 250 && px(&p, 2.0)[2] > 250 && px(&p, 1.0)[0] > 60 && px(&p, 1.0)[2] > 60, "{:?} {:?} {:?}", px(&p, 0.0), px(&p, 1.0), px(&p, 2.0));
+    // Editar viéndolo en el segundo 3 (como el inspector) pone otra llave y no toca la base.
+    let c = p.clip_video(id).unwrap();
+    let base = c.clone();
+    let visto = base.en_su_momento(3.0).into_owned();
+    c.contenido = Contenido::Color([0.0, 1.0, 0.0, 1.0]);
+    devolver_campos(c, &visto, &base, 3.0);
+    assert_eq!((c.extra["color"].claves.len(), &c.contenido), (3, &base.contenido));
+    assert!(px(&p, 3.5)[1] > 250);
+    // Igual en la tarjeta.
+    if toma_uno::vgpu::gpu().is_some() {
+        let a = componer_cpu(&p, 1.0, 640, 360, &mut Nada);
+        let b = toma_uno::vgpu::componer(&p, 1.0, 640, 360, &mut Nada, toma_uno::vgpu::Salida::Rgba).unwrap();
+        assert!(dif(&a, &b) < 0.8);
+    }
+    // Partir el clip: la segunda mitad sigue donde iba.
+    let q = px(&p, 2.4);
+    p.dividir(id, 2.2);
+    assert!(px(&p, 2.4).iter().zip(&q).all(|(a, b)| a.abs_diff(*b) < 3));
+    // Guardar llave: todo lo que tiene en ese momento.
+    let mut p = proyecto();
+    let id = poner(&mut p, Contenido::Titulo(toma_uno::titulos::plantilla(1).1), 0, 4.0);
+    let c = p.clip_video(id).unwrap();
+    guardar_llave(c, 1.0);
+    assert_eq!(c.mov.x.claves.len() + c.mov.ancho.claves.len() + c.extra["tam"].claves.len() + c.extra["color"].claves.len(), 4);
+    assert!(!c.extra.contains_key("rec_izq"), "el recorte solo si se usa");
+    guardar_llave(c, 3.0);
+    assert_eq!(momentos(c).len(), 2);
+    c.extra.get_mut("tam").unwrap().poner(3.0, Valor::Num(40.0));
+    let a = cuadro(&p, 1.0);
+    assert!(dif(&a, &cuadro(&p, 3.0)) > 1.0, "la letra crece");
+    // Quitar todo deja lo que se veía, fijo; y vuelve igual del archivo.
+    let r = std::env::temp_dir().join(format!("campos-{}.bcraft", std::process::id()));
+    toma_uno::archivo::guardar(&p, &r, None, false).unwrap();
+    assert!(toma_uno::archivo::abrir(&r, &std::env::temp_dir()).unwrap() == p);
+    let _ = std::fs::remove_file(r);
+    let b = cuadro(&p, 3.0);
+    quitar_todo(p.clip_video(id).unwrap(), 3.0);
+    assert!(p.clip_video(id).unwrap().extra.is_empty() && dif(&b, &cuadro(&p, 0.5)) < 0.5);
+}

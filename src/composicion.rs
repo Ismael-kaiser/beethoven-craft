@@ -7,6 +7,7 @@ use effectcraft_effects as ec;
 use effectcraft_keyframe::Value;
 use effectcraft_raster::Image;
 use rayon::prelude::*;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, OnceLock};
 
@@ -500,7 +501,7 @@ pub fn usa_pasado(p: &Proyecto) -> bool {
 }
 
 /// Todo lo que `componer` le pedirá a la fuente para el segundo `t`, en orden: (clip, segundo del archivo, ancho, alto).
-pub fn pedidos(p: &Proyecto, t: f64, w: usize, h: usize) -> Vec<(&ClipVideo, f64, usize, usize)> {
+pub fn pedidos(p: &Proyecto, t: f64, w: usize, h: usize) -> Vec<(Cow<'_, ClipVideo>, f64, usize, usize)> {
     let mut v = vec![];
     for (i, capa) in p.capas.iter().enumerate() {
         if !capa.visible {
@@ -508,13 +509,19 @@ pub fn pedidos(p: &Proyecto, t: f64, w: usize, h: usize) -> Vec<(&ClipVideo, f64
         }
         let Some(c) = p.video_en(i, t) else { continue };
         if atajo(p, i, c, t, w, h) {
-            v.extend(pedido(c, t, w, h).map(|(ts, aw, ah)| (c, ts, aw, ah)));
+            v.extend(pedido(c, t, w, h).map(|(ts, aw, ah)| (Cow::Borrowed(c), ts, aw, ah)));
             return v;
         }
-        v.extend(pedido(c, t, w, h).map(|(ts, aw, ah)| (c, ts, aw, ah)));
+        let propio = pedido(c, t, w, h);
+        let (cw, ch) = propio.map_or((w, h), |x| (x.1, x.2));
+        v.extend(propio.map(|(ts, aw, ah)| (Cow::Borrowed(c), ts, aw, ah)));
+        v.extend(crate::nodos::pedidos(c, t, cw, ch).into_iter().map(|(m, ts, a, b)| (Cow::Owned(m), ts, a, b)));
         if c.entrada.as_ref().is_some_and(|x| t < c.inicio + x.dur) {
             if let Some(q) = previo(p, c) {
-                v.extend(pedido(q, t, w, h).map(|(ts, aw, ah)| (q, ts, aw, ah)));
+                let propio = pedido(q, t, w, h);
+                let (cw, ch) = propio.map_or((w, h), |x| (x.1, x.2));
+                v.extend(propio.map(|(ts, aw, ah)| (Cow::Borrowed(q), ts, aw, ah)));
+                v.extend(crate::nodos::pedidos(q, t, cw, ch).into_iter().map(|(m, ts, a, b)| (Cow::Owned(m), ts, a, b)));
             }
         }
     }
@@ -609,6 +616,7 @@ fn efectos_del_cuadro(c: &ClipVideo, tl: f64, p: &Proyecto, img: Image, w: usize
 
 fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<Image> {
     let tl = t - c.inicio;
+    let c = &*c.en_su_momento(tl);
     let mut b = imagen_de(c, t, p, w, h, f)?;
     let (bw, bh) = (b.img.width as f64, b.img.height as f64);
     let r = c.mov.recorte;
@@ -632,7 +640,8 @@ fn dibujar_clip(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut
         b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, pasado.as_ref());
     }
     if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
-        b = crate::nodos::evaluar(g, b, tl, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, pasado.as_ref()));
+        let medios = crate::nodos::medios(c, t, p, &b, f);
+        b = crate::nodos::evaluar(g, b, tl, &medios, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, pasado.as_ref()));
     }
     let de_cuadro = c.fx.iter().any(|x| x.activo && del_cuadro(&x.tipo));
     let m = &c.mov;
@@ -706,6 +715,7 @@ pub fn quieto(c: &ClipVideo, t: f64) -> bool {
     fijo && c.fx.iter().all(|f| !f.activo)
         && c.nodos.as_ref().is_none_or(|g| !g.activo)
         && c.mov.props().iter().all(|p| p.claves.is_empty())
+        && c.extra.is_empty()
         && c.entrada.as_ref().is_none_or(|x| t >= c.inicio + x.dur)
         && c.salida.as_ref().is_none_or(|x| t <= c.fin() - x.dur)
 }
@@ -819,7 +829,8 @@ pub fn componer_cpu(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente
                     b = aplicar_fx(x, tl, c.dur, p.fps, b, tam, None);
                 }
                 if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
-                    b = crate::nodos::evaluar(g, b, tl, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, None));
+                    let medios = crate::nodos::medios(c, t, p, &b, f);
+                    b = crate::nodos::evaluar(g, b, tl, &medios, &|f, b| aplicar_fx(f, tl, c.dur, p.fps, b, tam, None));
                 }
                 // Los efectos pueden agrandar el buffer: se recorta al lienzo.
                 let (dx, dy) = (b.offset[0].round() as i64, b.offset[1].round() as i64);
@@ -828,7 +839,7 @@ pub fn componer_cpu(p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente
                     fila.iter_mut().enumerate().for_each(|(x, q)| *q = b.img.get(x as i64 + dx, y as i64 + dy));
                 });
                 // Con recorte, los efectos solo se ven dentro del recuadro.
-                let r = c.mov.recorte;
+                let r = c.en_su_momento(tl).mov.recorte;
                 if r.iter().any(|v| *v > 0.0) {
                     let (x0, y0) = ((w as f32 * r[0] / 100.0) as usize, (h as f32 * r[1] / 100.0) as usize);
                     let (x1, y1) = ((w as f32 * (1.0 - r[2] / 100.0)) as usize, (h as f32 * (1.0 - r[3] / 100.0)) as usize);

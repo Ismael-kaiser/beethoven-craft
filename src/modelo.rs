@@ -530,6 +530,22 @@ pub struct ClipVideo {
     /// Color con que se tiñe en la línea de tiempo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<[u8; 3]>,
+    /// Clase a la que pertenece (`Proyecto::clases`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clase: Option<u64>,
+    /// Lo animado que no es movimiento ni efecto: color, tamaño de la letra, recorte… (ver [`ClipVideo::campos`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra: BTreeMap<String, Prop>,
+}
+
+/// Clips que comparten efectos: lo que se le pone o cambia a uno, les pasa a todos.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ClaseClip {
+    pub id: u64,
+    pub nombre: String,
+    pub color: [u8; 3],
+    /// Los efectos compartidos, por su número. Los que cada clip traía antes son solo suyos.
+    pub fx: Vec<u64>,
 }
 
 impl ClipVideo {
@@ -552,6 +568,104 @@ impl ClipVideo {
             && !self.nodos.as_ref().is_some_and(|g| g.activo)
             && self.entrada.is_none()
             && self.salida.is_none()
+            && self.extra.is_empty()
+    }
+
+    /// Lo que se puede animar además del movimiento y los efectos: clave, nombre y valor de base.
+    pub fn campos(&self) -> Vec<(&'static str, &'static str, Valor)> {
+        let n = |x: f32| Valor::Num(x as f64);
+        let mut v = match &self.contenido {
+            Contenido::Titulo(x) => vec![
+                ("tam", "Tamaño de letra", n(x.tam)),
+                ("color", "Color de letra", Valor::Color(x.color)),
+                ("borde", "Borde", n(x.borde)),
+                ("color_borde", "Color del borde", Valor::Color(x.color_borde)),
+                ("sombra", "Sombra", n(x.sombra)),
+                ("fondo", "Fondo", Valor::Color(x.fondo)),
+            ],
+            Contenido::Forma(f) => vec![
+                ("color", "Color", Valor::Color(f.color)),
+                ("f_ancho", "Ancho de la figura", n(f.tam[0])),
+                ("f_alto", "Alto de la figura", n(f.tam[1])),
+                ("linea", "Contorno", n(f.linea)),
+                ("f_extra", "Esquinas o puntas", n(f.extra)),
+            ],
+            Contenido::Color(q) => vec![("color", "Color", Valor::Color(*q))],
+            _ => vec![],
+        };
+        let r = self.mov.recorte;
+        v.extend([("rec_izq", "Recorte izquierdo", n(r[0])), ("rec_arr", "Recorte de arriba", n(r[1])), ("rec_der", "Recorte derecho", n(r[2])), ("rec_abj", "Recorte de abajo", n(r[3]))]);
+        v
+    }
+
+    /// Escribe el valor de base de un campo.
+    pub fn poner_campo(&mut self, k: &str, v: &Valor) {
+        let x = v.num() as f32;
+        let col = match v {
+            Valor::Color(c) => Some(*c),
+            _ => None,
+        };
+        let r = &mut self.mov.recorte;
+        match k {
+            "rec_izq" => r[0] = x.clamp(0.0, 99.0),
+            "rec_arr" => r[1] = x.clamp(0.0, 99.0),
+            "rec_der" => r[2] = x.clamp(0.0, 99.0),
+            "rec_abj" => r[3] = x.clamp(0.0, 99.0),
+            _ => {}
+        }
+        match &mut self.contenido {
+            Contenido::Titulo(t) => match (k, col) {
+                ("tam", _) => t.tam = x.clamp(0.5, 100.0),
+                ("borde", _) => t.borde = x.max(0.0),
+                ("sombra", _) => t.sombra = x.clamp(0.0, 1.0),
+                ("color", Some(c)) => t.color = c,
+                ("color_borde", Some(c)) => t.color_borde = c,
+                ("fondo", Some(c)) => t.fondo = c,
+                _ => {}
+            },
+            Contenido::Forma(f) => match (k, col) {
+                ("color", Some(c)) => f.color = c,
+                ("f_ancho", _) => f.tam[0] = x.max(0.1),
+                ("f_alto", _) => f.tam[1] = x.max(0.1),
+                ("linea", _) => f.linea = x.max(0.0),
+                ("f_extra", _) => f.extra = x.clamp(0.0, 100.0),
+                _ => {}
+            },
+            Contenido::Color(q) => {
+                if let ("color", Some(c)) = (k, col) {
+                    *q = c;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// El clip con sus campos animados en el valor del segundo `tl` (del clip). Sin nada animado, él mismo.
+    pub fn en_su_momento(&self, tl: f64) -> std::borrow::Cow<'_, ClipVideo> {
+        if self.extra.is_empty() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut c = self.clone();
+        for (k, p) in &self.extra {
+            c.poner_campo(k, &p.en(tl));
+        }
+        std::borrow::Cow::Owned(c)
+    }
+
+    /// Todo lo que lleva cuadros clave: movimiento, efectos y campos.
+    pub fn animables(&mut self) -> impl Iterator<Item = &mut Prop> {
+        self.mov.props_mut().into_iter().chain(self.fx.iter_mut().flat_map(|f| f.p.values_mut())).chain(self.extra.values_mut())
+    }
+
+    /// Los campos que se quedaron sin cuadros clave vuelven a ser un valor fijo.
+    pub fn ordenar_campos(&mut self) {
+        if self.extra.values().any(|p| p.claves.is_empty()) {
+            let (quedan, fijos): (BTreeMap<_, _>, BTreeMap<_, _>) = std::mem::take(&mut self.extra).into_iter().partition(|x| !x.1.claves.is_empty());
+            self.extra = quedan;
+            for (k, p) in fijos {
+                self.poner_campo(&k, &p.v);
+            }
+        }
     }
 }
 
@@ -638,6 +752,8 @@ pub struct Proyecto {
     pub fx_maestro: Vec<Fx>,
     #[serde(default)]
     pub buses: Vec<Bus>,
+    #[serde(default)]
+    pub clases: Vec<ClaseClip>,
     pub sig_id: u64,
     /// Formato del video exportado; lo fija el primer video importado.
     pub ancho: u32,
@@ -668,6 +784,7 @@ impl Proyecto {
             maestro_db: 0.0,
             fx_maestro: vec![],
             buses: vec![],
+            clases: vec![],
             sig_id: 1,
             ancho: 1920,
             alto: 1080,
@@ -849,6 +966,101 @@ impl Proyecto {
         self.video.iter_mut().find(|c| c.id == id)
     }
 
+    pub fn clase(&mut self, id: u64) -> Option<&mut ClaseClip> {
+        self.clases.iter_mut().find(|c| c.id == id)
+    }
+
+    pub fn nueva_clase(&mut self, nombre: &str, color: [u8; 3]) -> u64 {
+        let id = self.id();
+        self.clases.push(ClaseClip { id, nombre: nombre.into(), color, fx: vec![] });
+        id
+    }
+
+    /// Los clips se quedan con los efectos que tenían.
+    pub fn quitar_clase(&mut self, id: u64) {
+        self.clases.retain(|c| c.id != id);
+        self.video.iter_mut().for_each(|c| c.clase = c.clase.filter(|x| *x != id));
+    }
+
+    /// Todos los efectos y nodos de un clip pasan a ser de su clase.
+    pub fn compartir_todo(&mut self, clip: u64) {
+        let Some((k, fx, nodos)) = self.clip_video(clip).and_then(|c| Some((c.clase?, c.fx.clone(), c.nodos.clone()))) else { return };
+        let Some(cl) = self.clase(k) else { return };
+        cl.fx = fx.iter().map(|f| f.id).collect();
+        for c in self.video.iter_mut().filter(|c| c.clase == Some(k) && c.id != clip) {
+            c.fx.retain(|f| !fx.iter().any(|x| x.id == f.id));
+            c.fx.extend(fx.iter().cloned());
+            if nodos.is_some() {
+                c.nodos = nodos.clone();
+            }
+        }
+    }
+
+    /// Números nuevos para los efectos de una copia de clip; los de su clase conservan el suyo, que es el mismo en todos.
+    pub fn renumerar(&mut self, c: &mut ClipVideo) {
+        let de_clase = c.clase.and_then(|k| self.clases.iter().find(|x| x.id == k)).map_or(vec![], |k| k.fx.clone());
+        for f in c.fx.iter_mut().filter(|f| !de_clase.contains(&f.id)) {
+            f.id = self.id();
+        }
+    }
+
+    /// Pasa lo que cambió en un clip (comparado con `antes`) a los demás de su clase.
+    pub fn igualar_clases(&mut self, antes: &Proyecto) {
+        for mut k in self.clases.clone() {
+            let previo = |c: &ClipVideo| antes.video.iter().find(|a| a.id == c.id && a.clase == Some(k.id));
+            let suyos: Vec<usize> = (0..self.video.len()).filter(|i| self.video[*i].clase == Some(k.id)).collect();
+            // Un efecto recién puesto es de la clase.
+            let mut fuente = None;
+            let mut nodos = None;
+            for i in &suyos {
+                let c = &self.video[*i];
+                let Some(a) = previo(c) else { continue };
+                let recientes: Vec<u64> = c.fx.iter().map(|f| f.id).filter(|id| !a.fx.iter().any(|x| x.id == *id) && !k.fx.contains(id)).collect();
+                k.fx.extend(recientes);
+                let de = |v: &[FxVideo]| v.iter().filter(|f| k.fx.contains(&f.id)).cloned().collect::<Vec<_>>();
+                if fuente.is_none() && de(&c.fx) != de(&a.fx) {
+                    fuente = Some(*i);
+                }
+                if nodos.is_none() && c.nodos != a.nodos {
+                    nodos = Some(*i);
+                }
+            }
+            // Sin cambios, alguien de antes le da lo compartido a los que acaban de entrar.
+            let nuevos: Vec<usize> = suyos.iter().copied().filter(|i| previo(&self.video[*i]).is_none()).collect();
+            let viejo = suyos.iter().copied().find(|i| previo(&self.video[*i]).is_some());
+            let destinos = if fuente.is_some() { suyos.clone() } else { nuevos.clone() };
+            if let Some(de) = fuente.or(viejo) {
+                let lista: Vec<FxVideo> = self.video[de].fx.iter().filter(|f| k.fx.contains(&f.id)).cloned().collect();
+                for i in destinos.into_iter().filter(|i| *i != de) {
+                    let c = &mut self.video[i];
+                    // Una copia recién hecha (partir, duplicar) ya los trae, con sus llaves en su lugar.
+                    let copia = fuente.is_none() && !antes.video.iter().any(|a| a.id == c.id) && k.fx.iter().all(|id| c.fx.iter().any(|f| f.id == *id));
+                    if copia {
+                        continue;
+                    }
+                    c.fx.retain(|f| !k.fx.contains(&f.id));
+                    c.fx.extend(lista.iter().cloned());
+                }
+                if fuente.is_some() {
+                    k.fx.retain(|id| lista.iter().any(|f| f.id == *id));
+                }
+            }
+            if let Some(de) = nodos {
+                let g = self.video[de].nodos.clone();
+                for i in suyos.into_iter().filter(|i| *i != de) {
+                    self.video[i].nodos = g.clone();
+                }
+            } else if let Some(g) = viejo.and_then(|v| self.video[v].nodos.clone()) {
+                for i in nuevos.into_iter().filter(|i| self.video[*i].nodos.is_none()).collect::<Vec<_>>() {
+                    self.video[i].nodos = Some(g.clone());
+                }
+            }
+            if let Some(x) = self.clase(k.id) {
+                x.fx = k.fx;
+            }
+        }
+    }
+
     /// Todo el video sale de una sola capa sin nada encima: se puede exportar por el camino rápido.
     pub fn video_simple(&self) -> bool {
         self.video.iter().all(|c| c.simple() && c.capa == 0) && self.capas.iter().all(|c| c.visible)
@@ -876,6 +1088,8 @@ impl Proyecto {
             animado: false,
             nodos: None,
             color: None,
+            clase: None,
+            extra: BTreeMap::new(),
         }
     }
 
@@ -923,16 +1137,8 @@ impl Proyecto {
             c.salida = None;
             c.dur = corte;
             // Las animaciones siguen donde iban.
-            let m = &mut b.mov;
-            for p in m.props_mut() {
-                p.claves.iter_mut().for_each(|k| k.0 -= corte);
-            }
-            for p in b.fx.iter_mut().flat_map(|f| f.p.values_mut()) {
-                p.claves.iter_mut().for_each(|k| k.0 -= corte);
-            }
-            let ids: Vec<u64> = (0..b.fx.len() as u64).map(|i| nuevo + 1 + i).collect();
-            b.fx.iter_mut().zip(&ids).for_each(|(f, id)| f.id = *id);
-            self.sig_id += ids.len() as u64;
+            b.animables().for_each(|p| p.claves.iter_mut().for_each(|k| k.0 -= corte));
+            self.renumerar(&mut b);
             self.video.insert(i + 1, b);
             return true;
         }

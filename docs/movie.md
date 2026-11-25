@@ -50,7 +50,9 @@ Es una ventana flotante: se mueve de donde no hay botones, se estira de las oril
 - **Animaciones**: de entrada, de salida, de énfasis y «todo el tiempo». Un clic pone la animación sobre el clip elegido y se pueden juntar varias.
 - **Texto**: animación letra por letra, por palabra o por línea.
 - **Pistas**: los cuadros clave de cada propiedad. **Gráfica**: la curva, con manijas.
-- **Grabar claves**: con el botón encendido, mover el cuadro en la pantalla crea las claves.
+- **Grabar claves**: viene prendido en esta pestaña. Elige un objeto, mueve el cursor y cámbialo (lugar, tamaño, giro, color, letra, recorte, un efecto…): se guarda la llave sola, y lo que tenía antes queda al principio.
+- **Guardar llave** (Shift+K): guarda en el cursor todo lo que tiene el objeto. También con doble clic en su barra, o con un clic si prendes **◆ Con clic**.
+- Los rombos de la barra son los momentos: arrastrar uno mueve todas sus llaves; clic derecho, más opciones.
 
 ## Animación libre
 
@@ -90,6 +92,12 @@ Clic derecho en un clip de audio o video → **Color del clip**. Si hay varios e
 ![Nodos](img/movie-nodos.jpg)
 
 Los efectos de un clip se conectan en lugar de ir en lista. Cada nodo tiene entrada de imagen y, si la usa, de máscara. Hay fusión, máscara, calificador de color, mezcla de color con ruedas, plantillas para empezar y todos los efectos de video. El grafo se aplica después de los efectos normales del clip.
+
+Arriba del lienzo está la tira de clips: ahí se elige a cuál se le ponen nodos. A la izquierda, **Clips e imágenes** tiene todo lo del proyecto (y **Abrir archivo…**): un clic lo agrega como nodo, encimado chico con un Fusionar, y de ahí se le conectan efectos solo a él. En su nodo se cambia de qué sale, el tamaño, el lugar y si se repite al terminar.
+
+### Clases de clips
+
+Clic derecho en un clip de video → **Agregar a una clase** → **+ Nueva clase** (con varios elegidos, entran todos). Desde entonces, el efecto o los nodos que le pongas o cambies a uno les pasan a todos los de la clase; los que cada clip ya traía son solo suyos, a menos que uses **Pasar los efectos de este clip a todos**. Ahí mismo se cambian su nombre y color.
 
 ## Clip vacío
 

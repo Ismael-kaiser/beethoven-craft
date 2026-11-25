@@ -31,6 +31,12 @@ pub struct Estado {
     pub panel: Panel2,
     /// Cambiar un valor pone un cuadro clave aunque la propiedad no esté animada.
     pub auto: bool,
+    /// Lo mismo en la pestaña Animación, donde viene prendido.
+    pub grabar: bool,
+    /// Un clic en la barra del objeto pone una llave ahí.
+    pub clic_pone: bool,
+    /// Lo que cambió en este cuadro no es una edición (deshacer, abrir).
+    pub callar: bool,
     pub grafica: bool,
     /// Pista que se ve en la gráfica.
     pub pista: Option<(u64, Pista)>,
@@ -41,6 +47,8 @@ pub struct Estado {
     arrastre: Option<Arrastre>,
     copiadas: Vec<(Pista, f64, Valor, Curva)>,
     menu: Option<Clave>,
+    /// Clic derecho en una llave o en la barra de un objeto.
+    menu_momento: Option<(u64, f64)>,
     encuadrar: bool,
     pub buscar: String,
     pub libre: super::libre::Libre,
@@ -53,6 +61,9 @@ impl Default for Estado {
             claves: vec![],
             panel: Panel2::Listas,
             auto: false,
+            grabar: true,
+            clic_pone: false,
+            callar: false,
             grafica: false,
             pista: None,
             zoom: 120.0,
@@ -62,6 +73,7 @@ impl Default for Estado {
             arrastre: None,
             copiadas: vec![],
             menu: None,
+            menu_momento: None,
             encuadrar: true,
             buscar: String::new(),
             libre: Default::default(),
@@ -78,6 +90,8 @@ enum Arrastre {
     /// En la gráfica: la clave, y el punto de control (0 o 1) de la curva.
     Punto(Clave),
     Control(Clave, usize),
+    /// Todas las llaves de un momento del objeto: de dónde.
+    Momento(u64, f64),
     /// Mueve o recorta el clip: id, qué (0 mover, 1 izquierda, 2 derecha), desfase.
     Clip(u64, u8, f64),
 }
@@ -85,6 +99,8 @@ enum Arrastre {
 enum Hacer {
     Ir(f64),
     Agregar(u64, Pista, f64),
+    /// Llave con todo, en ese segundo del clip.
+    Guardar(u64, f64),
     Curva(Curva),
     Borrar,
     Quitar(u64),
@@ -103,6 +119,7 @@ pub fn nombre_clip(c: &ClipVideo) -> String {
 fn nombre_pista(c: &ClipVideo, p: &Pista) -> String {
     match p {
         Pista::Mov(p) => t(p.nombre()).into(),
+        Pista::Campo(k) => t(c.campos().iter().find(|x| x.0 == k).map_or("", |x| x.1)).into(),
         Pista::Fx(id, k) => match c.fx.iter().find(|f| f.id == *id) {
             Some(f) => format!("{} · {}", t(nombres::efecto(&f.tipo)), nombres::control(&f.tipo, k)),
             None => k.clone(),
@@ -176,7 +193,6 @@ impl App {
             self.anim.clip = self.p.video.iter().find(|c| c.animado).map(|c| c.id);
         }
         self.clip = self.anim.clip.or(self.clip);
-        let antes = self.anim.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id).cloned());
         let alto = ui.available_height();
         egui::Panel::bottom("anim-pistas").frame(Frame::new().fill(WORKSPACE)).resizable(true).default_size(alto * 0.46).size_range(190.0..=(alto - 170.0).max(220.0)).show(ui, |ui| {
             ui.set_min_size(ui.available_size());
@@ -197,29 +213,23 @@ impl App {
             }
         });
         CentralPanel::default().frame(Frame::new().fill(Color32::BLACK)).show(ui, |ui| self.preview(ui));
-        if self.anim.auto {
-            if let Some(a) = antes {
-                self.claves_automaticas(&a);
-            }
+        if self.anim.grabar {
+            self.claves_automaticas();
         }
     }
 
-    /// Lo que cambió sin estar animado recibe cuadros clave: el valor de antes al principio y el nuevo en el cursor.
-    pub fn claves_automaticas(&mut self, a: &ClipVideo) {
-        let tl = (self.ahora() - a.inicio).clamp(0.0, a.dur);
-        let Some(c) = self.p.clip_video(a.id) else { return };
-        let mut v: Vec<Pista> = Propiedad::TODAS.into_iter().map(Pista::Mov).collect();
-        v.extend(a.fx.iter().flat_map(|f| f.p.keys().map(|k| Pista::Fx(f.id, k.clone()))));
-        for p in v {
-            let (Some(x), Some(y)) = (p.de(a).cloned(), p.de_mut(c)) else { continue };
-            if x.claves.is_empty() && y.claves.is_empty() && x.v != y.v {
-                let nuevo = y.v.clone();
-                if tl > 0.02 {
-                    y.claves.push((0.0, x.v));
-                }
-                y.claves.push((tl, nuevo));
-                c.animado = true;
-            }
+    /// Lo que se le cambió al objeto elegido desde el cuadro pasado (mover, girar, color, un control…) queda en llaves.
+    pub fn claves_automaticas(&mut self) {
+        if std::mem::take(&mut self.anim.callar) {
+            return;
+        }
+        let Some(a) = self.aplicado.clone() else { return };
+        let Some(antes) = self.clip.and_then(|id| a.video.iter().find(|c| c.id == id)) else { return };
+        // Recortar o mover el clip en el tiempo no es animarlo.
+        let tl = self.a_cuadro(self.ahora() - antes.inicio).clamp(0.0, antes.dur);
+        let Some(c) = self.p.clip_video(antes.id).filter(|c| c.inicio == antes.inicio && c.dur == antes.dur) else { return };
+        if animaciones::grabar_cambios(antes, c, tl) {
+            self.avisar(tf("◆ Llave guardada en {}", &[&tiempo(antes.inicio + tl)]), false);
         }
     }
 
@@ -282,47 +292,55 @@ impl App {
         ui.label(RichText::new(t("En el proyecto")).font(barlow(17.0)).color(TEXT));
         ui.label(RichText::new(t("Clic para animarlo.")).size(12.5).color(TEXT_FAINT));
         ui.add_space(3.0);
-        let mut v: Vec<(u64, String, bool, f64, &str)> = self
-            .p
-            .video
-            .iter()
-            .map(|c| {
-                let k = match c.contenido {
-                    Contenido::Titulo(_) => "Texto",
-                    Contenido::Imagen => "Imagen",
-                    Contenido::Archivo => "Video",
-                    Contenido::Color(_) => "Color",
-                    Contenido::Ajuste => "Efectos",
-                    Contenido::Forma(_) => "Figura",
-                };
-                (c.id, nombre_clip(c), c.animado, c.inicio, k)
-            })
-            .collect();
-        v.sort_by(|a, b| a.3.total_cmp(&b.3));
+        let mut v: Vec<u64> = self.p.video.iter().map(|c| c.id).collect();
+        v.sort_by(|a, b| {
+            let ini = |id: &u64| self.p.video.iter().find(|c| c.id == *id).map_or(0.0, |c| c.inicio);
+            ini(a).total_cmp(&ini(b))
+        });
         if v.is_empty() {
             ui.label(RichText::new(t("Aún no hay nada. Agrega algo de arriba.")).color(TEXT_FAINT));
         }
-        let ancho = ui.available_width() - 6.0;
-        for (id, n, animado, ini, k) in v {
-            let on = self.anim.clip == Some(id);
-            let (r, resp) = ui.allocate_exact_size(vec2(ancho, 30.0), Sense::click());
-            resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, format!("Animar {n}")));
-            let p = ui.painter_at(r);
-            p.rect_filled(r, 5, if on { BUTTON_HI } else if resp.hovered() { BUTTON } else { c(0x353535) });
-            if animado {
-                rombo(&p, pos2(r.left() + 12.0, r.center().y), 4.5, MAIN);
-            }
-            let g = p.layout_no_wrap(t(k).into(), fuente(12.0), TEXT_FAINT);
-            let w = g.size().x;
-            p.galley(pos2(r.right() - w - 8.0, r.center().y - g.size().y / 2.0), g, TEXT_FAINT);
-            ui.painter_at(Rect::from_min_max(r.min, pos2(r.right() - w - 16.0, r.bottom()))).text(pos2(r.left() + 24.0, r.center().y), Align2::LEFT_CENTER, &n, fuente(14.5), if on { TEXT } else { TEXT_DIM });
-            if resp.on_hover_text(tiempo(ini)).clicked() {
-                self.anim.clip = Some(id);
-                self.clip = Some(id);
-                if let Some(c) = self.p.clip_video(id) {
-                    c.animado = true;
+        let ancho = ui.available_width() - 8.0;
+        let cols = (ancho / 96.0).floor().max(2.0);
+        let w = (ancho - (cols - 1.0) * 6.0) / cols;
+        ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+        let mut elige = None;
+        ui.horizontal_wrapped(|ui| {
+            for id in v {
+                let Some(c) = self.p.video.iter().find(|c| c.id == id) else { continue };
+                let on = self.anim.clip == Some(id);
+                let n = nombre_clip(c);
+                let llaves = animaciones::momentos(c).len();
+                let tex = self.mini_clip(c, c.dur * 0.3);
+                let r = super::nodos::carta(ui, w, &n, "", &format!("Animar {n}"), |p, r| super::nodos::pinta_fuente(p, r, c, tex));
+                let img = Rect::from_min_size(r.rect.min, vec2(w, (w * 9.0 / 16.0).round()));
+                let p = ui.painter();
+                if llaves > 0 {
+                    // Cuántas llaves tiene.
+                    let g = p.layout_no_wrap(llaves.to_string(), barlow(11.5), COLORED_DARK);
+                    let q = Rect::from_min_size(img.min + vec2(4.0, 4.0), g.size() + vec2(20.0, 2.0));
+                    encendido(p, q, 5, MAIN);
+                    rombo(p, pos2(q.left() + 8.5, q.center().y), 3.8, COLORED_DARK);
+                    p.galley(pos2(q.left() + 15.0, q.center().y - g.size().y / 2.0), g, COLORED_DARK);
                 }
-                self.ir(ini.max(0.0));
+                if on {
+                    p.rect_stroke(img.expand(1.0), 7, Stroke::new(2.0, MAIN), StrokeKind::Outside);
+                }
+                if r.on_hover_text(tiempo(c.inicio)).clicked() {
+                    elige = Some((id, c.inicio, c.fin()));
+                }
+            }
+        });
+        if let Some((id, a, b)) = elige {
+            self.anim.clip = Some(id);
+            self.clip = Some(id);
+            self.anim.encuadrar = true;
+            if let Some(c) = self.p.clip_video(id) {
+                c.animado = true;
+            }
+            let ahora = self.ahora();
+            if ahora < a || ahora >= b {
+                self.ir(a.max(0.0));
             }
         }
     }
@@ -498,20 +516,36 @@ impl App {
                 if boton_color(ui, &tabler::CARET_LEFT, false, "Cuadro clave anterior", GLYPH, 26.0).clicked() {
                     self.saltar_clave(-1);
                 }
-                if boton_color(ui, &tabler::KEYFRAME, false, "Poner cuadro clave de posición, escala, giro y opacidad en el cursor", MAIN, 26.0).clicked() {
+                // El botón grande: guarda el objeto como está.
+                let hay = self.anim.clip.is_some();
+                let n = t("Guardar llave");
+                let gal = ui.painter().layout_no_wrap(n.to_string(), fuente(14.5), COLORED_DARK);
+                let (r, resp) = ui.allocate_exact_size(vec2(gal.size().x + 38.0, 26.0), if hay { Sense::click() } else { Sense::hover() });
+                resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, hay, n));
+                if hay && !resp.is_pointer_button_down_on() { encendido(ui.painter(), r, 6, if resp.hovered() { HIGHLIGHT } else { MAIN }) } else { relieve(ui.painter(), r, 6, if hay { DEEP } else { BUTTON }, false, hay) }
+                rombo(ui.painter(), pos2(r.left() + 15.0, r.center().y), 5.5, if hay { COLORED_DARK } else { TEXT_FAINT });
+                ui.painter().galley(pos2(r.left() + 28.0, r.center().y - gal.size().y / 2.0), gal, if hay { COLORED_DARK } else { TEXT_FAINT });
+                if resp.on_hover_text(t("Guarda en el cursor todo lo que tiene el objeto: lugar, tamaño, giro, transparencia, color, recorte y efectos animados (Shift+K)")).clicked() {
                     self.clave_de_todo();
                 }
                 if boton_color(ui, &tabler::CARET_RIGHT, false, "Cuadro clave siguiente", GLYPH, 26.0).clicked() {
                     self.saltar_clave(1);
                 }
-                let on = self.anim.auto;
+                let on = self.anim.clic_pone;
+                if pastilla(ui, "◆ Con clic", on).on_hover_text(t("Con esto prendido, cada clic en la barra del objeto guarda una llave ahí. Apagado: doble clic.")).clicked() {
+                    self.anim.clic_pone = !on;
+                }
+                let on = self.anim.grabar;
                 let (r, resp) = ui.allocate_exact_size(vec2(122.0, 26.0), Sense::click());
                 resp.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, on, t("Grabar claves")));
                 relieve(ui.painter(), r, 6, if on { mezcla(RECORD, BUTTON, 0.55) } else { BUTTON }, resp.hovered(), on || resp.is_pointer_button_down_on());
-                ui.painter().circle_filled(pos2(r.left() + 14.0, r.center().y), 5.0, RECORD);
+                ui.painter().circle_filled(pos2(r.left() + 14.0, r.center().y), 5.0, if on { RECORD } else { mezcla(RECORD, BUTTON, 0.6) });
+                if on {
+                    ui.painter().circle_filled(pos2(r.left() + 14.0, r.center().y), 9.0, RECORD.gamma_multiply(0.18));
+                }
                 ui.painter().text(pos2(r.left() + 26.0, r.center().y), Align2::LEFT_CENTER, t("Grabar claves"), fuente(14.0), TEXT);
                 if resp.on_hover_text(t("Con esto prendido, cualquier cambio (mover en la vista, girar, un control de efecto) pone un cuadro clave en el cursor")).clicked() {
-                    self.anim.auto = !on;
+                    self.anim.grabar = !on;
                 }
                 ui.separator();
                 // Curva de lo elegido
@@ -619,13 +653,18 @@ impl App {
         let t0 = self.ahora();
         let Some(c) = self.anim.clip.and_then(|id| self.p.clip_video(id)) else { return };
         let tl = (t0 - c.inicio).clamp(0.0, c.dur);
-        for p in [Propiedad::X, Propiedad::Y, Propiedad::Escala, Propiedad::Giro, Propiedad::Opacidad] {
-            let q = p.de_mut(c);
-            if q.clave_en(tl).is_none() {
-                q.alternar_clave(tl);
-            }
-        }
-        c.animado = true;
+        let id = c.id;
+        self.guardar_llave_en(id, tl);
+    }
+
+    /// Guarda todo lo que el objeto tiene en `tl` (segundo del clip).
+    pub fn guardar_llave_en(&mut self, id: u64, tl: f64) {
+        let tl = self.a_cuadro(tl);
+        let Some(c) = self.p.clip_video(id) else { return };
+        let tl = tl.clamp(0.0, c.dur);
+        animaciones::guardar_llave(c, tl);
+        let t0 = c.inicio + tl;
+        self.avisar(tf("◆ Llave guardada en {}", &[&tiempo(t0)]), false);
     }
 
     fn curva_a_elegidas(&mut self, cv: Curva) {
@@ -776,11 +815,13 @@ impl App {
         let mut rombos: Vec<(Rect, Clave)> = vec![];
         let mut carriles: Vec<(Rect, u64, Pista)> = vec![];
         let mut barras: Vec<(Rect, u64)> = vec![];
+        let mut momentos: Vec<(Rect, u64, f64)> = vec![];
         let mut y = cuerpo.top() - self.anim.y0;
         for c in &clips {
             let on = elegido == Some(c.id);
             let cab = Rect::from_min_size(pos2(todo.left(), y), vec2(todo.width(), FILA_CLIP));
-            p.rect_filled(cab, 0, if on { c_fila(0x3d3d3d) } else { c_fila(0x313131) });
+            degradado(&p, cab, 0, if on { c_fila(0x4a4a4a) } else { c_fila(0x383838) }, if on { c_fila(0x333333) } else { c_fila(0x2a2a2a) });
+            p.hline(cab.x_range(), cab.top() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(20)));
             let abierto = on != self.anim.cerrados.contains(&c.id);
             let fl = Rect::from_center_size(pos2(cab.left() + 14.0, cab.center().y), vec2(16.0, 16.0));
             let o = fl.center();
@@ -809,16 +850,25 @@ impl App {
                     pz.vline(e, b.top() + 4.0..=b.bottom() - 4.0, Stroke::new(2.0, MAIN));
                 }
             }
+            if b.intersects(zona) {
+                vidrio(&pz, b, 5, if on { MAIN } else { c_fila(0x8a8a8a) }, false);
+            }
+            // Sus llaves, por momento: se arrastran juntas.
+            let mo: Vec<f64> = animaciones::momentos(c).into_iter().map(|m| m.0).filter(|k| *k >= -0.01 && *k <= c.dur + 0.01).collect();
+            for k in mo {
+                let o = pos2(a_x(c.inicio + k), cab.center().y);
+                if zona.expand(8.0).contains(o) {
+                    let r = Rect::from_center_size(o, vec2(15.0, 20.0));
+                    let sobre = raton.is_some_and(|m| r.contains(m));
+                    rombo(&pz, o + vec2(0.0, 1.0), 6.5, Color32::from_black_alpha(120));
+                    rombo(&pz, o, 6.5, if sobre { Color32::WHITE } else if on { HIGHLIGHT } else { Color32::from_rgb(0xc9, 0xb2, 0x5a) });
+                    momentos.push((r, c.id, k));
+                }
+            }
             barras.push((b, c.id));
             y += FILA_CLIP;
             let pistas = Pista::todas(c);
             if !abierto {
-                // Cerrado: todos sus cuadros clave en la barra.
-                for q in pistas.iter().filter_map(|p| p.de(c)) {
-                    for k in &q.claves {
-                        rombo(&pz, pos2(a_x(c.inicio + k.0), cab.center().y), 3.5, HIGHLIGHT);
-                    }
-                }
                 continue;
             }
             for pista in pistas {
@@ -902,6 +952,10 @@ impl App {
                         self.anim.claves = vec![k];
                     }
                     Some(Arrastre::Claves(self.anim.claves.iter().map(|k| (k.clone(), k.2)).collect(), m))
+                } else if let Some((_, id, k)) = momentos.iter().find(|x| x.0.contains(m)) {
+                    self.clip = Some(*id);
+                    self.anim.clip = Some(*id);
+                    Some(Arrastre::Momento(*id, *k))
                 } else if let Some((b, id)) = barras.iter().find(|b| b.0.expand(3.0).contains(m)) {
                     let que = if (m.x - b.left()).abs() < 7.0 { 1 } else if (m.x - b.right()).abs() < 7.0 { 2 } else { 0 };
                     let ini = self.p.video.iter().find(|c| c.id == *id).map_or(0.0, |c| c.inicio);
@@ -938,6 +992,16 @@ impl App {
                     }
                     self.anim.arrastre = Some(Arrastre::Claves(self.mover_claves(v, dt), o));
                 }
+                Some(Arrastre::Momento(id, de)) => {
+                    let ini = clips.iter().find(|c| c.id == id).map_or(0.0, |c| c.inicio);
+                    let a = clips.iter().find(|c| c.id == id).map_or(0.0, |c| self.iman_animacion(a_t(m.x), c, &[ini + de])) - ini;
+                    let a = self.a_cuadro(a);
+                    let quedo = self.p.clip_video(id).is_some_and(|c| {
+                        let a = a.clamp(0.0, c.dur);
+                        (a - de).abs() > 1e-6 && animaciones::mover_momento(c, de, a)
+                    });
+                    self.anim.arrastre = Some(Arrastre::Momento(id, if quedo { a.max(0.0) } else { de }));
+                }
                 Some(Arrastre::Clip(id, que, des)) => {
                     let s = a_t(m.x);
                     if let Some(c) = self.p.clip_video(id) {
@@ -949,8 +1013,7 @@ impl App {
                                 let fin = c.fin();
                                 let ini = s.clamp(0.0, fin - 0.1);
                                 let d = c.inicio - ini;
-                                c.mov.props_mut().into_iter().for_each(|p| p.correr(d));
-                                c.fx.iter_mut().flat_map(|f| f.p.values_mut()).for_each(|p| p.correr(d));
+                                c.animables().for_each(|p| p.correr(d));
                                 (c.inicio, c.dur) = (ini, fin - ini);
                                 c.total = c.total.max(c.dur);
                             }
@@ -970,7 +1033,26 @@ impl App {
             self.anim.arrastre = None;
         }
         if let Some(m) = todo_raton.filter(|m| m.x >= carril.left()) {
-            if resp.double_clicked() && en_rombo(m).is_none() {
+            let en_momento = momentos.iter().find(|x| x.0.contains(m)).map(|x| (x.1, x.2));
+            let en_barra = barras.iter().find(|b| b.0.contains(m)).map(|b| b.1);
+            if let (true, Some((id, k))) = (resp.clicked() && !resp.double_clicked(), en_momento) {
+                // Clic en una llave: se elige entera y el cursor va a ella.
+                self.anim.clip = Some(id);
+                self.clip = Some(id);
+                if let Some(c) = clips.iter().find(|c| c.id == id) {
+                    self.anim.claves = Pista::todas(c).into_iter().filter(|p| p.de(c).is_some_and(|q| q.clave_en(k).is_some())).map(|p| (id, p, k)).collect();
+                    hacer.push(Hacer::Ir(c.inicio + k));
+                }
+            } else if let (true, Some(id), None) = (resp.double_clicked() || (resp.clicked() && self.anim.clic_pone), en_barra, en_momento) {
+                // Llave con todo lo que tiene ahí.
+                self.anim.clip = Some(id);
+                self.clip = Some(id);
+                if let Some(c) = clips.iter().find(|c| c.id == id) {
+                    let s = a_t(m.x).clamp(c.inicio, c.fin());
+                    hacer.push(Hacer::Ir(s));
+                    hacer.push(Hacer::Guardar(id, s - c.inicio));
+                }
+            } else if resp.double_clicked() && en_rombo(m).is_none() {
                 if let Some((_, id, pista)) = carriles.iter().find(|c| c.0.contains(m)) {
                     if let Some(c) = clips.iter().find(|c| c.id == *id) {
                         let tk = a_t(m.x) - c.inicio;
@@ -1008,6 +1090,7 @@ impl App {
                 }
             }
             if resp.secondary_clicked() {
+                self.anim.menu_momento = en_momento.or(en_barra.map(|id| (id, a_t(m.x) - clips.iter().find(|c| c.id == id).map_or(0.0, |c| c.inicio))));
                 self.anim.menu = en_rombo(m);
                 if let Some(k) = &self.anim.menu {
                     if !self.anim.claves.contains(k) {
@@ -1020,6 +1103,7 @@ impl App {
         for h in hacer {
             match h {
                 Hacer::Ir(s) => self.ir(s),
+                Hacer::Guardar(id, tl) => self.guardar_llave_en(id, tl),
                 Hacer::Agregar(id, pista, tk) => {
                     let mut queda = false;
                     if let Some(c) = self.p.clip_video(id) {
@@ -1048,6 +1132,22 @@ impl App {
     }
 
     fn menu_clave(&mut self, resp: &Response, hacer: &mut Vec<Hacer>) {
+        if let (Some((id, tl)), None) = (self.anim.menu_momento, &self.anim.menu) {
+            let ini = self.p.video.iter().find(|c| c.id == id).map_or(0.0, |c| c.inicio);
+            let abierto = resp.context_menu(|ui| {
+                ui.set_min_width(210.0);
+                if ui.button(RichText::new(t("◆ Guardar llave con todo")).color(MAIN)).clicked() {
+                    hacer.push(Hacer::Ir(ini + tl));
+                    hacer.push(Hacer::Guardar(id, tl));
+                    ui.close();
+                }
+                self.menu_llaves(ui, id, ini + tl);
+            });
+            if abierto.is_none() {
+                self.anim.menu_momento = None;
+            }
+            return;
+        }
         let Some((id, pista, tk)) = self.anim.menu.clone() else { return };
         let actual = self.p.video.iter().find(|c| c.id == id).and_then(|c| pista.de(c)).map(|p| p.curva_en(tk));
         let abierto = resp.context_menu(|ui| {

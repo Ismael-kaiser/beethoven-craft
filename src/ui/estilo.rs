@@ -333,6 +333,86 @@ pub fn encendido(p: &Painter, r: Rect, rad: u8, col: Color32) {
     p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.55)), StrokeKind::Outside);
 }
 
+/// Tornillito pulido de reloj: cabeza redonda con luz, ranura y bisel. `giro`: hacia dónde quedó la ranura.
+pub fn tornillo(p: &Painter, o: Pos2, r: f32, giro: f32, azul: bool) {
+    let (claro, oscuro) = if azul { (Color32::from_rgb(0x6f, 0x93, 0xd8), Color32::from_rgb(0x1c, 0x2c, 0x5e)) } else { (Color32::from_rgb(0xd4, 0xd6, 0xda), Color32::from_rgb(0x5a, 0x5c, 0x61)) };
+    p.circle_filled(o, r + 1.0, Color32::from_black_alpha(150));
+    p.circle_filled(o + vec2(0.0, 0.6), r + 0.6, Color32::from_white_alpha(22));
+    p.circle_filled(o, r, oscuro);
+    p.circle_filled(o - vec2(0.0, r * 0.18), r * 0.82, mezcla(oscuro, claro, 0.55));
+    p.circle_filled(o - vec2(r * 0.15, r * 0.34), r * 0.45, claro);
+    let d = Vec2::angled(giro) * r * 0.8;
+    p.line_segment([o - d, o + d], Stroke::new((r * 0.36).max(0.8), Color32::from_black_alpha(190)));
+}
+
+/// Esfera chica de cronógrafo: aro pulido, minutería, y dos manecillas (segundos y minutos) con el tiempo `s`.
+pub fn esfera(p: &Painter, o: Pos2, r: f32, s: f64, col: Color32) {
+    p.circle_filled(o + vec2(0.0, 1.0), r + 2.0, Color32::from_black_alpha(150));
+    // Aro: oscuro, acero y un filo de luz arriba.
+    p.circle_filled(o, r + 1.2, Color32::from_rgb(0x2c, 0x2d, 0x31));
+    p.circle_filled(o - vec2(0.0, 0.5), r + 0.4, Color32::from_rgb(0x9b, 0x9e, 0xa5));
+    p.circle_filled(o + vec2(0.0, 0.4), r - 0.4, Color32::from_rgb(0x3a, 0x3c, 0x41));
+    p.circle_filled(o, r - 1.3, Color32::from_rgb(0x10, 0x11, 0x14));
+    for i in 0..12 {
+        let d = Vec2::angled(i as f32 / 12.0 * 2.0 * PI - PI / 2.0);
+        let largo = if i % 3 == 0 { 3.2 } else { 1.8 };
+        p.line_segment([o + d * (r - 2.0), o + d * (r - 2.0 - largo)], Stroke::new(if i % 3 == 0 { 1.1 } else { 0.8 }, Color32::from_white_alpha(if i % 3 == 0 { 210 } else { 110 })));
+    }
+    let mano = |a: f64, l: f32, w: f32, c: Color32| {
+        let d = Vec2::angled((a * 2.0 * std::f64::consts::PI - std::f64::consts::FRAC_PI_2) as f32);
+        p.line_segment([o - d * l * 0.28, o + d * l], Stroke::new(w, c));
+    };
+    mano(s / 3600.0, (r - 2.0) * 0.6, 1.8, Color32::from_rgb(0xcf, 0xd2, 0xd8));
+    mano(s / 60.0, (r - 2.0) * 0.92, 1.1, col);
+    p.circle_filled(o, 1.8, col);
+    p.circle_filled(o - vec2(0.4, 0.5), 0.7, Color32::from_white_alpha(200));
+    // Cristal abombado: media luna de luz.
+    let n = 14;
+    let mut v: Vec<Pos2> = (0..=n).map(|i| o + (r - 1.6) * Vec2::angled(PI + PI * i as f32 / n as f32)).collect();
+    v.extend((0..=n).rev().map(|i| { let a = PI + PI * i as f32 / n as f32; o + vec2(a.cos() * (r - 1.6), a.sin() * (r - 1.6) * 0.12) }));
+    p.add(Shape::convex_polygon(v[..=n].to_vec(), Color32::from_white_alpha(20), Stroke::NONE));
+}
+
+/// Rueda dentada fina (engrane), girada `a` radianes.
+pub fn engrane(p: &Painter, o: Pos2, r: f32, dientes: usize, a: f32, col: Color32) {
+    for i in 0..dientes {
+        let d = Vec2::angled(a + i as f32 / dientes as f32 * 2.0 * PI);
+        p.line_segment([o + d * (r - 1.0), o + d * (r + 1.8)], Stroke::new(1.3, col));
+    }
+    p.circle_stroke(o, r - 0.6, Stroke::new(1.4, col));
+}
+
+/// Índice aplicado de una carátula: barrita facetada, con un lado en luz y el otro en sombra.
+pub fn indice(p: &Painter, x: f32, y0: f32, y1: f32, w: f32, col: Color32) {
+    p.rect_filled(Rect::from_min_max(pos2(x - w / 2.0 + 0.6, y0 + 1.2), pos2(x + w / 2.0 + 0.8, y1 + 1.2)), 1, Color32::from_black_alpha(130));
+    p.rect_filled(Rect::from_min_max(pos2(x - w / 2.0, y0), pos2(x, y1)), 0, mezcla(col, Color32::WHITE, 0.45));
+    p.rect_filled(Rect::from_min_max(pos2(x, y0), pos2(x + w / 2.0, y1)), 0, mezcla(col, Color32::BLACK, 0.35));
+}
+
+/// Vidrio encima de algo ya dibujado, como el Aero de antes: la mitad de arriba con un brillo que termina en seco, luz que
+/// sube desde abajo con el tono `col`, filo blanco por dentro y borde oscuro por fuera. Sin desenfoques: casi no cuesta.
+pub fn vidrio(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool) {
+    vidrio_en(p, r, rad, col, hover, r.height() * 0.46);
+}
+
+/// [`vidrio`], con el brillo de arriba hasta `alto`.
+pub fn vidrio_en(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool, alto: f32) {
+    if r.width() < 3.0 || r.height() < 3.0 {
+        return;
+    }
+    let k = if hover { 1.35 } else { 1.0 };
+    let blanco = |a: f32| Color32::from_white_alpha((a * k).min(255.0) as u8);
+    let corte = r.top() + alto.min(r.height());
+    degradado_en(p, Rect::from_min_max(r.min, pos2(r.right(), corte)), CornerRadius { nw: rad, ne: rad, sw: 0, se: 0 }, blanco(58.0), blanco(16.0));
+    let luz = mezcla(col, Color32::WHITE, 0.45);
+    let t = |a: f32| Color32::from_rgba_unmultiplied(luz.r(), luz.g(), luz.b(), (a * k).min(255.0) as u8);
+    degradado_en(p, Rect::from_min_max(pos2(r.left(), r.bottom() - r.height() * 0.38), r.max), CornerRadius { nw: 0, ne: 0, sw: rad, se: rad }, t(0.0), t(46.0));
+    p.rect_stroke(r.shrink(0.5), CornerRadius::same(rad.saturating_sub(1)), Stroke::new(1.0, blanco(46.0)), StrokeKind::Inside);
+    let f = (rad as f32 * 0.7).max(1.5);
+    p.hline(r.left() + f..=r.right() - f, r.top() + 0.75, Stroke::new(1.0, blanco(120.0)));
+    p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.78)), StrokeKind::Outside);
+}
+
 /// Hueco metido en el tablero (pantallas, medidores, campos): oscuro, con sombra arriba y luz abajo.
 pub fn hueco(p: &Painter, r: Rect, rad: u8, fondo: Color32) {
     let rr = CornerRadius::same(rad);

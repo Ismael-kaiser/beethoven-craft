@@ -287,8 +287,8 @@ fn en_paralelo(
                 // Los mismos cuadros que pediría la composición, y para los efectos de tiempo, lo que el lector tiene
                 // en su cola en este momento: así componer en otro hilo da lo mismo que leer en orden.
                 let pedidos = composicion::pedidos(p, t_de(n), an, al);
-                let cuadros = pedidos.iter().filter_map(|&(c, ts, aw, ah)| Some((c.id, l.cuadro(c, ts, aw, ah)?))).collect();
-                let recientes = pedidos.iter().filter(|x| composicion::de_tiempo(x.0)).map(|x| (x.0.id, l.recientes(x.0))).collect();
+                let cuadros = pedidos.iter().filter_map(|(c, ts, aw, ah)| Some((c.id, l.cuadro(c, *ts, *aw, *ah)?))).collect();
+                let recientes = pedidos.iter().filter(|x| composicion::de_tiempo(&x.0)).map(|x| (x.0.id, l.recientes(&x.0))).collect();
                 if tx.send((n, composicion::Prestado { cuadros, recientes })).is_err() {
                     break;
                 }

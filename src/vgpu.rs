@@ -661,6 +661,7 @@ struct Dibujo {
 #[allow(clippy::too_many_arguments)]
 fn dibujar(m: &mut Mesa, c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<Option<Dibujo>> {
     let tl = t - c.inicio;
+    let c = &*c.en_su_momento(tl);
     let k = h as f64 / p.alto.max(1) as f64;
     let mut b = match &c.contenido {
         Contenido::Archivo | Contenido::Imagen => {
@@ -694,9 +695,7 @@ fn dibujar(m: &mut Mesa, c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize
         b = aplicar(m, b, x, tl, c.dur, p.fps, tam, pasado.as_ref())?;
     }
     if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
-        let z = m.bajar(&b)?;
-        let z = crate::nodos::evaluar(g, z, tl, &|f, b| composicion::aplicar_fx(f, tl, c.dur, p.fps, b, tam, pasado.as_ref()));
-        b = m.subir(&z)?;
+        b = nodos(m, g, c, b, t, p, f, tam, pasado.as_ref())?;
     }
     let mv = &c.mov;
     let esc = (mv.escala.en(tl).num() / 100.0).max(0.0001);
@@ -732,6 +731,126 @@ fn dibujar(m: &mut Mesa, c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize
     Some(Some(Dibujo { c: b, m: mat, op, directo }))
 }
 
+/// El grafo de nodos de un clip, en la tarjeta. Mismo resultado que `nodos::evaluar`.
+#[allow(clippy::too_many_arguments)]
+fn nodos(m: &mut Mesa, g: &crate::nodos::Grafo, c: &ClipVideo, entrada: Capa, t: f64, p: &Proyecto, f: &mut dyn Fuente, tam: [f64; 2], pasado: Option<&composicion::Pasado>) -> Option<Capa> {
+    use crate::nodos::{Clase, Dibujo, SALIDA};
+    let (w, h, k) = (entrada.ancho(), entrada.alto(), entrada.scale);
+    let mut hechos: std::collections::HashMap<u64, Capa> = Default::default();
+    for (id, d, (aw, ah, cx, cy), op) in crate::nodos::dibujos(c, t, p, w as usize, h as usize, f) {
+        let q = match d {
+            Dibujo::Cuadro(q) => subir_cuadro(m, &q, (q.ancho, q.alto), k)?,
+            Dibujo::Imagen(img) => m.subir(&ec::Buf { img, offset: [0.0; 2], scale: k })?,
+        };
+        let v = m.vacia(w, h, k)?;
+        let mat = [aw / q.ancho() as f64, 0.0, cx - aw / 2.0, 0.0, ah / q.alto() as f64, cy - ah / 2.0];
+        hechos.insert(id, m.mover(&v, &q, mat, BlendMode::Normal, op));
+    }
+    let offset = entrada.offset;
+    let mut base = entrada;
+    base.offset = [0.0; 2];
+    struct Va<'a> {
+        g: &'a crate::nodos::Grafo,
+        base: Capa,
+        tl: f64,
+        dur: f64,
+        fps: f64,
+        tam: [f64; 2],
+        pasado: Option<&'a composicion::Pasado>,
+    }
+    // `Some(None)`: no le llega nada a ese nodo. `None`: la tarjeta no pudo.
+    fn nodo(m: &mut Mesa, v: &Va, id: u64, hechos: &mut std::collections::HashMap<u64, Capa>, hondo: u32) -> Option<Option<Capa>> {
+        if let Some(x) = hechos.get(&id) {
+            return Some(Some(x.clone()));
+        }
+        let Some(n) = v.g.nodo(id).filter(|_| hondo <= 200) else { return Some(None) };
+        let (w, h, k) = (v.base.ancho(), v.base.alto(), v.base.scale);
+        let mut ent = |m: &mut Mesa, q: u8| -> Option<Option<Capa>> {
+            match v.g.cables.iter().find(|c| c.a == id && c.puerto == q) {
+                Some(c) => nodo(m, v, c.de, hechos, hondo + 1),
+                None => Some(None),
+            }
+        };
+        let por = |m: &mut Mesa, a: &Capa, masc: &Capa, inv: bool| {
+            let mut d = Datos::default();
+            d.u[3][0] = u32::from(inv);
+            m.propio("bc_por_mascara", a, &d, Some(masc), None, None)
+        };
+        let num = |k: &str| n.fx.p.get(k).map_or(0.0, |p| p.en(v.tl).num());
+        let r = match n.clase {
+            Clase::Entrada => Some(v.base.clone()),
+            Clase::Salida => ent(m, 0)?,
+            Clase::Medio => None,
+            Clase::Efecto => match ent(m, 0)? {
+                Some(a) if n.fx.activo => {
+                    let mut b = aplicar(m, a.clone(), &n.fx, v.tl, v.dur, v.fps, v.tam, v.pasado)?;
+                    if b.offset != [0.0; 2] || (b.ancho(), b.alto()) != (w, h) {
+                        b = m.recorte(&b, b.offset[0].round() as i64, b.offset[1].round() as i64, w, h);
+                    }
+                    match ent(m, 1)? {
+                        Some(masc) => {
+                            let (a, b) = (por(m, &a, &masc, true)?, por(m, &b, &masc, false)?);
+                            let mut d = Datos::default();
+                            d.f[0] = [1.0, 1.0, 0.0, 0.0];
+                            Some(m.propio("bc_fc_suma", &a, &d, Some(&b), None, None)?)
+                        }
+                        None => Some(b),
+                    }
+                }
+                a => a,
+            },
+            Clase::Fusionar => match (ent(m, 0)?, ent(m, 1)?) {
+                (Some(a), _) if !n.fx.activo => Some(a),
+                (Some(a), Some(mut b)) => {
+                    if let Some(masc) = ent(m, 2)? {
+                        b = por(m, &b, &masc, false)?;
+                    }
+                    let modo = match n.fx.p.get("modo").map(|p| p.en(v.tl)) {
+                        Some(Valor::Op(i)) => composicion::FUSIONES.get(i as usize).map_or(BlendMode::Normal, |x| x.1),
+                        _ => BlendMode::Normal,
+                    };
+                    Some(m.mezclar(&a, &b, modo, (num("opacidad") / 100.0).clamp(0.0, 1.0) as f32))
+                }
+                (a, b) => a.or(b),
+            },
+            Clase::Fondo => {
+                let q = match n.fx.p.get("color").map(|p| p.en(v.tl)) {
+                    Some(Valor::Color(q)) => q,
+                    _ => [0.0, 0.0, 0.0, 1.0],
+                };
+                let mut d = Datos::default();
+                d.f[0] = [q[0] * q[3], q[1] * q[3], q[2] * q[3], q[3]];
+                Some(m.propio("bc_color_solido", &v.base, &d, None, None, None)?)
+            }
+            Clase::Mascara => {
+                let o = m.subir(&ec::Buf { img: crate::nodos::mascara(n, v.tl, w, h), offset: [0.0; 2], scale: k })?;
+                match ent(m, 0)? {
+                    Some(z) => Some(por(m, &o, &z, false)?),
+                    None => Some(o),
+                }
+            }
+            Clase::Calificador => match ent(m, 0)? {
+                Some(a) => {
+                    let img = crate::nodos::calificador(n, v.tl, &m.bajar(&a)?.img);
+                    Some(m.subir(&ec::Buf { img, offset: [0.0; 2], scale: k })?)
+                }
+                None => None,
+            },
+        };
+        if let Some(x) = &r {
+            hechos.insert(id, x.clone());
+        }
+        Some(r)
+    }
+    let v = Va { g, base, tl: t - c.inicio, dur: c.dur, fps: p.fps, tam, pasado };
+    let mut r = match nodo(m, &v, SALIDA, &mut hechos, 0)? {
+        Some(r) => r,
+        None => m.vacia(w, h, k)?,
+    };
+    r.offset = offset;
+    Some(r)
+}
+
 /// En un lienzo transparente de `w` × `h`.
 fn suelto(m: &mut Mesa, d: Option<Dibujo>, w: usize, h: usize, k: f64) -> Option<Capa> {
     let Some(d) = d else { return m.vacia(w as u32, h as u32, k) };
@@ -760,7 +879,9 @@ fn conviene(p: &Proyecto, t: f64) -> bool {
         for x in c.fx.iter().filter(|x| x.activo) {
             if en_tarjeta(x) { si = true } else { no = true }
         }
-        no |= c.nodos.as_ref().is_some_and(|g| g.activo);
+        for n in c.nodos.iter().filter(|g| g.activo).flat_map(|g| &g.nodos).filter(|n| n.clase == crate::nodos::Clase::Efecto && n.fx.activo) {
+            if en_tarjeta(&n.fx) { si = true } else { no = true }
+        }
         si |= i > 0 || c.mov != Default::default();
     }
     si || !no
@@ -814,14 +935,12 @@ fn cuadro(g: &Gpu, p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente,
                 b = aplicar(m, b, x, tl, c.dur, p.fps, tam, None)?;
             }
             if let Some(g) = c.nodos.as_ref().filter(|g| g.activo) {
-                let z = m.bajar(&b)?;
-                let z = crate::nodos::evaluar(g, z, tl, &|f, b| composicion::aplicar_fx(f, tl, c.dur, p.fps, b, tam, None));
-                b = m.subir(&z)?;
+                b = nodos(m, g, c, b, t, p, f, tam, None)?;
             }
             if b.offset != [0.0; 2] || (b.ancho() as usize, b.alto() as usize) != (w, h) {
                 b = m.recorte(&b, b.offset[0].round() as i64, b.offset[1].round() as i64, w as u32, h as u32);
             }
-            let r = c.mov.recorte;
+            let r = c.en_su_momento(tl).mov.recorte;
             if r.iter().any(|v| *v > 0.0) {
                 let (x0, y0) = ((w as f32 * r[0] / 100.0) as usize, (h as f32 * r[1] / 100.0) as usize);
                 let (x1, y1) = ((w as f32 * (1.0 - r[2] / 100.0)) as usize, (h as f32 * (1.0 - r[3] / 100.0)) as usize);

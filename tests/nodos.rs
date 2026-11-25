@@ -112,6 +112,102 @@ fn mascara_calificador_y_fusion() {
     assert!(dif(&a, &cuadro(&p)) < 0.6);
 }
 
+/// Un nodo «Clip o imagen»: pone otro clip, imagen o video, y sus efectos y fusiones le tocan.
+#[test]
+fn medio_de_otro_clip() {
+    struct Dos;
+    impl Fuente for Dos {
+        fn cuadro(&mut self, c: &ClipVideo, t: f64, an: usize, al: usize) -> Option<Arc<Cuadro>> {
+            // El del nodo es azul; el de la línea de tiempo, rojo.
+            let q = if c.ruta.ends_with("azul.mp4") { [0u8, 0, 255, 255] } else { [255, 0, 0, 255] };
+            Some(Arc::new(Cuadro { t, ancho: an, alto: al, rgba: q.repeat(an * al), ..Default::default() }))
+        }
+    }
+    let mut p = proyecto();
+    let mut otro = p.nuevo_video("/azul.mp4".into(), Contenido::Archivo, 7.0, 3.0);
+    (otro.ancho, otro.alto, otro.total) = (320, 180, 10.0);
+    let mut g = Grafo::default();
+    let m = g.agregar(Clase::Medio, None, 0.0, 0.0);
+    g.nodo_mut(m).unwrap().medio = Some(Box::new(otro.clone()));
+    let q = |p: &Proyecto| componer(p, 1.0, 320, 180, &mut Dos);
+    // Suelto no hace nada ni se lee; conectado a la salida, es lo que se ve.
+    p.video[0].nodos = Some(g.clone());
+    assert!(px(&q(&p), 160, 90)[0] > 240 && toma_uno::composicion::pedidos(&p, 1.0, 320, 180).len() == 1);
+    g.conectar(m, SALIDA, 0);
+    p.video[0].nodos = Some(g.clone());
+    assert!(px(&q(&p), 160, 90)[2] > 240);
+    // Se pide con un número propio, en su segundo.
+    let v = toma_uno::composicion::pedidos(&p, 1.0, 320, 180);
+    let x = v.iter().find(|x| x.0.ruta.ends_with("azul.mp4")).unwrap();
+    assert!(x.0.id != otro.id && (x.1 - 1.0).abs() < 1e-6);
+    // Que se repita: a los 10 s de 10, vuelve a empezar; y con «Empezar en».
+    g.nodo_mut(m).unwrap().fx.p.get_mut("final").unwrap().v = Valor::Op(1);
+    g.nodo_mut(m).unwrap().fx.p.get_mut("desde").unwrap().v = Valor::Num(8.0);
+    p.video[0].nodos = Some(g.clone());
+    let ts = |t: f64| toma_uno::nodos::pedidos(&p.video[0], t, 320, 180)[0].1;
+    assert!((ts(0.5) - 8.5).abs() < 1e-6 && (ts(2.5) - 8.5).abs() < 1e-6, "{} {}", ts(0.5), ts(2.5));
+    // Fusionado chico sobre el clip: azul en el centro, rojo en la orilla.
+    let k = g.agregar(Clase::Fusionar, None, 0.0, 0.0);
+    g.nodo_mut(m).unwrap().fx.p.get_mut("escala").unwrap().v = Valor::Num(40.0);
+    g.conectar(ENTRADA, k, 0);
+    g.conectar(m, k, 1);
+    g.conectar(k, SALIDA, 0);
+    p.video[0].nodos = Some(g.clone());
+    let o = q(&p);
+    assert!(px(&o, 160, 90)[2] > 240 && px(&o, 10, 10)[0] > 240);
+    // Un efecto solo a ese: se vuelve gris y lo demás no.
+    let mut f = fx_nuevo(0, "bc:color").unwrap();
+    f.p.get_mut("sat").unwrap().v = Valor::Num(0.0);
+    let e = g.agregar(Clase::Efecto, Some(f), 0.0, 0.0);
+    g.conectar(m, e, 0);
+    g.conectar(e, k, 1);
+    p.video[0].nodos = Some(g.clone());
+    let o = q(&p);
+    assert!((px(&o, 160, 90)[2] - px(&o, 160, 90)[0]).abs() < 8 && px(&o, 10, 10)[0] > 240);
+    // También un título; y todo vuelve igual del archivo, con su medio en la lista.
+    g.nodo_mut(m).unwrap().medio = Some(Box::new(p.nuevo_video("t".into(), Contenido::Titulo(toma_uno::titulos::plantilla(1).1), 0.0, 5.0)));
+    p.video[0].nodos = Some(g.clone());
+    let con_titulo = q(&p);
+    g.nodo_mut(m).unwrap().fx.p.get_mut("opacidad").unwrap().v = Valor::Num(0.0);
+    p.video[0].nodos = Some(g.clone());
+    assert!(dif(&con_titulo, &q(&p)) > 0.05);
+    g.nodo_mut(m).unwrap().medio = Some(Box::new(otro));
+    p.video[0].nodos = Some(g);
+    assert!(toma_uno::archivo::medios(&p).iter().any(|r| r.ends_with("azul.mp4")));
+    let r = std::env::temp_dir().join(format!("nodos-medio-{}.bcraft", std::process::id()));
+    toma_uno::archivo::guardar(&p, &r, None, false).unwrap();
+    assert!(toma_uno::archivo::abrir(&r, &std::env::temp_dir()).unwrap() == p);
+    let _ = std::fs::remove_file(r);
+}
+
+/// El grafo en la tarjeta da lo mismo que en el procesador.
+#[test]
+fn nodos_en_la_tarjeta() {
+    if toma_uno::vgpu::gpu().is_none() {
+        return;
+    }
+    for i in 0..PLANTILLAS.len() + 1 {
+        let mut p = proyecto();
+        (p.ancho, p.alto, p.video[0].ancho, p.video[0].alto) = (640, 360, 640, 360);
+        let mut g = Grafo::default();
+        plantilla(&mut g, i.min(PLANTILLAS.len() - 1), |t| fx_nuevo(0, t));
+        if i == PLANTILLAS.len() {
+            // Con un medio encima, en modo Pantalla.
+            let mut c = p.nuevo_video("/otro.mp4".into(), Contenido::Archivo, 0.0, 4.0);
+            (c.ancho, c.alto, c.total) = (320, 320, 4.0);
+            let (m, k) = (g.agregar(Clase::Medio, None, 0.0, 0.0), g.agregar(Clase::Fusionar, None, 0.0, 0.0));
+            g.nodo_mut(m).unwrap().medio = Some(Box::new(c));
+            g.nodo_mut(m).unwrap().fx.p.get_mut("escala").unwrap().v = Valor::Num(50.0);
+            g.insertar(ENTRADA, k);
+            g.conectar(m, k, 1);
+        }
+        p.video[0].nodos = Some(g);
+        let a = componer_cpu(&p, 1.0, 640, 360, &mut Img);
+        let b = toma_uno::vgpu::componer(&p, 1.0, 640, 360, &mut Img, toma_uno::vgpu::Salida::Rgba).unwrap();
+        assert!(dif(&a, &b) < 0.8, "plantilla {i}: {}", dif(&a, &b));
+    }
+}
+
 /// Cada plantilla cambia la imagen y vuelve igual del archivo; en un clip vacío le toca a lo de abajo.
 #[test]
 fn plantillas_y_archivo() {

@@ -451,6 +451,62 @@ impl App {
         if self.seleccion.contains(&id) { self.seleccion.iter().copied().collect() } else { vec![id] }
     }
 
+    /// Clase de un clip de video (y de los demás elegidos con él).
+    pub fn menu_clase(&mut self, ui: &mut Ui, id: u64) {
+        ui.set_min_width(230.0);
+        let actual = self.p.video.iter().find(|c| c.id == id).and_then(|c| c.clase);
+        let mut poner = None;
+        if let Some(k) = actual.and_then(|k| self.p.clase(k)) {
+            ui.horizontal(|ui| {
+                ui.color_edit_button_srgb(&mut k.color);
+                ui.add(TextEdit::singleline(&mut k.nombre).desired_width(170.0)).on_hover_text(crate::idioma::t("Nombre de la clase"));
+            });
+            ui.separator();
+        }
+        for k in &self.p.clases {
+            let n = self.p.video.iter().filter(|c| c.clase == Some(k.id)).count();
+            let [r, g, b] = k.color;
+            let txt = RichText::new(format!("●  {}  ({n})", k.nombre)).color(if actual == Some(k.id) { COLORED_DARK } else { mezcla(Color32::from_rgb(r, g, b), Color32::WHITE, 0.25) });
+            if ui.selectable_label(actual == Some(k.id), txt).clicked() {
+                poner = Some(Some(k.id));
+            }
+        }
+        if ui.button(RichText::new(crate::idioma::t("+ Nueva clase")).color(MAIN)).on_hover_text(crate::idioma::t("Los efectos que le pongas a un clip de la clase les pasan a todos")).clicked() {
+            poner = Some(Some(self.clase_nueva()));
+        }
+        if let Some(k) = actual {
+            ui.separator();
+            if ui.button(crate::idioma::t("Elegir todos los de la clase")).clicked() {
+                self.seleccion = self.p.video.iter().filter(|c| c.clase == Some(k)).map(|c| c.id).collect();
+                self.clip = Some(id);
+            }
+            if ui.button(crate::idioma::t("Pasar los efectos de este clip a todos")).on_hover_text(crate::idioma::t("También los que ya traía antes de entrar a la clase")).clicked() {
+                self.p.compartir_todo(id);
+            }
+            if ui.button(crate::idioma::t("Sacar de la clase")).clicked() {
+                poner = Some(None);
+            }
+            if ui.button(crate::idioma::t("Borrar la clase")).on_hover_text(crate::idioma::t("Los clips se quedan con sus efectos")).clicked() {
+                self.p.quitar_clase(k);
+            }
+        }
+        if let Some(k) = poner {
+            for id in self.junto_con(id) {
+                if let Some(c) = self.p.clip_video(id) {
+                    c.clase = k;
+                }
+            }
+            ui.close();
+        }
+    }
+
+    pub fn clase_nueva(&mut self) -> u64 {
+        let n = (1..).map(|n| crate::idioma::tf("Clase {}", &[&n])).find(|n| self.p.clases.iter().all(|k| k.nombre != *n)).unwrap();
+        // Un color que no se repita mientras haya.
+        let x = TINTES.iter().map(|t| t.1).find(|x| self.p.clases.iter().all(|k| k.color != rgb(*x))).unwrap_or(TINTES[self.p.clases.len() % TINTES.len()].1);
+        self.p.nueva_clase(&n, rgb(x))
+    }
+
     /// Teñir un clip (y los demás elegidos con él).
     pub fn menu_color(&mut self, ui: &mut Ui, id: u64) {
         let actual = self.p.clip(id).map(|c| c.color).or_else(|| self.p.video.iter().find(|c| c.id == id).map(|c| c.color)).flatten();
@@ -495,6 +551,10 @@ impl App {
             }
         }
     }
+}
+
+fn rgb(x: u32) -> [u8; 3] {
+    [(x >> 16) as u8, (x >> 8) as u8, x as u8]
 }
 
 /// Colores para teñir clips.

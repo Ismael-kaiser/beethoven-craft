@@ -908,6 +908,7 @@ impl Director {
         let de_tiempo = composicion::usa_pasado(&p);
         let mut s = Surtido { cuadros: HashMap::new(), pasado: HashMap::new() };
         for (c, ts, aw, ah) in composicion::pedidos(&p, t, tam.0, tam.1) {
+            let c = &*c;
             if let Some(q) = self.lectores.cuadro(c, ts, aw, ah) {
                 if de_tiempo {
                     s.pasado.insert(c.id, self.lectores.recientes(c));
@@ -1051,6 +1052,14 @@ pub struct Tira {
     pub ancho: usize,
     pub alto: usize,
     pub rgba: Vec<Vec<u8>>,
+}
+
+/// La miniatura de una imagen.
+pub fn tira_imagen(ruta: &std::path::Path, razon: f64) -> Option<Tira> {
+    let alto = 80;
+    let ancho = ((alto as f64 * razon / 2.0).round() as usize * 2).clamp(16, 240);
+    let s = medios::ffmpeg().arg("-i").arg(ruta).args(["-frames:v", "1", "-vf", &format!("scale={ancho}:{alto}"), "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"]).output().ok()?;
+    (s.stdout.len() == ancho * alto * 4).then(|| Tira { paso: 1e9, ancho, alto, rgba: vec![s.stdout] })
 }
 
 pub fn tira(ruta: &std::path::Path, dur: f64, razon: f64) -> Option<Tira> {

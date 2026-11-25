@@ -63,6 +63,8 @@ pub enum Pista {
     Mov(Propiedad),
     /// Efecto (por su id) y control.
     Fx(u64, String),
+    /// Color, tamaño de letra, recorte… (`ClipVideo::campos`).
+    Campo(String),
 }
 
 impl Pista {
@@ -70,17 +72,27 @@ impl Pista {
         match self {
             Pista::Mov(p) => Some(p.de(c)),
             Pista::Fx(id, k) => c.fx.iter().find(|f| f.id == *id)?.p.get(k),
+            Pista::Campo(k) => c.extra.get(k),
         }
     }
     pub fn de_mut<'a>(&self, c: &'a mut ClipVideo) -> Option<&'a mut Prop> {
         match self {
             Pista::Mov(p) => Some(p.de_mut(c)),
             Pista::Fx(id, k) => c.fx.iter_mut().find(|f| f.id == *id)?.p.get_mut(k),
+            // Si aún no está animado, empieza con su valor de base.
+            Pista::Campo(k) => {
+                if !c.extra.contains_key(k) {
+                    let v = c.campos().into_iter().find(|x| x.0 == k)?.2;
+                    c.extra.insert(k.clone(), Prop { v, ..Prop::num(0.0) });
+                }
+                c.extra.get_mut(k)
+            }
         }
     }
     /// Las de un clip: todo el movimiento y los controles ya animados de sus efectos.
     pub fn todas(c: &ClipVideo) -> Vec<Pista> {
         let mut v: Vec<Pista> = Propiedad::TODAS.into_iter().map(Pista::Mov).collect();
+        v.extend(c.campos().iter().filter(|x| c.extra.get(x.0).is_some_and(|p| !p.claves.is_empty())).map(|x| Pista::Campo(x.0.into())));
         for f in &c.fx {
             v.extend(f.p.iter().filter(|p| !p.1.claves.is_empty()).map(|p| Pista::Fx(f.id, p.0.clone())));
         }
@@ -275,6 +287,77 @@ pub fn quitar_todo(c: &mut ClipVideo, t: f64) {
             p.curvas.clear();
         }
     }
+    c.ordenar_campos();
+}
+
+/// Una llave con todo lo que el objeto tiene en `tl`: movimiento, color, tamaño, recorte y los controles de efecto que ya
+/// se animan. Las llaves que ya estaban ahí se quedan.
+pub fn guardar_llave(c: &mut ClipVideo, tl: f64) {
+    poner_llave(c, Llave::Todo, tl);
+    // El recorte solo si se usa: si no, serían cuatro pistas de ceros.
+    let recorta = c.mov.recorte.iter().any(|v| *v > 0.0);
+    let campos: Vec<String> = c.campos().iter().filter(|x| recorta || !x.0.starts_with("rec_")).map(|x| x.0.to_string()).collect();
+    let fx = Pista::todas(c).into_iter().filter(|p| matches!(p, Pista::Fx(..) | Pista::Campo(_)));
+    let pistas: Vec<Pista> = campos.into_iter().map(Pista::Campo).chain(fx).collect();
+    for p in pistas {
+        if let Some(q) = p.de_mut(c).filter(|q| q.clave_en(tl).is_none()) {
+            q.alternar_clave(tl);
+        }
+    }
+}
+
+/// Lo que cambió de `a` a `c` sin estar animado recibe cuadros clave: el valor de antes al principio del clip y el nuevo en
+/// `tl`. Verdadero si puso alguno.
+pub fn grabar_cambios(a: &ClipVideo, c: &mut ClipVideo, tl: f64) -> bool {
+    let mut puso = false;
+    let mut poner = |y: &mut Prop, antes: Valor, nuevo: Valor| {
+        if tl > 0.02 {
+            y.claves.push((0.0, antes));
+        }
+        y.claves.push((tl, nuevo));
+        puso = true;
+    };
+    let mut v: Vec<Pista> = Propiedad::TODAS.into_iter().map(Pista::Mov).collect();
+    v.extend(a.fx.iter().flat_map(|f| f.p.keys().map(|k| Pista::Fx(f.id, k.clone()))));
+    for p in v {
+        let (Some(x), Some(y)) = (p.de(a).cloned(), p.de_mut(c)) else { continue };
+        if x.claves.is_empty() && y.claves.is_empty() && x.v != y.v {
+            let nuevo = y.v.clone();
+            poner(y, x.v, nuevo);
+        }
+    }
+    if std::mem::discriminant(&a.contenido) == std::mem::discriminant(&c.contenido) {
+        for ((k, _, antes), (_, _, nuevo)) in a.campos().into_iter().zip(c.campos()) {
+            if antes != nuevo && !c.extra.contains_key(k) && !a.extra.contains_key(k) {
+                let mut q = Prop { v: antes.clone(), ..Prop::num(0.0) };
+                poner(&mut q, antes.clone(), nuevo);
+                c.extra.insert(k.into(), q);
+                c.poner_campo(k, &antes);
+            }
+        }
+    }
+    c.animado |= puso;
+    puso
+}
+
+/// Lo que se editó en `c` viéndolo en su momento `tl` (salió de `visto`, que es `base.en_su_momento(tl)`): en lo animado, el
+/// cambio va a su llave y la base se queda; lo demás se queda como se escribió.
+pub fn devolver_campos(c: &mut ClipVideo, visto: &ClipVideo, base: &ClipVideo, tl: f64) {
+    if c.extra.is_empty() {
+        return;
+    }
+    for ((k, _, nuevo), (_, _, antes)) in c.campos().into_iter().zip(visto.campos()) {
+        if let Some(p) = c.extra.get_mut(k) {
+            if nuevo != antes {
+                p.poner(tl, nuevo);
+            }
+        } else {
+            continue;
+        }
+        if let Some((_, _, v)) = base.campos().into_iter().find(|x| x.0 == k) {
+            c.poner_campo(k, &v);
+        }
+    }
 }
 
 // ---- Llaves puestas a mano y trazos libres
@@ -313,7 +396,7 @@ impl Llave {
             Pista::Mov(Propiedad::Ancho | Propiedad::Alto) => Llave::Estirado,
             Pista::Mov(Propiedad::Giro) => Llave::Giro,
             Pista::Mov(Propiedad::Opacidad) => Llave::Opacidad,
-            Pista::Fx(..) => return None,
+            Pista::Fx(..) | Pista::Campo(_) => return None,
         })
     }
 }

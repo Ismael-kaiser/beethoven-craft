@@ -89,4 +89,5 @@ pub(crate) const KERNELS: &[&str] = &[
     "bc_fc_luz",
     "bc_fc_bordes",
     "bc_fc_nivel",
+    "bc_por_mascara",
 ];

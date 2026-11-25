@@ -2059,3 +2059,13 @@ fn bc_transicion(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     textureStore(out, t, tr_srgb(o));
 }
+
+// `src` por la cobertura de `aux` (u[3].x = 1: por lo que le falta).
+@compute @workgroup_size(16, 16)
+fn bc_por_mascara(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let dims = out_dims();
+    let t = vec2<i32>(gid.xy);
+    if (t.x >= dims.x || t.y >= dims.y) { return; }
+    let k = textureLoad(aux, t, 0).w;
+    textureStore(out, t, textureLoad(src, t, 0) * select(k, 1.0 - k, N(0) == 1));
+}
