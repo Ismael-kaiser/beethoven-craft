@@ -1,6 +1,6 @@
 // Beethoven DAW Demo. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
 //! El metal, el vidrio y la relojería de Movie. Son funciones propias de Beethoven Craft (agregadas en Movie 0.11 por su
-//! autor, que aquí las da bajo MIT o Apache-2.0); no incluye nada de la piel de Lemon Studio.
+//! autor, que aquí las da bajo MIT o Apache-2.0).
 use super::piel::HUECO as WELL;
 use eframe::egui::*;
 use std::f32::consts::PI;
@@ -298,4 +298,36 @@ pub fn vidrio_en(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool, alto:
     let f = (rad as f32 * 0.7).max(1.5);
     p.hline(r.left() + f..=r.right() - f, r.top() + 0.75, Stroke::new(1.0, blanco(120.0)));
     p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.78)), StrokeKind::Outside);
+}
+
+/// Medidor de aguja: carátula color crema, escala con zona roja y cristal.
+pub fn aguja(p: &Painter, r: Rect, v: f32, nombre: &str, k: f32) {
+    p.rect_filled(r.expand(3.0 * k), (6.0 * k) as u8, Color32::from_gray(0x16));
+    degradado(p, r, (4.0 * k) as u8, Color32::from_rgb(0xf6, 0xee, 0xd2), Color32::from_rgb(0xd6, 0xc8, 0x9e));
+    let dentro = p.with_clip_rect(r.intersect(p.clip_rect()));
+    let eje = pos2(r.center().x, r.bottom() + r.height() * 0.18);
+    let largo = (r.height() * 0.95).min(r.width() * 0.62);
+    let ang = |x: f32| PI * (1.25 + 0.5 * x);
+    for i in 0..=20 {
+        let x = i as f32 / 20.0;
+        let u = Vec2::angled(ang(x));
+        let col = if x > 0.75 { Color32::from_rgb(0xb0, 0x2c, 0x20) } else { Color32::from_rgb(0x30, 0x2a, 0x1e) };
+        let l = if i % 5 == 0 { 0.14 } else { 0.07 };
+        dentro.line_segment([eje + u * largo, eje + u * largo * (1.0 + l)], Stroke::new(if i % 5 == 0 { 1.6 } else { 0.9 } * k, col));
+    }
+    dentro.text(
+        pos2(r.center().x, r.bottom() - r.height() * 0.3),
+        Align2::CENTER_CENTER,
+        nombre,
+        FontId::proportional(11.0 * k),
+        Color32::from_rgb(0x4a, 0x40, 0x2c),
+    );
+    let u = Vec2::angled(ang(v));
+    dentro.line_segment(
+        [eje + vec2(2.0 * k, 2.0 * k), eje + u * largo * 1.1 + vec2(2.0 * k, 2.0 * k)],
+        Stroke::new(2.0 * k, Color32::from_black_alpha(60)),
+    );
+    dentro.line_segment([eje, eje + u * largo * 1.1], Stroke::new(1.6 * k, Color32::from_rgb(0x20, 0x14, 0x10)));
+    dentro.circle_filled(pos2(eje.x, r.bottom()), 7.0 * k, Color32::from_gray(0x1c));
+    vidrio_en(p, r, (4.0 * k) as u8, Color32::from_rgb(0xff, 0xe8, 0xb0), false, r.height() * 0.32);
 }

@@ -23,6 +23,8 @@ pub struct Archivos {
     pub lua: BTreeMap<String, String>,
     /// Imágenes por nombre con su extensión («logo.png», «fondos/noche.png»).
     pub imagenes: BTreeMap<String, Arc<Vec<u8>>>,
+    /// Audios por nombre, y dónde están: se abren cuando hacen falta.
+    pub audios: BTreeMap<String, std::path::PathBuf>,
 }
 
 static SIG: AtomicU64 = AtomicU64::new(1);
@@ -124,6 +126,7 @@ fn todo(dir: &Path) -> Result<(BTreeMap<String, String>, Archivos), String> {
                         let b = std::fs::read(&p).map_err(|e| format!("{n}: {e}"))?;
                         a.poner_imagen(&n, b)?;
                     }
+                    Some("wav" | "ogg" | "flac" | "mp3") => _ = a.audios.insert(n, p),
                     _ => {}
                 }
             }

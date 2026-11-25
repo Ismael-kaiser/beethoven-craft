@@ -643,7 +643,7 @@ impl App {
             let cuerpo = Rect::from_min_max(pos2(rc.left(), rc.top() + 19.0), rc.max - vec2(0.0, 3.0));
             if let Some(q) = self.p.patrones.iter().find(|p| p.id == k.patron) {
                 let pt = ui.painter_at(tit.intersect(carril));
-                icono(&pt, &tabler::PIANO, Rect::from_min_size(tit.min + vec2(5.0, 3.0), Vec2::splat(12.0)), Color32::WHITE);
+                icono(&pt, &iconos::PIANO, Rect::from_min_size(tit.min + vec2(5.0, 3.0), Vec2::splat(12.0)), Color32::WHITE);
                 pt.text(tit.left_center() + vec2(22.0, 0.0), Align2::LEFT_CENTER, &q.nombre, fuente(13.0), Color32::WHITE);
                 let (lo, hi) = q.notas.iter().fold((127u8, 0u8), |(a, b), n| (a.min(n.tecla), b.max(n.tecla)));
                 let alto = (hi.max(lo) - lo.min(hi)).max(8) as f32 + 1.0;
@@ -781,7 +781,7 @@ impl App {
     pub fn tempo_ui(&mut self, ui: &mut Ui) {
         ui.add(DragValue::new(&mut self.p.bpm).range(40.0..=240.0).speed(0.2).max_decimals(1).suffix(" bpm")).on_hover_text(crate::idioma::t("Tempo de los patrones"));
         let on = self.metronomo;
-        if boton(ui, &tabler::METRONOME, on, "Metrónomo (no se exporta)").clicked() {
+        if boton(ui, &iconos::METRONOME, on, "Metrónomo (no se exporta)").clicked() {
             self.metronomo = !on;
         }
         let c = if self.metronomo { (self.p.pulso() * SR as f64).round() as i64 } else { 0 };

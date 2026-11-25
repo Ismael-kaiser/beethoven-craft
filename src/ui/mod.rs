@@ -22,7 +22,8 @@ pub mod proyecto;
 pub mod texto;
 #[rustfmt::skip]
 #[allow(dead_code)]
-mod tabler;
+mod iconos;
+mod metal;
 
 use crate::audio::{self, Grabacion, Monitor, Reloj, Salida};
 use crate::exportar::{self, Modo};
@@ -1659,10 +1660,10 @@ impl App {
     fn transporte(&mut self, ui: &mut Ui) {
         let tocando = self.tocando();
         let grabando = self.grab.is_some();
-        if boton(ui, &tabler::PLAYER_PLAY, tocando, "Reproducir / pausa (espacio)").clicked() {
+        if boton(ui, &iconos::PLAYER_PLAY, tocando, "Reproducir / pausa (espacio)").clicked() {
             self.alternar();
         }
-        if boton(ui, &tabler::PLAYER_STOP, false, "Detener y volver al inicio").clicked() {
+        if boton(ui, &iconos::PLAYER_STOP, false, "Detener y volver al inicio").clicked() {
             self.detener();
         }
         if boton_rec(ui, grabando).clicked() {
@@ -1776,19 +1777,19 @@ impl App {
             ui.painter().text(r.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, tiempo(self.ahora()), fuente(27.0), col.gamma_multiply(0.25));
             ui.painter().text(r.center(), Align2::CENTER_CENTER, tiempo(self.ahora()), fuente(27.0), col);
             ui.separator();
-            if boton(ui, &tabler::ARROW_BACK_UP, false, "Deshacer (⌘Z)").clicked() {
+            if boton(ui, &iconos::ARROW_BACK_UP, false, "Deshacer (⌘Z)").clicked() {
                 self.volver(true);
             }
-            if boton(ui, &tabler::SLICE, false, "Dividir el clip en el cursor (S)").clicked() {
+            if boton(ui, &iconos::SLICE, false, "Dividir el clip en el cursor (S)").clicked() {
                 self.dividir();
             }
             self.tempo_ui(ui);
             ui.separator();
             let iman = self.linea.iman;
-            if boton(ui, &tabler::MAGNET, iman, "Imán: pega los clips a los bordes cercanos").clicked() {
+            if boton(ui, &iconos::MAGNET, iman, "Imán: pega los clips a los bordes cercanos").clicked() {
                 self.linea.iman = !iman;
             }
-            if boton(ui, &tabler::DEVICE_FLOPPY, false, "Guardar (⌘S)").clicked() {
+            if boton(ui, &iconos::DEVICE_FLOPPY, false, "Guardar (⌘S)").clicked() {
                 self.menu_guardar(false);
             }
             ui.separator();
@@ -1946,14 +1947,14 @@ impl App {
         let paso = 1.0 / self.p.fps.max(1.0);
         let t = self.ahora();
         u.add_space((barra.width() / 2.0 - 190.0).max(4.0));
-        if boton_color(&mut u, &tabler::CARET_LEFT, false, "Un cuadro atrás (←)", GLYPH, 26.0).clicked() {
+        if boton_color(&mut u, &iconos::CARET_LEFT, false, "Un cuadro atrás (←)", GLYPH, 26.0).clicked() {
             self.ir(t - paso);
         }
         let tocando = self.tocando();
-        if boton_color(&mut u, &tabler::PLAYER_PLAY, tocando, "Reproducir / pausa", GLYPH, 26.0).clicked() {
+        if boton_color(&mut u, &iconos::PLAYER_PLAY, tocando, "Reproducir / pausa", GLYPH, 26.0).clicked() {
             self.alternar();
         }
-        if boton_color(&mut u, &tabler::CARET_RIGHT, false, "Un cuadro adelante (→)", GLYPH, 26.0).clicked() {
+        if boton_color(&mut u, &iconos::CARET_RIGHT, false, "Un cuadro adelante (→)", GLYPH, 26.0).clicked() {
             self.ir(t + paso);
         }
         u.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -2759,11 +2760,9 @@ impl App {
                     });
                 });
                 ui.add_space(6.0);
-                ui.label(crate::idioma::t("Código propio: MIT o Apache-2.0, como prefieras."));
-                ui.label(crate::idioma::t("La app completa, por las piezas de Lemon Studio: GPL-3.0 o posterior."));
-                ui.label(crate::idioma::t("Efectos de audio y diseño: © 2026 ItsAlphaNeon y colaboradores (GPL-3.0)."));
+                ui.label(crate::idioma::t("Software libre: MIT o Apache-2.0, como prefieras."));
                 ui.label(crate::idioma::t("Efectos de video: EffectCraft; transiciones: FilmCraft; curvas de animación: AniCraft; del equipo de ArtCraft (MIT o Apache-2.0)."));
-                ui.label(crate::idioma::t("Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Íconos Tabler (MIT). Video y audio: ffmpeg."));
+                ui.label(crate::idioma::t("Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Video y audio: ffmpeg."));
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     if ui.button(crate::idioma::t("Buscar actualizaciones")).clicked() {

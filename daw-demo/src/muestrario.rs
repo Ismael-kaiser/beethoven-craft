@@ -27,6 +27,10 @@ pub struct Muestra {
     pub datos: Vec<f32>,
     /// Cuánto tarda en apagarse al soltar la tecla, según el SoundFont (la mediana de sus zonas).
     pub soltar: Option<f32>,
+    /// La huella de un lugar, para los efectos que hacen convolución.
+    pub impulso: Option<Box<crate::impulso::Impulso>>,
+    /// Dónde empieza cada corte (0 a 1), si está cortada.
+    pub cortes: Vec<f32>,
 }
 
 impl Muestra {
@@ -50,6 +54,70 @@ impl Muestra {
             m.agregar(&c, sr, gan);
         }
         m
+    }
+
+    /// Agrega otra muestra para que suene tal cual en una sola tecla.
+    pub fn agregar_en(&mut self, x: &Muestra, tecla: u8) {
+        for z in x.zonas.iter().filter(|z| (z.tonos.0..=z.tonos.1).contains(&60)) {
+            let n = self.agregar(&x.datos[z.ini..z.fin], z.sr, z.gan);
+            (n.tonos, n.raiz) = ((tecla, tecla), tecla as f32 + z.raiz - 60.0);
+        }
+    }
+
+    /// Agrega otra muestra para esas teclas y fuerzas; en `nota` suena tal cual.
+    pub fn agregar_entre(&mut self, x: &Muestra, nota: u8, teclas: (u8, u8), fuerzas: (u8, u8)) {
+        for z in x.zonas.iter().filter(|z| (z.tonos.0..=z.tonos.1).contains(&60)) {
+            let n = self.agregar(&x.datos[z.ini..z.fin], z.sr, z.gan);
+            (n.tonos, n.fuerzas, n.raiz) = (teclas, fuerzas, nota as f32 + z.raiz - 60.0);
+        }
+    }
+
+    /// En partes, desde la tecla 48. `golpes`: donde sube el sonido de repente; `fino` (0 a 1), qué tanto se buscan.
+    pub fn cortada(&self, partes: usize, golpes: bool, fino: f32) -> Muestra {
+        let mut m = Muestra::default();
+        let Some(largo) = self.zonas.iter().map(|z| z.fin - z.ini).max().filter(|n| *n > 64) else { return m };
+        let mut ini: Vec<usize> = (0..partes).map(|k| k * largo / partes).collect();
+        if golpes {
+            let z = &self.zonas[0];
+            let x = &self.datos[z.ini..z.fin];
+            let paso = ((z.sr * 0.005) as usize).max(1);
+            let nivel: Vec<f32> = x.chunks(paso).map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt()).collect();
+            let alto = nivel.iter().cloned().fold(1e-9, f32::max);
+            let umbral = 1.15 + (1.0 - fino) * 2.5;
+            ini = vec![0];
+            for k in 2..nivel.len() {
+                let antes = nivel[k.saturating_sub(6)..k].iter().sum::<f32>() / nivel[k.saturating_sub(6)..k].len() as f32;
+                let en = (k * paso).saturating_sub(paso / 2);
+                // Separados al menos 60 ms.
+                if nivel[k] > alto * 0.06 && nivel[k] > antes * umbral && en > ini[ini.len() - 1] + (z.sr * 0.06) as usize && ini.len() < 32 {
+                    ini.push(en);
+                }
+            }
+        }
+        for (k, a) in ini.iter().enumerate() {
+            let b = ini.get(k + 1).copied().unwrap_or(largo);
+            for z in &self.zonas {
+                let (a, b) = ((z.ini + a).min(z.fin), (z.ini + b).min(z.fin));
+                let mut x = self.datos[a..b].to_vec();
+                // Que no truene al cortar.
+                let n = x.len();
+                for q in 0..(z.sr * 0.002) as usize {
+                    if q < n {
+                        x[n - 1 - q] *= q as f32 / (z.sr * 0.002);
+                    }
+                }
+                let w = m.agregar(&x, z.sr, z.gan);
+                let tecla = 48 + k as u8;
+                (w.tonos, w.raiz) = ((tecla, tecla), tecla as f32 + z.raiz - 60.0);
+            }
+            m.cortes.push(*a as f32 / largo as f32);
+        }
+        m
+    }
+
+    /// Cuánto dura, en segundos.
+    pub fn segundos(&self) -> f32 {
+        self.zonas.iter().map(|z| (z.fin - z.ini) as f32 / z.sr).fold(0.0, f32::max)
     }
 
     fn agregar(&mut self, x: &[f32], sr: f32, gan: [f32; 2]) -> &mut Zona {

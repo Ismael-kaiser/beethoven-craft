@@ -525,7 +525,8 @@ impl App {
         {
             self.arreglo.gesto = None;
             if self.p.clips[i].audio.is_some() {
-                self.mostrar(Vista::Canal);
+                self.clip = Some(i);
+                self.mostrar(Vista::Editor);
             } else {
                 self.abrir_patron();
             }
@@ -937,6 +938,11 @@ impl App {
                     ui.selectable_value(&mut c.mezcla, k, &m.nombre);
                 }
             });
+            if ui.button(t("Editar audio")).clicked() {
+                self.clip = Some(i);
+                self.mostrar(Vista::Editor);
+                ui.close();
+            }
             if ui.button(t("Ajustes del audio")).clicked() {
                 self.clip = Some(i);
                 self.mostrar(Vista::Canal);

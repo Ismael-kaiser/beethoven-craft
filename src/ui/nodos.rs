@@ -250,8 +250,8 @@ pub(super) fn pinta_fuente(p: &Painter, r: Rect, c: &ClipVideo, tex: Option<Text
         Contenido::Forma(_) => {
             p.circle_filled(medio, r.height() * 0.28, Color32::from_white_alpha(190));
         }
-        Contenido::Ajuste => icono(p, &tabler::ADJUSTMENTS, Rect::from_center_size(medio, Vec2::splat(r.height() * 0.5)), Color32::from_white_alpha(200)),
-        Contenido::Archivo | Contenido::Imagen => icono(p, &tabler::MOVIE, Rect::from_center_size(medio, Vec2::splat(r.height() * 0.45)), TEXT_FAINT),
+        Contenido::Ajuste => icono(p, &iconos::ADJUSTMENTS, Rect::from_center_size(medio, Vec2::splat(r.height() * 0.5)), Color32::from_white_alpha(200)),
+        Contenido::Archivo | Contenido::Imagen => icono(p, &iconos::MOVIE, Rect::from_center_size(medio, Vec2::splat(r.height() * 0.45)), TEXT_FAINT),
         _ => {}
     }
 }
@@ -293,7 +293,7 @@ fn pinta_basico(p: &Painter, r: Rect, k: Clase) {
         Clase::Fondo => {
             p.rect_filled(Rect::from_center_size(o, vec2(u * 2.6, u * 1.8)), 4, c_(0x9a5a5a));
         }
-        _ => icono(p, &tabler::MOVIE, Rect::from_center_size(o, Vec2::splat(u * 1.8)), TEXT_DIM),
+        _ => icono(p, &iconos::MOVIE, Rect::from_center_size(o, Vec2::splat(u * 1.8)), TEXT_DIM),
     }
 }
 
@@ -525,7 +525,7 @@ impl App {
                     }
                     if va("Abrir archivo…") && carta(ui, w, t("Abrir archivo…"), "Un video o imagen de tu computadora", t("Abrir archivo…"), |p, r| {
                         hueco(p, r, 6, c_(0x202020));
-                        icono(p, &tabler::PLUS, Rect::from_center_size(r.center(), Vec2::splat(22.0)), MAIN);
+                        icono(p, &iconos::PLUS, Rect::from_center_size(r.center(), Vec2::splat(22.0)), MAIN);
                     }).clicked() {
                         abrir = true;
                     }
@@ -624,7 +624,7 @@ impl App {
             }
             if carta(ui, w, t("Abrir archivo…"), "Un video o imagen de tu computadora", t("Elegir archivo"), |p, r| {
                 hueco(p, r, 6, c_(0x202020));
-                icono(p, &tabler::PLUS, Rect::from_center_size(r.center(), Vec2::splat(22.0)), MAIN);
+                icono(p, &iconos::PLUS, Rect::from_center_size(r.center(), Vec2::splat(22.0)), MAIN);
             }).clicked() {
                 abrir = true;
             }
@@ -712,7 +712,7 @@ impl App {
             ui.label(RichText::new(nombre(n)).size(17.0));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if n.id != ENTRADA && n.id != SALIDA {
-                    quitar = boton_color(ui, &tabler::X, false, "Quitar nodo (⌫)", TEXT_DIM, 24.0).clicked();
+                    quitar = boton_color(ui, &iconos::X, false, "Quitar nodo (⌫)", TEXT_DIM, 24.0).clicked();
                 }
             });
         });

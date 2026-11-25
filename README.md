@@ -5,13 +5,19 @@ Compositor de video y audio en español (y en inglés), hecho en Rust. Son dos p
 - **Beethoven Movie**: editor de video con animación, nodos, filtros y mezcla de sonido.
 - **Beethoven DAW**: estudio de música con Playlist, Mixer, unos 195 instrumentos grabados, efectos en Lua y plugins VST3/CLAP.
 
-Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
+Creado por **mixter-ha99**. Software libre, MIT o Apache-2.0.
 
 > *English: a free video editor (Beethoven Movie) and music studio (Beethoven DAW) in one app, written in Rust. The interface is available in Spanish and English. Docs are in Spanish for now.*
 
 ![Menú principal](docs/img/menu.jpg)
 
-## Novedades de la 0.12
+## Novedades de la 0.12.4
+
+- **DAW**: editor de audio, 48 efectos con ventana analógica, sintetizadores, muestreador, pads y cortador; afinador de voz, quita ruido y arpegiador en vivo; el Mixer compensa la latencia.
+- **Plugins**: suelta una carpeta, un `.zip` o un `.lua` y funciona. Lua puede correr mientras suena. Guía: [PLUGINS.md](daw-demo/PLUGINS.md). Los nuestros también salen como **VST3 y CLAP** («BeethovenPlugins» en las descargas).
+- **Movie**: sonido, controles e íconos nuevos, todo MIT o Apache-2.0.
+
+### Antes, en la 0.12.0
 
 - **Beethoven DAW nuevo**, escrito desde cero. Las canciones del anterior (`.beethoven`) se abren con la 0.11.
 - **Asistente de IA** en Movie y en el DAW, con la IA que tú tengas.
@@ -123,10 +129,8 @@ Grabaciones, voces separadas y autoguardado van en la carpeta de videos del usua
 
 ## Licencia y créditos
 
-- **El código propio de Beethoven Craft**: [MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras.
-- **Lo que viene de Lemon Studio** (`crates/audio-fx` y los archivos de Movie que dice [AVISOS.md](AVISOS.md)): [GPL-3.0 o posterior](LICENSE), como lo puso su autor.
-- **La app completa**, porque incluye esas piezas, se reparte bajo GPL-3.0 o posterior.
+[MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras. Las versiones hasta la 0.12.0 incluían piezas de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio) y siguen bajo GPL-3.0.
 
-Algunas piezas de Movie (efectos de audio, colores y controles) vienen de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio), y Movie usa piezas de EffectCraft, FilmCraft y AniCraft. Todos los créditos y licencias están en [AVISOS.md](AVISOS.md).
+Movie usa piezas de EffectCraft, FilmCraft y AniCraft, y el paquete de Windows trae ffmpeg, un programa aparte con su propia licencia. Todos los créditos están en [AVISOS.md](AVISOS.md).
 
-Este proyecto no está afiliado a Lemon Studio, ArtCraft, FL Studio (Image-Line), DaVinci Resolve (Blackmagic Design) ni CapCut.
+Este proyecto no está afiliado a ArtCraft, FL Studio (Image-Line), DaVinci Resolve (Blackmagic Design) ni CapCut.

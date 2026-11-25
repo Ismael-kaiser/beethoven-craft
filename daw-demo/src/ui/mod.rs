@@ -3,6 +3,9 @@
 mod arreglo;
 pub mod asistente;
 mod ecualizador;
+mod editor;
+pub mod externa;
+pub mod grafica;
 pub mod lado;
 mod lienzo;
 mod metal;
@@ -10,6 +13,7 @@ mod mezcla;
 mod notas;
 mod piel;
 mod ritmo;
+mod torno;
 
 use crate::biblioteca::Biblioteca;
 use crate::idioma::{self, Idioma, t, tf};
@@ -34,15 +38,16 @@ pub enum Vista {
     Mezcla,
     Canal,
     Asistente,
+    Editor,
 }
 
-const VISTAS: usize = 6;
+const VISTAS: usize = 7;
 
 /// De fábrica: Playlist y Mixer son pestañas; lo demás, ventanas encima.
-const FIJAS: [bool; VISTAS] = [true, false, false, true, false, false];
+const FIJAS: [bool; VISTAS] = [true, false, false, true, false, false, false];
 
 impl Vista {
-    pub const TODAS: [Vista; VISTAS] = [Vista::Arreglo, Vista::Ritmo, Vista::Notas, Vista::Mezcla, Vista::Canal, Vista::Asistente];
+    pub const TODAS: [Vista; VISTAS] = [Vista::Arreglo, Vista::Ritmo, Vista::Notas, Vista::Mezcla, Vista::Canal, Vista::Asistente, Vista::Editor];
 
     fn nombre(self) -> &'static str {
         match self {
@@ -52,6 +57,7 @@ impl Vista {
             Vista::Mezcla => "Mixer",
             Vista::Canal => "Instrumento",
             Vista::Asistente => "Asistente",
+            Vista::Editor => "Editor de audio",
         }
     }
 
@@ -63,6 +69,7 @@ impl Vista {
             Vista::Mezcla => (Key::F9, "F9"),
             Vista::Canal => (Key::F8, "F8"),
             Vista::Asistente => (Key::F10, "F10"),
+            Vista::Editor => (Key::F2, "F2"),
         }
     }
 
@@ -77,6 +84,7 @@ impl Vista {
             Vista::Notas => r(0.06, 0.14, 0.88, 0.84),
             Vista::Mezcla => r(0.04, 0.2, 0.92, 0.78),
             Vista::Asistente => r(0.62, 0.02, 0.38, 0.96),
+            Vista::Editor => r(0.03, 0.12, 0.94, 0.86),
         }
     }
 }
@@ -106,6 +114,13 @@ pub struct App {
     anotando: BTreeMap<u8, (u32, u32, f32)>,
     grabando: Option<(audio::Entrada, u32)>,
     asistente: asistente::Asistente,
+    pub audio_ed: editor::Editor,
+    /// La pista del Mixer que se pidió pasar a audio.
+    pasar: Option<usize>,
+    /// Lo que van grabando los guiones en vivo.
+    tomas: BTreeMap<String, Vec<[f32; 2]>>,
+    /// Cuándo se miró la carpeta de plugins.
+    mirada: std::time::Instant,
     prueba: bool,
     /// Las interfaces en Lua ya cargadas, por guion. `None`: ese guion no trae.
     lienzos: BTreeMap<String, (u64, Option<crate::interfaz::Interfaz>)>,
@@ -172,6 +187,8 @@ enum Pendiente {
 }
 
 /// La carpeta del usuario.
+pub use lado::picos;
+
 pub fn carpeta() -> PathBuf {
     let casa = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
     casa.unwrap_or_else(std::env::temp_dir).join("Music").join("Beethoven DAW Demo")
@@ -237,6 +254,10 @@ impl App {
             anotar: false,
             anotando: BTreeMap::new(),
             grabando: None,
+            audio_ed: Default::default(),
+            pasar: None,
+            tomas: BTreeMap::new(),
+            mirada: std::time::Instant::now(),
             asistente: asistente::Asistente::nuevo(ctx, carpeta.as_ref().map(|c| c.join("asistente.json"))),
             prueba,
             lienzos: BTreeMap::new(),
@@ -427,6 +448,7 @@ impl App {
         self.deshecho.clear();
         self.archivo = archivo;
         self.bib.rack = Default::default();
+        self.bib.soltar_vivos();
         self.cambio_bib += 1;
         self.patron = self.p.patrones[0].id;
         self.canal = self.p.canales.first().map_or(0, |c| c.id);
@@ -440,6 +462,16 @@ impl App {
             .filter_map(|x| self.bib.rack.dar(&x, self.bib.sr).err().map(|e| tf("No se pudo cargar «{}»: {}", &[&x.nombre, &e])))
             .collect();
         malos.into_iter().for_each(|a| self.avisar(a, true));
+        // Los de Lua que el proyecto usa y aquí no están.
+        let mut faltan: Vec<String> =
+            self.p.mezcla.iter().flat_map(|m| &m.efectos).filter(|e| e.plugin.is_none()).map(|e| e.efecto.clone()).collect();
+        faltan.extend(self.p.canales.iter().filter(|c| c.plugin.is_none() && c.muestra.is_none()).map(|c| c.instrumento.clone()));
+        faltan.retain(|k| self.bib.ver(k).is_none() && self.bib.del_banco(k).is_none());
+        faltan.sort();
+        faltan.dedup();
+        if !faltan.is_empty() {
+            self.avisar(tf("A este proyecto le faltan plugins: {}. Instálalos y sonarán solos", &[&faltan.join(", ")]), true);
+        }
     }
 
     fn plugins_puestos(&self) -> Vec<PluginPuesto> {
@@ -496,6 +528,9 @@ impl App {
     pub fn abrir(&mut self, r: &Path) {
         let ext = r.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let nombre = r.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        if crate::instalar::es_plugin(r) {
+            return self.instalar_plugin(r);
+        }
         let res: Result<(), String> = (|| {
             let leer = || std::fs::read(r).map_err(|e| e.to_string());
             match ext.as_str() {
@@ -519,12 +554,6 @@ impl App {
                     self.poner_muestra(r, &nombre)?;
                     self.p.canales.last_mut().unwrap().controles.insert("baja".into(), 0.3);
                     self.mostrar(Vista::Canal);
-                }
-                "lua" => {
-                    let f = std::fs::read_to_string(r).map_err(|e| e.to_string())?;
-                    self.bib.guardar(&nombre, &f)?;
-                    self.cambio_bib += 1;
-                    self.avisar(tf("«{}» quedó en la biblioteca", &[&nombre]), false);
                 }
                 "vst3" | "clap" => self.ofrecer(r, None),
                 _ => return Err(t("No conozco ese tipo de archivo").into()),
@@ -614,7 +643,13 @@ impl App {
 
     fn momento(&self, ui: &Ui, pista: usize) -> crate::interfaz::Momento {
         let nivel = self.picos[pista][0].max(self.picos[pista][1]);
-        crate::interfaz::Momento { tiempo: ui.input(|i| i.time), nivel, tocando: self.tocando() || nivel > 1e-3, raton: None }
+        let mut m = crate::interfaz::Momento { tiempo: ui.input(|i| i.time), nivel, tocando: self.tocando() || nivel > 1e-3, ..Default::default() };
+        if self.estado.escucha.load(Relaxed) == pista as u32 && m.tocando {
+            let x = self.estado.onda();
+            m.espectro = ecualizador::espectro(&x, self.bib.sr, 64).iter().map(|d| ((d + 84.0) / 84.0).clamp(0.0, 1.0)).collect();
+            m.onda = x.iter().step_by(x.len() / 256).copied().collect();
+        }
+        m
     }
 
     pub fn abrir_ventanas(&mut self) {
@@ -652,6 +687,31 @@ impl App {
     }
 
     /// Un WAV por cada pista de mezcla que suene.
+    /// Graba lo que suena en una pista, con sus efectos, y lo pone como audio en la Playlist; la pista queda muda.
+    pub fn pasar_a_audio(&mut self, i: usize) {
+        let Some(mut q) = Self::solo_pista(&self.completo(), i) else {
+            return self.avisar(t("Esa pista no tiene qué sonar"), true);
+        };
+        // Sin lo de la general: el audio nuevo vuelve a pasar por ella.
+        let g = &mut q.mezcla[0];
+        g.efectos.clear();
+        (g.volumen, g.pan, g.eq, g.ancho) = (1.0, 0.0, [0.0; 3], 1.0);
+        self.tocar(false);
+        let x = a_audio(&q, &mut self.aparte(), self.modo());
+        let dir = self.carpeta.clone().unwrap_or_else(std::env::temp_dir).join("Grabaciones");
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+        let nombre: String = self.p.mezcla[i].nombre.chars().map(|c| if c.is_alphanumeric() || c == ' ' { c } else { '_' }).collect();
+        let r = dir.join(format!("{nombre}-{n}.wav"));
+        let res = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|_| wav::escribir(&r, self.bib.sr as u32, &x));
+        match res.and_then(|_| self.poner_audio(&r, None, 0, Some(0))) {
+            Ok(()) => {
+                self.p.mezcla[i].mudo = true;
+                self.avisar(tf("«{}» quedó como audio en la Playlist", &[&self.p.mezcla[i].nombre.clone()]), false);
+            }
+            Err(e) => self.avisar(tf("No se pudo guardar: {}", &[&e]), true),
+        }
+    }
+
     fn exportar_pistas(&mut self) {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else { return };
         self.tocar(false);
@@ -816,6 +876,7 @@ impl App {
             Vista::Mezcla => self.ver_mezcla(ui),
             Vista::Canal => self.ver_canal(ui),
             Vista::Asistente => self.ver_asistente(ui),
+            Vista::Editor => self.ver_editor_audio(ui),
         }
     }
 
@@ -895,8 +956,8 @@ impl App {
                 if b(ui, "Importar…", "")
                     && let Some(r) = rfd::FileDialog::new()
                         .add_filter(
-                            "Audio, MIDI, SF2, SFZ, Lua",
-                            &[crate::decodificar::EXTENSIONES, &["mid", "midi", "sf2", "sf3", "sfz", "lua"]].concat(),
+                            "Audio, MIDI, SF2, SFZ, Lua, zip",
+                            &[crate::decodificar::EXTENSIONES, &["mid", "midi", "sf2", "sf3", "sfz", "lua", "zip", "bplugin"]].concat(),
                         )
                         .pick_file()
                 {
@@ -1045,6 +1106,9 @@ impl App {
         let r = w.show(ui.ctx(), |ui| {
             let (todo, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
             let nombre = match v {
+                Vista::Editor if self.clip_audio().is_some() => {
+                    format!("{} · {}", t(v.nombre()), self.clip_audio().map_or("", |a| a.nombre.as_str()))
+                }
                 Vista::Canal if self.clip_audio().is_some() => format!("{} · {}", t("Audio"), self.clip_audio().map_or("", |a| a.nombre.as_str())),
                 Vista::Notas | Vista::Canal => {
                     let c = self.p.canales.iter().find(|c| c.id == self.canal).map_or("", |c| c.nombre.as_str());
@@ -1127,7 +1191,7 @@ impl App {
     /// Un audio como instrumento, en un canal nuevo.
     fn poner_muestra(&mut self, r: &Path, nombre: &str) -> Result<(), String> {
         crate::muestrario::abrir(r, 0)?;
-        self.canal = self.p.agregar_canal("muestra", nombre);
+        self.canal = self.p.agregar_canal("muestreador", nombre);
         let pista = self.p.pista_para(nombre);
         let c = self.p.canales.last_mut().unwrap();
         c.pista = pista;
@@ -1179,6 +1243,10 @@ impl App {
         }
         let toco = |ui: &mut Ui, k| ui.input_mut(|i| i.consume_key(Modifiers::NONE, k));
         if toco(ui, K::Space) {
+            if self.activa == Vista::Editor && self.abierta(Vista::Editor) && !self.tocando() {
+                self.oir_editor();
+                return;
+            }
             let t = self.tocando();
             self.tocar(!t);
         }
@@ -1322,6 +1390,14 @@ impl App {
 
     pub fn ui(&mut self, ui: &mut Ui) {
         self.pista_ayuda.clear();
+        // Lo que se ponga o cambie en la carpeta de plugins entra solo.
+        if self.bib.carpeta.is_some() {
+            if self.mirada.elapsed().as_millis() > 900 {
+                self.mirada = std::time::Instant::now();
+                self.vigilar_plugins();
+            }
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+        }
         let soltados: Vec<PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         if !soltados.is_empty() {
             let o = raton(ui.ctx());
@@ -1401,6 +1477,31 @@ impl App {
         self.mensajes(ui);
         self.pista_ayuda_vista = std::mem::take(&mut self.pista_ayuda);
         self.revisar_borrados();
+        // Lo que falló o grabó un guion en vivo.
+        let vivos: Vec<(String, Arc<crate::vivo::Vivo>)> = self.bib.vivos().map(|(k, v)| (k.to_string(), v.clone())).collect();
+        for (lugar, v) in vivos {
+            if let Some(e) = v.falla() {
+                self.avisar(crate::vivo::mensaje(&lugar, &e), true);
+            }
+            let x = v.grabado();
+            let toma = self.tomas.entry(lugar.clone()).or_default();
+            if !x.is_empty() {
+                toma.extend(x);
+            } else if !toma.is_empty() {
+                // Dejó de grabar: se guarda y queda en la Playlist.
+                let x = std::mem::take(toma);
+                let dir = self.carpeta.clone().unwrap_or_else(std::env::temp_dir).join("Grabaciones");
+                let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+                let r = dir.join(format!("{}-{n}.wav", lugar.replace(' ', "-")));
+                let res = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|_| wav::escribir(&r, self.bib.sr as u32, &x));
+                if let Err(e) = res.and_then(|_| self.poner_audio(&r, None, 0, None)) {
+                    self.avisar(tf("No se pudo guardar: {}", &[&e]), true);
+                }
+            }
+        }
+        if let Some(i) = self.pasar.take() {
+            self.pasar_a_audio(i);
+        }
         self.historial(ui);
         self.sincronizar();
         metalizar(ui.ctx());

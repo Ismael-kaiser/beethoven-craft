@@ -1,0 +1,37 @@
+[package]
+name = "beethoven-plugins"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Los efectos e instrumentos de Beethoven como VST3 y CLAP"
+
+[lib]
+name = "beethoven_plugins"
+crate-type = ["cdylib"]
+
+[dependencies]
+beethoven-daw-demo = { path = ".." }
+clap-sys = "0.5"
+vst3 = "0.3"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu"] }
+egui-wgpu = { version = "0.36", default-features = false }
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSView", "NSWindow", "NSResponder", "NSEvent", "NSTrackingArea", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSTimer", "NSRunLoop", "NSString", "NSObjCRuntime", "objc2-core-foundation"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# egui se dibuja sobre X11: es lo que piden VST3 y CLAP.
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "x11"] }
+x11rb = { version = "0.13", features = ["allow-unsafe-code", "dl-libxcb"] }
+
+[profile.release]
+debug = false
+strip = true
+
+[workspace]

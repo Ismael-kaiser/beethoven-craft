@@ -2,19 +2,15 @@
 
 El código propio de Beethoven Craft (creado por mixter-ha99) está bajo MIT (`LICENSE-MIT`) o Apache-2.0 (`LICENSE-APACHE`), a elección de quien lo use.
 
-Estas partes vienen de Lemon Studio o se hicieron a partir de él y siguen bajo la GNU GPL, versión 3 o posterior (`LICENSE`): `crates/audio-fx/`, `src/ui/estilo.rs`, `src/ui/tabler.rs`, `src/efectos.rs` y `src/instrumentos.rs`. Su licencia no la puede cambiar nadie más que sus autores.
+Las versiones hasta la 0.12.0 incluían piezas de Lemon Studio (GPL-3.0 o posterior) y siguen bajo esa licencia. Después de la 0.12.0 esas piezas se quitaron: los efectos de sonido, el sintetizador, los controles y los íconos son código nuevo de Beethoven Craft.
 
-Como la app armada incluye esas partes, completa se reparte bajo la GPL-3.0 o posterior: si la compartes, tienes que compartir también este código.
-
-Beethoven DAW (`daw-demo/`) está escrito desde cero y no usa código de Lemon Studio; sus avisos están en `daw-demo/AVISOS.md`. Trae el banco de instrumentos grabados MuseScore General (MIT; FluidR3 © Frank Wen y otros), con su licencia en `sonidos/MuseScore_General_License.md`.
+Beethoven DAW (`daw-demo/`) está escrito desde cero; sus avisos están en `daw-demo/AVISOS.md`. Trae el banco de instrumentos grabados MuseScore General (MIT; FluidR3 © Frank Wen y otros), con su licencia en `sonidos/MuseScore_General_License.md`.
 
 Incluye trabajo de otras personas:
 
-- **Lemon Studio** (https://github.com/ItsAlphaNeon/Lemon-Studio, commit 349c6ba), Copyright (C) 2026 ItsAlphaNeon y colaboradores, GPL-3.0-or-later: de ahí vienen los efectos de audio (`crates/audio-fx`, copiados el 2026-11-23 sin sus módulos de prueba) y los colores y controles de la piel «Lemon» (`src/ui/estilo.rs`, redibujados con egui). El autor de Lemon Studio pide, sin que la licencia obligue, que su código no se use en ArtCraft; Beethoven Craft no es ArtCraft, pero sí usa piezas de los dos.
 - **EffectCraft** (https://github.com/storytold/effectcraft, commit 1738360), Copyright (c) 2026 ArtCraft Team y colaboradores, MIT o Apache-2.0. Efectos de video, y su compositor de tarjeta gráfica (`crates/craft-gpu`, recortado el 2026-11-23; `mesa.rs` y `shaders/bc.wgsl` son de Beethoven Craft; sus licencias y su `NOTICE` van en esa carpeta).
-- **FilmCraft** (https://github.com/storytold/filmcraft, commit 17221b5), del mismo equipo, MIT o Apache-2.0. Transiciones y 17 efectos de luz y movimiento (`crates/craft-trans`). Licencias en `recursos/`. Sus marcas no se usan: Beethoven Craft no está afiliado a ArtCraft, EffectCraft, FilmCraft ni Lemon Studio.
+- **FilmCraft** (https://github.com/storytold/filmcraft, commit 17221b5), del mismo equipo, MIT o Apache-2.0. Transiciones y 17 efectos de luz y movimiento (`crates/craft-trans`). Licencias en `recursos/`. Sus marcas no se usan: Beethoven Craft no está afiliado a ArtCraft, EffectCraft ni FilmCraft.
 - **AniCraft** (https://github.com/storytold/anicraft, commit 7ce262d), Copyright (c) 2026 ArtCraft Team y colaboradores, MIT o Apache-2.0. Las curvas de animación (`src/curvas.rs`, de `crates/doc/src/easing.rs`).
-- **Íconos Tabler** 3.31.0, MIT, Copyright (c) 2020-2024 Paweł Kuna (`recursos/TABLER-LICENSE.txt`).
 - **Cuprum** (Jovanny Lemonad) y **Barlow** (The Barlow Project Authors), SIL Open Font License 1.1 (`recursos/Cuprum-OFL.txt`, `recursos/Barlow-OFL.txt`).
 - **UVR-MDX-NET-Voc_FT**, modelo de Ultimate Vocal Remover (Anjok07, aufr33 y colaboradores), MIT con crédito. Se ejecuta en tu Mac con `tract`.
 - Bibliotecas de Rust: ver `Cargo.lock` (egui, cpal, rfd, serde, realfft, tract, fontdue y sus dependencias).

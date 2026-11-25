@@ -561,3 +561,159 @@ fn un_audio_se_mueve_arrastrandolo() {
     }
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn editar_un_audio_sin_tocar_el_original() {
+    let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
+    let mut h = abrir(Idioma::Es);
+    let r = std::env::temp_dir().join(format!("bdaw-editar-{}.wav", std::process::id()));
+    let x: Vec<[f32; 2]> = (0..96000).map(|i| [(i as f32 * 0.03).sin() * 0.4 * (i as f32 / 9000.0).sin().abs(); 2]).collect();
+    beethoven_daw_demo::wav::escribir(&r, 48000, &x).unwrap();
+    let original = std::fs::read(&r).unwrap();
+    h.state_mut().poner_audio(&r, None, 0, None).unwrap();
+    h.state_mut().mostrar(Vista::Editor);
+    h.run_steps(4);
+    assert_eq!(h.state().audio_ed.cuadros(), 96000);
+    // Seleccionar arrastrando y silenciar.
+    let z = h.get_by_label("Onda del audio").rect();
+    let punto = |k: f32| pos2(z.left() + z.width() * k, z.center().y);
+    h.drag_at(punto(0.25));
+    h.run_steps(1);
+    h.hover_at(punto(0.5));
+    h.run_steps(2);
+    h.drop_at(punto(0.5));
+    h.run_steps(3);
+    let sel = h.state().audio_ed.sel.clone();
+    assert!(sel.start.abs_diff(24000) < 300 && sel.end.abs_diff(48000) < 300, "{sel:?}");
+    foto(&mut h, "editor");
+    let antes = h.state().p.clone();
+    h.get_by_label("Silenciar").click();
+    h.run_steps(4);
+    let a = h.state().p.clips.last().unwrap().audio.clone().unwrap();
+    assert_ne!(a.ruta, r.to_string_lossy());
+    let w = beethoven_daw_demo::wav::leer(std::path::Path::new(&a.ruta)).unwrap();
+    assert!(w.izq[sel.clone()].iter().all(|v| *v == 0.0) && w.izq[..sel.start].iter().any(|v| *v != 0.0));
+    // Quitar acorta el clip.
+    h.get_by_label("Quitar").click();
+    h.run_steps(4);
+    assert!(h.state().p.clips.last().unwrap().dur < antes.clips.last().unwrap().dur);
+    assert!(h.state().audio_ed.cuadros().abs_diff(96000 - sel.len()) < 100);
+    // Deshacer regresa y el archivo de siempre no cambió.
+    h.state_mut().deshacer();
+    h.state_mut().deshacer();
+    h.run_steps(3);
+    assert_eq!(h.state().p, antes);
+    assert_eq!(h.state().audio_ed.cuadros(), 96000);
+    assert_eq!(std::fs::read(&r).unwrap(), original);
+    let _ = std::fs::remove_file(&r);
+}
+
+#[test]
+fn los_efectos_con_su_propio_diseno() {
+    let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
+    for g in beethoven_daw_demo::biblioteca::Biblioteca::nueva(48000.0, None).de_tipo(beethoven_daw_demo::lua::Tipo::Efecto) {
+        let clave = g.clave.as_str();
+        let mut h = abrir(Idioma::Es);
+        h.state_mut().p.mezcla[1].efectos.push(beethoven_daw_demo::modelo::EfectoPuesto::nuevo(clave));
+        h.state_mut().fx_abiertos = vec![(1, 0)];
+        h.run_steps(5);
+        foto(&mut h, clave);
+    }
+}
+
+#[test]
+fn los_sintetizadores() {
+    let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
+    for clave in ["tresondas", "frecuencias", "muralla", "acido", "retumbo", "pulsada", "barras", "muestreador", "pads", "cortador"] {
+        let mut h = abrir(Idioma::Es);
+        let canal = h.state().canal;
+        h.state_mut().p.canales.iter_mut().find(|c| c.id == canal).unwrap().instrumento = clave.into();
+        h.state_mut().mostrar(Vista::Canal);
+        h.run_steps(3);
+        // A pantalla completa para ver todo su diseño.
+        h.get_by_label("Agrandar").click();
+        h.run_steps(4);
+        foto(&mut h, clave);
+    }
+}
+
+/// Que ninguna ventana de fábrica falle al dibujarse, en los dos idiomas.
+#[test]
+fn ninguna_interfaz_falla() {
+    let b = beethoven_daw_demo::biblioteca::Biblioteca::nueva(48000.0, None);
+    for g in &b.guiones {
+        let Some(mut i) = beethoven_daw_demo::interfaz::cargar_con(&g.fuente, g.archivos.clone()).unwrap() else {
+            assert!(
+                ["muestra", "ecualizador"].contains(&g.clave.as_str()) || g.ficha.tipo == beethoven_daw_demo::lua::Tipo::Herramienta,
+                "{} sin ventana",
+                g.clave
+            );
+            continue;
+        };
+        let v = g.ficha.controles.iter().map(|c| (c.clave.clone(), c.valor)).collect();
+        let m = beethoven_daw_demo::interfaz::Momento {
+            nivel: 0.3,
+            tocando: true,
+            activo: true,
+            tiempo: 2.0,
+            onda: vec![0.2; 256],
+            espectro: vec![0.4; 64],
+            huella: vec![0.5; 256],
+            cortes: vec![0.0, 0.5],
+            nombres: g.ficha.controles.iter().map(|c| (c.clave.clone(), c.nombre.ver().to_string())).collect(),
+            ..Default::default()
+        };
+        assert!(!i.cuadro(&v, &m).is_empty() && i.error.is_none(), "{}: {:?}", g.clave, i.error);
+    }
+}
+
+/// Soltar un plugin en la ventana, usarlo y verlo en la lista, sin reiniciar.
+#[test]
+fn soltar_un_plugin_y_usarlo() {
+    let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
+    let d = std::env::temp_dir().join(format!("bdaw-soltar-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    let c = d.join("mi distorsion");
+    std::fs::create_dir_all(&c).unwrap();
+    let guion = include_str!("../plantillas/efecto.lua").replace("Mi efecto", "Distorsión ajena").replace("autor = \"\"", "autor = \"Ana\"");
+    std::fs::write(c.join("mi distorsion.lua"), guion).unwrap();
+    let mut h = abrir(Idioma::Es);
+    h.state_mut().bib.carpeta = Some(d.join("Lua"));
+    let ctx = h.ctx.clone();
+    h.state_mut().soltar(&ctx, &c, None);
+    h.run_steps(4);
+    assert!(h.state().bib.ver("mi_distorsion").is_some_and(|g| g.propio));
+    h.state_mut().p.mezcla[1].efectos.push(beethoven_daw_demo::modelo::EfectoPuesto::nuevo("mi_distorsion"));
+    h.state_mut().fx_abiertos = vec![(1, 0)];
+    h.run_steps(5);
+    foto(&mut h, "plugin-ajeno");
+    // Un cambio en el disco entra solo mientras el programa corre.
+    let f = d.join("Lua/mi_distorsion/mi_distorsion.lua");
+    let s = std::fs::read_to_string(&f).unwrap().replace("version = \"1.0\"", "version = \"2.0.1\"");
+    std::fs::write(&f, s).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    h.run_steps(4);
+    assert_eq!(h.state().bib.ver("mi_distorsion").unwrap().ficha.version, "2.0.1");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// La ventana de un plugin en otro programa.
+#[test]
+fn la_ventana_en_otro_programa() {
+    let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
+    idioma::poner(Idioma::Es);
+    for k in ["compresor", "afinador", "monoanalogico", "ecualizador"] {
+        let n = beethoven_daw_demo::instancia::Instancia::nueva(k, 48000.0, Default::default()).unwrap();
+        let ctx = egui::Context::default();
+        let t = beethoven_daw_demo::ui::externa::Externa::nueva(&ctx, &n).tam(&n);
+        let mut e = None;
+        let mut h = Harness::builder().with_size(t).wgpu().build_ui(move |ui| {
+            let e = e.get_or_insert_with(|| beethoven_daw_demo::ui::externa::Externa::nueva(ui.ctx(), &n));
+            e.pintar(ui, &n);
+        });
+        h.run_steps(4);
+        if let Ok(c) = std::env::var("CAPTURAS") {
+            h.render().unwrap().save(format!("{c}/externa-{k}.png")).unwrap();
+        }
+    }
+}

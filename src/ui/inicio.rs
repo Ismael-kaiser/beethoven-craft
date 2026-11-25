@@ -1,6 +1,6 @@
 //! Menú principal: lo primero que se ve al abrir la app. Proyectos recientes, nuevo video, nueva canción y abrir.
 use super::estilo::*;
-use super::{App, Confirmar, Espacio, biblioteca, carpeta, nombre_de, tabler};
+use super::{App, Confirmar, Espacio, biblioteca, carpeta, nombre_de, iconos};
 use crate::explorador::{llano, natural, peso};
 use crate::idioma::{self, Idioma, t, tf};
 use crate::proyectos::{self, Borrado, Ficha, Libro, Tipo};
@@ -172,7 +172,7 @@ enum Hacer {
 }
 
 /// Renglón de la barra de la izquierda.
-fn nav(ui: &mut Ui, i: &tabler::TablerIcon, n: &str, on: bool, cuenta: usize) -> Response {
+fn nav(ui: &mut Ui, i: &iconos::Icono, n: &str, on: bool, cuenta: usize) -> Response {
     let n = t(n);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, n));
@@ -195,7 +195,7 @@ fn nav(ui: &mut Ui, i: &tabler::TablerIcon, n: &str, on: bool, cuenta: usize) ->
 }
 
 /// Tarjeta grande de «crear». El dibujo del fondo lo pone `arte`.
-fn crear(ui: &mut Ui, r: Rect, titulo: &str, sub: &str, marca: &str, col: Color32, i: &tabler::TablerIcon, arte: impl FnOnce(&Painter, Rect)) -> Response {
+fn crear(ui: &mut Ui, r: Rect, titulo: &str, sub: &str, marca: &str, col: Color32, i: &iconos::Icono, arte: impl FnOnce(&Painter, Rect)) -> Response {
     let titulo = t(titulo);
     let activo = ui.is_enabled();
     let resp = ui.interact(r, Id::new(("crear", marca)), Sense::click());
@@ -410,21 +410,21 @@ impl App {
         ui.add_space(24.0);
         ui.spacing_mut().item_spacing.y = 4.0;
         let n = self.inicio.lista.as_ref().map_or(0, Vec::len);
-        if nav(ui, &tabler::FOLDERS, "Proyectos", self.inicio.vista == Vista::Inicio, n).clicked() {
+        if nav(ui, &iconos::FOLDERS, "Proyectos", self.inicio.vista == Vista::Inicio, n).clicked() {
             self.inicio.vista = Vista::Inicio;
         }
-        if nav(ui, &tabler::TRASH, "Papelera", self.inicio.vista == Vista::Papelera, self.inicio.borrados.len()).clicked() {
+        if nav(ui, &iconos::TRASH, "Papelera", self.inicio.vista == Vista::Papelera, self.inicio.borrados.len()).clicked() {
             self.inicio.vista = Vista::Papelera;
         }
         ui.add_space(10.0);
-        if nav(ui, &tabler::FOLDER_OPEN, "Abrir proyecto…", false, 0).clicked() {
+        if nav(ui, &iconos::FOLDER_OPEN, "Abrir proyecto…", false, 0).clicked() {
             self.inicio.pendiente = None;
             self.pedir(Confirmar::Abrir);
         }
-        if nav(ui, &tabler::KEYBOARD, "Atajos de teclado", false, 0).clicked() {
+        if nav(ui, &iconos::KEYBOARD, "Atajos de teclado", false, 0).clicked() {
             self.atajos.abierto = true;
         }
-        if nav(ui, &tabler::SETTINGS, "Configuración", false, 0).clicked() {
+        if nav(ui, &iconos::SETTINGS, "Configuración", false, 0).clicked() {
             self.inicio.config = true;
         }
         if self.nueva.is_some() {
@@ -459,7 +459,7 @@ impl App {
         let w = (ancho - 16.0) / 2.0;
         let izq = Rect::from_min_size(fila.min, vec2(w, fila.height()));
         let der = izq.translate(vec2(w + 16.0, 0.0));
-        let nuevo = crear(ui, izq, "Nuevo video", "Edita, anima y mezcla tu video", "Beethoven Movie", MAIN, &tabler::MOVIE, arte_video);
+        let nuevo = crear(ui, izq, "Nuevo video", "Edita, anima y mezcla tu video", "Beethoven Movie", MAIN, &iconos::MOVIE, arte_video);
         // Formatos a un clic, dentro de la tarjeta
         let mut pie = ui.new_child(UiBuilder::new().max_rect(Rect::from_min_max(pos2(izq.left() + 20.0, izq.bottom() - 42.0), izq.max - vec2(12.0, 10.0))).layout(Layout::left_to_right(Align::Center)));
         pie.spacing_mut().item_spacing.x = 6.0;
@@ -479,7 +479,7 @@ impl App {
         if daw.is_none() {
             u.disable();
         }
-        let r = crear(&mut u, der, "Nueva canción", "Compón, escribe partituras y mezcla", "Beethoven DAW", VIOLETA, &tabler::PIANO, arte_musica)
+        let r = crear(&mut u, der, "Nueva canción", "Compón, escribe partituras y mezcla", "Beethoven DAW", VIOLETA, &iconos::PIANO, arte_musica)
             .on_disabled_hover_text(t("No encuentro Beethoven DAW. Hay que armarlo con empaque/empacar.sh."));
         if r.clicked() {
             if let Some(d) = daw {
@@ -500,7 +500,7 @@ impl App {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(12.0);
                 let ren = self.inicio.renglones;
-                if boton_color(ui, if ren { &tabler::GRID_DOTS } else { &tabler::LAYOUT_ROWS }, false, if ren { "Ver como tarjetas" } else { "Ver como lista" }, GLYPH, 28.0).clicked() {
+                if boton_color(ui, if ren { &iconos::GRID_DOTS } else { &iconos::LAYOUT_ROWS }, false, if ren { "Ver como tarjetas" } else { "Ver como lista" }, GLYPH, 28.0).clicked() {
                     self.inicio.renglones = !ren;
                 }
                 let o = [(Orden::Nuevos, "Más nuevo"), (Orden::Nombre, "Nombre"), (Orden::Peso, "Más pesado")];
@@ -547,7 +547,7 @@ impl App {
         if v.is_empty() {
             let (r, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
             let o = r.center() - vec2(0.0, 24.0);
-            icono(ui.painter(), &tabler::FOLDER_PLUS, Rect::from_center_size(o - vec2(0.0, 34.0), Vec2::splat(46.0)), TEXT_FAINT);
+            icono(ui.painter(), &iconos::FOLDER_PLUS, Rect::from_center_size(o - vec2(0.0, 34.0), Vec2::splat(46.0)), TEXT_FAINT);
             let texto = if todos == 0 { "Aún no hay proyectos. Empieza uno nuevo o abre uno que ya tengas." } else { "No hay proyectos con ese nombre" };
             ui.painter().text(o + vec2(0.0, 12.0), Align2::CENTER_CENTER, t(texto), fuente(15.0), TEXT_DIM);
             return;
@@ -607,7 +607,7 @@ impl App {
                 if f.tipo == Tipo::Cancion && r.width() > 80.0 {
                     arte_musica(&p, Rect::from_min_max(pos2(r.left() - r.width() * 0.85, r.top()), r.max));
                 }
-                icono(&p, if f.tipo == Tipo::Cancion { &tabler::MUSIC } else { &tabler::MOVIE }, Rect::from_center_size(r.center(), Vec2::splat((r.height() * 0.34).min(40.0))), col.gamma_multiply(0.75));
+                icono(&p, if f.tipo == Tipo::Cancion { &iconos::MUSIC } else { &iconos::MOVIE }, Rect::from_center_size(r.center(), Vec2::splat((r.height() * 0.34).min(40.0))), col.gamma_multiply(0.75));
             }
         }
     }

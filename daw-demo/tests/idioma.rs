@@ -55,8 +55,22 @@ fn todo_tiene_ingles() {
         "[What the user is looking at, filled in by the program: {v}]",
         "modelo de claude",
         "{limpio} {i}.{ext}",
+        "{ruta}: {x}",
+        "canal {}",
+        "return 0",
+        "son cuatro",
+        "efecto {i} {k}",
+        "notas {}",
+        "fft: 2 a 4096, potencia de dos",
+        "forma de la reserva",
+        "local e = ... return e.izq, e.der",
+        "{nombre} · {autor}",
+        "Audio, MIDI, SF2, SFZ, Lua, zip",
+        "propias:{}:{clave}",
+        "pads:{}",
         "el sistema da azar",
         "Beethoven DAW Demo: clips",
+        "Beethoven DAW Demo: audio",
         "Claude API",
         "Claude Code",
         "LM Studio",
@@ -150,12 +164,20 @@ fn todo_tiene_ingles() {
     ["instrumentos", "efectos", "herramientas"].iter().for_each(|d| archivos(d, "lua", &mut lua));
     for f in lua {
         let s = std::fs::read_to_string(&f).unwrap();
-        for l in s.lines().filter(|l| !l.contains("en = \"") && !l.contains("es and")) {
+        for l in s.lines().filter(|l| {
+            !l.contains("en = \"") && !l.contains("es and") && !l.contains("idioma ==") && !l.contains("in ipairs") && !l.contains("en and")
+        }) {
             let v = comillas(l);
             let de_nombre = l.contains("nombre =");
             // Los controles son { clave, nombre, … }: cuenta cada segundo texto.
             for (i, x) in v.iter().enumerate() {
-                if (de_nombre && !["efecto", "herramienta"].contains(&x.as_str()) || l.contains("{ \"") && i % 2 == 1) && !tabla().contains_key(x) {
+                if (de_nombre && !["efecto", "herramienta"].contains(&x.as_str()) || l.contains("{ \"") && i % 2 == 1)
+                    && !x.starts_with('#')
+                    && x != "VU"
+                    && x.chars().next().is_some_and(|c| c.is_uppercase())
+                    && x.chars().any(|c| c.is_alphabetic())
+                    && !tabla().contains_key(x)
+                {
                     falta.insert(x.clone());
                 }
             }

@@ -13,6 +13,10 @@ return {
     { "mezcla", { es = "Mezcla", en = "Mix" }, 0, 1, 1 },
   },
 
+  presets = {
+    { nombre = "Un poco más de cuerpo", cuerpo = 3, grave = 2, calor = 0.15, doble = 0.1 },
+    { nombre = "Locutor", cuerpo = 8, grave = 6, calor = 0.35, doble = 0 },
+  },
   sonido = function(e, c)
     local function lado(x, seg)
       local g = campana(x, 230, c.cuerpo, 1.2)

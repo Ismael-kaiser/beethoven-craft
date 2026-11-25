@@ -2,17 +2,17 @@
 use super::estilo::*;
 use super::*;
 
-pub const TODAS: [(Espacio, &str, &tabler::TablerIcon); 6] = [
-    (Espacio::Playlist, "Playlist", &tabler::PLAYLIST),
-    (Espacio::Video, "Video", &tabler::LAYOUT_ROWS),
-    (Espacio::Audio, "Audio", &tabler::ADJUSTMENTS),
-    (Espacio::Efectos, "Efectos", &tabler::FLASK_2),
-    (Espacio::Animacion, "Animación", &tabler::KEYFRAME),
-    (Espacio::Nodos, "Nodos", &tabler::BLEND_MODE),
+pub const TODAS: [(Espacio, &str, &iconos::Icono); 6] = [
+    (Espacio::Playlist, "Playlist", &iconos::PLAYLIST),
+    (Espacio::Video, "Video", &iconos::LAYOUT_ROWS),
+    (Espacio::Audio, "Audio", &iconos::ADJUSTMENTS),
+    (Espacio::Efectos, "Efectos", &iconos::FLASK_2),
+    (Espacio::Animacion, "Animación", &iconos::KEYFRAME),
+    (Espacio::Nodos, "Nodos", &iconos::BLEND_MODE),
 ];
 
-fn datos(e: Espacio) -> (&'static str, &'static tabler::TablerIcon) {
-    TODAS.iter().find(|t| t.0 == e).map_or(("", &tabler::FILE), |t| (crate::idioma::t(t.1), t.2))
+fn datos(e: Espacio) -> (&'static str, &'static iconos::Icono) {
+    TODAS.iter().find(|t| t.0 == e).map_or(("", &iconos::FILE), |t| (crate::idioma::t(t.1), t.2))
 }
 
 impl App {
@@ -27,7 +27,7 @@ impl App {
         if on || resp.hovered() {
             ui.painter().rect_filled(b, 7, if on { MAIN.gamma_multiply(0.18) } else { c(0x333333) });
         }
-        icono(ui.painter(), &tabler::FOLDERS, b.shrink(5.0), if on { MAIN } else { TEXT_DIM });
+        icono(ui.painter(), &iconos::FOLDERS, b.shrink(5.0), if on { MAIN } else { TEXT_DIM });
         if resp.on_hover_text(format!("{} ({})", crate::idioma::t("Panel de archivos"), crate::atajos::menu("archivos"))).clicked() {
             self.hacer_atajo("archivos");
         }
@@ -68,7 +68,7 @@ impl App {
                     ui.painter().circle_filled(x_r.center(), 9.0, BUTTON_HI);
                 }
                 if activa || resp.hovered() || rx.hovered() {
-                    icono(ui.painter(), &tabler::X, x_r.shrink(4.0), if rx.hovered() { TEXT } else { TEXT_FAINT });
+                    icono(ui.painter(), &iconos::X, x_r.shrink(4.0), if rx.hovered() { TEXT } else { TEXT_FAINT });
                 }
                 if rx.clicked() || resp.middle_clicked() {
                     cerrar = Some(i);

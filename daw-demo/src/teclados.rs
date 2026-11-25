@@ -1,6 +1,7 @@
 // Beethoven DAW Demo. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
 //! Teclados MIDI. Las notas van derecho al motor, sin pasar por la ventana.
 use crate::motor::Orden;
+use crate::plugin::Evento;
 use crossbeam_channel::Sender;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
@@ -29,6 +30,16 @@ pub fn abrir(canal: Arc<AtomicU32>, motor: Sender<Orden>, ventana: Sender<Toque>
             move |_, b, _| {
                 let [s, tono, f] = b else { return };
                 let (tono, f) = (*tono & 127, *f & 127);
+                // La rueda y los mandos.
+                let mando = match s >> 4 {
+                    14 => Some(Evento::Rueda(((f as i32) << 7 | tono as i32) as f32 / 8192.0 - 1.0)),
+                    11 => Some(Evento::Mando { n: tono, v: f as f32 / 127.0 }),
+                    _ => None,
+                };
+                if let Some(evento) = mando {
+                    let _ = motor.try_send(Orden::Mando { canal: canal.load(Relaxed), evento });
+                    return;
+                }
                 let o = match (s >> 4, f) {
                     (9, 1..) => {
                         let c = canal.load(Relaxed);

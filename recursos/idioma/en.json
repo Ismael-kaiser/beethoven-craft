@@ -515,7 +515,6 @@
  "Efectos": "Effects",
  "Efectos - {}": "Effects - {}",
  "Efectos de audio": "Audio effects",
- "Efectos de audio y diseño: © 2026 ItsAlphaNeon y colaboradores (GPL-3.0).": "Audio effects and design: © 2026 ItsAlphaNeon and contributors (GPL-3.0).",
  "Efectos de video": "Video effects",
  "Efectos de video: EffectCraft; transiciones: FilmCraft; curvas de animación: AniCraft; del equipo de ArtCraft (MIT o Apache-2.0).": "Video effects: EffectCraft; transitions: FilmCraft; animation curves: AniCraft; by the ArtCraft team (MIT or Apache-2.0).",
  "Eje de inclinación": "Tilt axis",
@@ -1191,7 +1190,7 @@
  "Sentido del desenfoque": "Blur direction",
  "Separación": "Separation",
  "Separación cancelada": "Separation canceled",
- "Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Íconos Tabler (MIT). Video y audio: ffmpeg.": "Vocal separation: Ultimate Vocal Remover's MDX-Net Voc FT model (MIT). Cuprum and Barlow fonts (OFL). Tabler icons (MIT). Video and audio: ffmpeg.",
+ "Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Video y audio: ffmpeg.": "Vocal separation: Ultimate Vocal Remover's MDX-Net Voc FT model (MIT). Cuprum and Barlow fonts (OFL). Video and audio: ffmpeg.",
  "Separados": "Separate",
  "Separando voz e instrumental": "Separating vocals and instrumental",
  "Separar RGB": "RGB split",
@@ -1214,7 +1213,6 @@
  "Sobre el original": "On the original",
  "Sobreexponer color": "Color dodge",
  "Sobrescribir": "Overwrite",
- "Software libre, GPL-3.0 o posterior.": "Free software, GPL-3.0 or later.",
  "Sol": "G",
  "Sol#": "G#",
  "Solarizar": "Solarize",
@@ -2290,8 +2288,6 @@
  "Recorte derecho": "Right crop",
  "Recorte de abajo": "Bottom crop",
  "Contorno": "Outline",
- "Código propio: MIT o Apache-2.0, como prefieras.": "Own code: MIT or Apache-2.0, at your choice.",
- "La app completa, por las piezas de Lemon Studio: GPL-3.0 o posterior.": "The complete app, because of the Lemon Studio parts: GPL-3.0 or later.",
  "ASISTENTE": "ASSISTANT",
  "Asistente": "Assistant",
  "Dile a la IA qué quieres hacer con el video": "Tell the AI what you want to do with the video",
@@ -2388,5 +2384,6 @@
  "Buscar": "Search",
  "Va a {} con tu cuenta: nombres, notas y ajustes; nunca tu audio": "Goes to {} with your account: names, notes and settings; never your audio",
  "Va a {} con tu cuenta: nombres, textos y ajustes; no tu video": "Goes to {} with your account: names, texts and settings; not your video",
- "Va a {} con tu cuenta: nombres, textos, ajustes y los cuadros que pida ver": "Goes to {} with your account: names, texts, settings and the frames it asks to see"
+ "Va a {} con tu cuenta: nombres, textos, ajustes y los cuadros que pida ver": "Goes to {} with your account: names, texts, settings and the frames it asks to see",
+ "Software libre: MIT o Apache-2.0, como prefieras.": "Free software: MIT or Apache-2.0, as you prefer."
 }

@@ -544,6 +544,10 @@ impl Vst3 {
         }
     }
 
+    pub fn latencia(&self) -> u32 {
+        unsafe { self.proc_.getLatencySamples() }
+    }
+
     pub fn procesar(&mut self, ev: &[Evento], t: &Tiempo, entra: &[Buf; 2], sale: &mut [Buf; 2], n: usize) {
         unsafe {
             if !self.procesando {
@@ -572,6 +576,8 @@ impl Vst3 {
                     Evento::Control { id, valor } => {
                         self.cambios.poner(id, valor);
                     }
+                    // En VST3 la rueda y los mandos llegan como parámetros: aún no.
+                    Evento::Rueda(_) | Evento::Mando { .. } => {}
                 }
             }
             let mut c: ProcessContext = std::mem::zeroed();

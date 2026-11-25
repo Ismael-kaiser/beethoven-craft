@@ -19,12 +19,27 @@ pub const EVENTOS: usize = 128;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Evento {
-    Nota { tono: u8, fuerza: f32 },
-    Suelta { tono: u8 },
-    Control { id: u32, valor: f64 },
+    Nota {
+        tono: u8,
+        fuerza: f32,
+    },
+    Suelta {
+        tono: u8,
+    },
+    Control {
+        id: u32,
+        valor: f64,
+    },
+    /// La rueda de tono, de -1 a 1.
+    Rueda(f32),
+    /// Un mando MIDI, de 0 a 1.
+    Mando {
+        n: u8,
+        v: f32,
+    },
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Tiempo {
     pub bpm: f64,
     /// En negras.
@@ -152,6 +167,14 @@ impl Plugin {
             Fondo::Vst3(v) => v.procesar(&todo[..k], t, entra, sale, n),
         }
         self.ocupado.store(false, Release);
+    }
+
+    /// Muestras que se tarda.
+    pub fn latencia(&self) -> u32 {
+        match self.f() {
+            Fondo::Clap(c) => c.latencia(),
+            Fondo::Vst3(v) => v.latencia(),
+        }
     }
 
     pub fn valor(&self, id: u32) -> f64 {

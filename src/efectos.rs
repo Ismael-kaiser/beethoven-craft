@@ -1,11 +1,8 @@
-//! Los efectos incluidos. El sonido viene del crate `audio-fx` (GPL-3.0, ver AVISOS.md); aquí se les dan
-//! nombres, controles en unidades normales y rangos propios.
+// Beethoven Craft. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
+//! Los efectos incluidos: sus nombres, controles y rangos, y cómo mueven el sonido de `sonido.rs` y `propios.rs`.
 use crate::modelo::{SR, db};
 use crate::propios;
-use audio_fx::effects::{
-    Effect, balance, chorus, delay, dynamics as dy, eq, fast_dist, filter, flanger, maximus, phaser, reverb, soft_clipper, stereo_enhancer,
-    stereo_shaper, transient_processor as trans, vocoder,
-};
+use crate::sonido::{self, Banda, Bandas};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +39,6 @@ pub enum TipoFx {
     Vinilo,
     Tartamudeo,
     SubGrave,
-    /// De Beethoven DAW.
     Parametrico,
     Distorsion,
     Moldeador,
@@ -113,10 +109,10 @@ impl TipoFx {
             TipoFx::Reverberacion | TipoFx::Eco | TipoFx::Amplitud | TipoFx::Autopaneo => "Espacio",
             TipoFx::Coro | TipoFx::Faser | TipoFx::Flanger | TipoFx::Tremolo | TipoFx::Vibrato | TipoFx::Tartamudeo => "Modulación",
             TipoFx::Saturador | TipoFx::RecorteSuave | TipoFx::Bits | TipoFx::Vinilo => "Distorsión",
-            TipoFx::Parametrico | TipoFx::Distorsion | TipoFx::Moldeador | TipoFx::Vocoder | TipoFx::Balance => "Beethoven DAW",
+            TipoFx::Parametrico | TipoFx::Distorsion | TipoFx::Moldeador | TipoFx::Vocoder | TipoFx::Balance => "Beethoven",
         }
     }
-    pub const GRUPOS: [&'static str; 7] = ["Beethoven DAW", "Voz", "Dinámica", "Tono y filtros", "Espacio", "Modulación", "Distorsión"];
+    pub const GRUPOS: [&'static str; 7] = ["Beethoven", "Voz", "Dinámica", "Tono y filtros", "Espacio", "Modulación", "Distorsión"];
 
     pub fn nombre(self) -> &'static str {
         crate::idioma::t(self.nombre_es())
@@ -573,27 +569,22 @@ pub trait Procesador: Send {
 
 pub fn crear(tipo: TipoFx, p: &[f32]) -> Box<dyn Procesador> {
     let mut e: Box<dyn Procesador> = match tipo {
-        TipoFx::Ecualizador => Box::new(Eq {
-            e: eq::equalizer::Equalizer::new(SR as f64, &ajuste_eq(p).params(), Default::default()),
-            l: vec![],
-            r: vec![],
-        }),
-        TipoFx::Compresor | TipoFx::Compuerta | TipoFx::Limitador => {
-            let exacto = if tipo == TipoFx::Limitador { dy::FLAG_EXACT_CEILING } else { 0 };
-            Box::new(Din {
-                tipo,
-                d: dy::Dynamics::new(SR as f64, ajuste_din(tipo, p), exacto),
-                post: 1.0,
-                l: vec![],
-                r: vec![],
-            })
-        }
-        TipoFx::Reverberacion => Box::new(Rev(reverb::Reverb::new(SR, Default::default(), 120.0))),
-        TipoFx::Eco => Box::new(Eco(delay::Delay::with_settings(SR, &ajuste_eco(p), 120.0))),
-        TipoFx::Coro => {
-            Box::new(Coro { c: chorus::Chorus::with_settings(SR, &ajuste_coro(p)), mezcla: 0.5, seco: vec![] })
-        }
-        TipoFx::Faser => Box::new(Fas(phaser::Phaser::with_settings(SR, &ajuste_faser(p)))),
+        TipoFx::Ecualizador => Box::new(Eq(Bandas::nuevas(6))),
+        TipoFx::Parametrico => Box::new(Par(Bandas::nuevas(7))),
+        TipoFx::Compresor => Box::new(sonido::Compresor::nuevo()),
+        TipoFx::Compuerta => Box::new(sonido::Compuerta::nueva()),
+        TipoFx::Limitador => Box::new(sonido::Limitador::nuevo()),
+        TipoFx::Multibanda => Box::new(sonido::Multibanda::nueva()),
+        TipoFx::Transitorios => Box::<sonido::Transitorios>::default(),
+        TipoFx::Reverberacion => Box::new(sonido::Sala::nueva()),
+        TipoFx::Eco => Box::new(sonido::Eco::nuevo()),
+        TipoFx::Coro => Box::new(Coro { c: sonido::Coro::nuevo(), mezcla: 0.5 }),
+        TipoFx::Flanger => Box::new(Flanger { f: sonido::Flanger::nuevo(), mezcla: 0.5 }),
+        TipoFx::Faser => Box::<sonido::Faser>::default(),
+        TipoFx::Filtro => Box::new(Filtro { f: Default::default(), p: [0.0; 3] }),
+        TipoFx::Saturador | TipoFx::RecorteSuave | TipoFx::Distorsion | TipoFx::Amplitud | TipoFx::Balance => Box::new(Directo { tipo, p: vec![] }),
+        TipoFx::Moldeador => Box::new(sonido::Moldeador::nuevo()),
+        TipoFx::Vocoder => Box::new(Voc::nuevo()),
         TipoFx::Afinador => Box::new(propios::Afinador::nuevo()),
         TipoFx::CambioTono => Box::new(propios::CambioTono::nuevo()),
         TipoFx::Seseo => Box::<propios::Seseo>::default(),
@@ -611,659 +602,351 @@ pub fn crear(tipo: TipoFx, p: &[f32]) -> Box<dyn Procesador> {
         TipoFx::Vinilo => Box::new(propios::Vinilo::nuevo()),
         TipoFx::Tartamudeo => Box::<propios::Tartamudeo>::default(),
         TipoFx::SubGrave => Box::<propios::SubGrave>::default(),
-        TipoFx::Multibanda => Box::new(Multi(maximus::Maximus::with_state(ajuste_multi(p), SR))),
-        TipoFx::Flanger => Box::new(Fla(flanger::Flanger::with_settings(SR, &ajuste_flanger(p)))),
-        TipoFx::Filtro => Box::new(Fil(filter::Filter::with_settings(SR, &ajuste_filtro(p)))),
-        TipoFx::RecorteSuave => Box::new(Rec { c: soft_clipper::SoftClipper::new(), post: 1.0 }),
-        TipoFx::Transitorios => Box::new(Tra { t: trans::TransientProcessor::with_settings(SR, &ajuste_trans(p)), post: 1.0 }),
-        TipoFx::Amplitud => Box::new(Amp { a: stereo_enhancer::StereoEnhancer::with_settings(SR, &ajuste_amp(p)), post: 1.0 }),
-        TipoFx::Parametrico => Box::new(Par {
-            e: eq::equalizer::Equalizer::new(SR as f64, &ajuste_par(p).params(), Default::default()),
-            l: vec![],
-            r: vec![],
-        }),
-        TipoFx::Distorsion => Box::new(Dis { f: fast_dist::FastDist::new(), l: vec![], r: vec![] }),
-        TipoFx::Moldeador => Box::new(Mol(stereo_shaper::StereoShaper::new(SR))),
-        TipoFx::Vocoder => Box::new(Voc::nuevo(p)),
-        TipoFx::Balance => Box::new(Bal(balance::Balance::with_settings(SR, &ajuste_bal(p)))),
-        TipoFx::Saturador => Box::new(Sat { f: fast_dist::FastDist::new(), mezcla: 0.5, post: 1.0, seco: vec![] }),
     };
     e.ajustar(p);
     e.limpiar();
     e
 }
 
-fn separar(buf: &[f32], l: &mut Vec<f32>, r: &mut Vec<f32>) {
-    l.clear();
-    r.clear();
-    for f in buf.chunks_exact(2) {
-        l.push(f[0]);
-        r.push(f[1]);
-    }
+/// `1 - mezcla / 2`: al mezclar copias del mismo sonido, lo seco baja menos.
+fn seco(mezcla: f32) -> f32 {
+    1.0 - mezcla * 0.5
 }
 
-fn juntar(buf: &mut [f32], l: &[f32], r: &[f32], g: f32) {
-    for (i, f) in buf.chunks_exact_mut(2).enumerate() {
-        f[0] = l[i] * g;
-        f[1] = r[i] * g;
+// ---- Ecualizadores
+
+struct Eq(Bandas);
+
+impl Eq {
+    fn poner(b: &mut Bandas, p: &[f32]) {
+        let q = std::f32::consts::FRAC_1_SQRT_2;
+        b.poner(0, if p[0] > 20.5 { Banda::PasaAgudos } else { Banda::Apagada }, p[0], 0.0, q);
+        b.poner(1, Banda::MesetaGrave, 120.0, p[1], q);
+        b.poner(2, Banda::Campana, p[3], p[2], 0.9);
+        b.poner(3, Banda::Campana, 4000.0, p[4], 0.9);
+        b.poner(4, Banda::MesetaAguda, 9000.0, p[5], q);
+        b.poner(5, if p[6] < 19_900.0 { Banda::PasaGraves } else { Banda::Apagada }, p[6], 0.0, q);
+        b.salida(p[7]);
     }
-}
-
-// ---- Ecualizador
-
-pub fn ajuste_eq(p: &[f32]) -> eq::Settings {
-    let mut s = eq::Settings::default();
-    let banda = |db: f32, hz: f32, kind: i32| eq::Band {
-        db: db as f64,
-        freq: eq::freq_pos(hz as f64),
-        width: eq::default_width(kind),
-        kind,
-        order: 0,
-    };
-    let nada = banda(0.0, 1000.0, eq::DISABLED);
-    s.bands = [
-        if p[0] > 20.5 { banda(0.0, p[0], eq::HIGH_PASS) } else { nada },
-        banda(p[1], 120.0, eq::LOW_SHELF),
-        banda(p[2], p[3], eq::PEAKING),
-        banda(p[4], 4000.0, eq::PEAKING),
-        banda(p[5], 9000.0, eq::HIGH_SHELF),
-        if p[6] < 19900.0 { banda(0.0, p[6], eq::LOW_PASS) } else { nada },
-        nada,
-    ];
-    s.main_db = p[7] as f64;
-    s
 }
 
 /// Curva del ecualizador en dB, para dibujarla.
 pub fn curva_eq(p: &[f32], hz: impl Iterator<Item = f64>) -> Vec<f64> {
-    let c = ajuste_eq(p).curve(eq::design::Design::Ordinary(SR as f64));
-    hz.map(|h| c.db(h)).collect()
-}
-
-struct Eq {
-    e: eq::equalizer::Equalizer,
-    l: Vec<f32>,
-    r: Vec<f32>,
+    let mut b = Bandas::nuevas(6);
+    Eq::poner(&mut b, p);
+    b.curva(hz)
 }
 
 impl Procesador for Eq {
     fn procesar(&mut self, buf: &mut [f32]) {
-        separar(buf, &mut self.l, &mut self.r);
-        self.e.process(&mut self.l, &mut self.r);
-        juntar(buf, &self.l, &self.r, 1.0);
+        self.0.procesar(buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        let s = ajuste_eq(p);
-        let nuevo = s.params();
-        for i in 0..nuevo.len() {
-            if self.e.params()[i] != nuevo[i] {
-                self.e.set_param(i, nuevo[i]);
-            }
-        }
+        Eq::poner(&mut self.0, p);
     }
     fn limpiar(&mut self) {
-        self.e.reset();
+        self.0.limpiar();
     }
-    fn latencia(&self) -> usize {
-        self.e.latency()
+}
+
+/// Nombres de los tipos de banda, en el orden de sus valores guardados.
+pub const TIPOS_BANDA: [&str; 8] = ["Apagada", "Pasa graves", "Pasa banda", "Pasa agudos", "Quita banda", "Meseta grave", "Campana", "Meseta aguda"];
+pub const ACORDES: [&str; 5] = ["Una nota", "Quinta", "Mayor", "Menor", "Séptima"];
+
+struct Par(Bandas);
+
+impl Par {
+    fn poner(b: &mut Bandas, p: &[f32]) {
+        use Banda::*;
+        for k in 0..7 {
+            let v = &p[k * 4..k * 4 + 4];
+            let tipo = [Apagada, PasaGraves, PasaBanda, PasaAgudos, QuitaBanda, MesetaGrave, Campana, MesetaAguda][(v[0].round() as usize).min(7)];
+            let ancho = (v[3] / 100.0).clamp(0.01, 1.0);
+            let q = match tipo {
+                // En octavas, de una esquina a la otra.
+                Campana | PasaBanda | QuitaBanda => {
+                    let o = 0.08 + ancho * 3.4;
+                    1.0 / (2.0 * (std::f32::consts::LN_2 / 2.0 * o).sinh())
+                }
+                MesetaGrave | MesetaAguda => (1.1 - ancho).clamp(0.3, 1.0),
+                // Angosto: con un pico en el corte.
+                _ => (0.276 / ancho).clamp(0.4, 8.0),
+            };
+            b.poner(k, tipo, v[1], v[2], q);
+        }
+        b.salida(p[28]);
+    }
+}
+
+/// Curva del paramétrico en dB.
+pub fn curva_par(p: &[f32], hz: impl Iterator<Item = f64>) -> Vec<f64> {
+    let mut b = Bandas::nuevas(7);
+    Par::poner(&mut b, p);
+    b.curva(hz)
+}
+
+impl Procesador for Par {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        self.0.procesar(buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        Par::poner(&mut self.0, p);
+    }
+    fn limpiar(&mut self) {
+        self.0.limpiar();
     }
 }
 
 // ---- Dinámica
 
-/// Valor guardado de una perilla de nivel (inverso de `dynamics::level`).
-fn perilla(amp: f32, base: f32, max: f32) -> i32 {
-    (1000.0 * (1.0 + (base - 1.0) * amp).ln() / base.ln()).clamp(0.0, max).round() as i32
-}
-
-/// Inverso de `dynamics::time_ms`.
-fn tiempo(ms: f32) -> i32 {
-    (1e4 * (1.0 + ms / 2.0).ln() / 501f32.ln()).clamp(0.0, 1e4).round() as i32
-}
-
-fn ajuste_din(tipo: TipoFx, p: &[f32]) -> [i32; dy::PARAMS] {
-    let mut v = dy::DEFAULTS;
-    match tipo {
-        TipoFx::Compresor => {
-            v[dy::CEILING] = 2000;
-            v[dy::LIM_ATT] = 0;
-            v[dy::COMP_THRES] = perilla(db(p[0]), 7.0, 999.0);
-            v[dy::COMP_RATIO] = (1000.0 * (1.0 + (p[1] - 1.0) / 0.38).ln() / 51f32.ln()).round() as i32;
-            v[dy::COMP_ATT] = tiempo(p[2]);
-            v[dy::COMP_REL] = tiempo(p[3]);
-            v[dy::RMS_WINDOW] = tiempo(5.0);
-        }
-        TipoFx::Compuerta => {
-            v[dy::CEILING] = 2000;
-            v[dy::LIM_ATT] = 0;
-            v[dy::GATE_THRES] = perilla(db(p[0]), 7.0, 1000.0);
-            v[dy::GATE_GAIN] = perilla(db(p[1]), 7.0, 1000.0);
-            v[dy::GATE_REL] = tiempo(p[2]);
-        }
-        _ => {
-            v[dy::GAIN] = perilla(db(p[0]), 7.0, 2000.0);
-            v[dy::CEILING] = perilla(db(p[1]), 3.0, 1000.0);
-            v[dy::LIM_REL] = tiempo(p[2]);
-        }
-    }
-    v
-}
-
-struct Din {
-    tipo: TipoFx,
-    d: dy::Dynamics,
-    post: f32,
-    l: Vec<f32>,
-    r: Vec<f32>,
-}
-
-impl Procesador for Din {
+impl Procesador for sonido::Compresor {
     fn procesar(&mut self, buf: &mut [f32]) {
-        separar(buf, &mut self.l, &mut self.r);
-        self.d.process(&mut self.l, &mut self.r, None);
-        juntar(buf, &self.l, &self.r, self.post);
+        sonido::Compresor::procesar(self, buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        self.post = if self.tipo == TipoFx::Compresor { db(p[4]) } else { 1.0 };
-        self.d.set_params(&ajuste_din(self.tipo, p));
+        (self.umbral, self.razon, self.ataque, self.suelta, self.ganancia) = (p[0], p[1], p[2], p[3], db(p[4]));
     }
     fn limpiar(&mut self) {
-        self.d.reset();
+        sonido::Compresor::limpiar(self);
+    }
+}
+
+impl Procesador for sonido::Compuerta {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        sonido::Compuerta::procesar(self, buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        (self.umbral, self.cerrada, self.suelta) = (db(p[0]), db(p[1]), p[2]);
+    }
+    fn limpiar(&mut self) {
+        sonido::Compuerta::limpiar(self);
+    }
+}
+
+impl Procesador for sonido::Limitador {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        sonido::Limitador::procesar(self, buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        (self.entrada, self.techo, self.suelta) = (db(p[0]), db(p[1]), p[2]);
+    }
+    fn limpiar(&mut self) {
+        sonido::Limitador::limpiar(self);
     }
     fn latencia(&self) -> usize {
-        self.d.latency()
+        sonido::Limitador::latencia()
     }
 }
 
-// ---- Reverberación
-
-struct Rev(reverb::Reverb);
-
-impl Procesador for Rev {
+impl Procesador for sonido::Multibanda {
     fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
+        sonido::Multibanda::procesar(self, buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        let mut s = reverb::Settings::default();
-        let k = &mut s.knobs;
-        let mezcla = (p[0] * 1.6).round() as i32;
-        k[reverb::WET] = mezcla;
-        k[reverb::EARLY] = mezcla;
-        k[reverb::DECAY] = (p[1] * 10.0).round() as i32;
-        k[reverb::ROOM] = p[2].round() as i32;
-        k[reverb::PREDELAY] = (p[3] * 0.384).round() as i32;
-        k[reverb::LOW_CUT] = if p[4] <= 20.5 { reverb::LOW_CUT_OFF } else { p[4].round() as i32 };
-        k[reverb::HIGH_CUT] = ((p[5] / 100.0).round() as i32).clamp(5, 220);
-        k[reverb::DAMPING] = k[reverb::HIGH_CUT];
-        self.0.set(s);
+        sonido::Multibanda::ajustar(self, [p[0], p[1]], [p[2], p[3], p[4], p[5]], p[6], p[7]);
     }
     fn limpiar(&mut self) {
-        self.0.clear();
+        sonido::Multibanda::limpiar(self);
+    }
+    fn latencia(&self) -> usize {
+        sonido::Limitador::latencia()
     }
 }
 
-// ---- Eco
-
-fn ajuste_eco(p: &[f32]) -> delay::Settings {
-    let mut s = delay::Settings::default();
-    let v = &mut s.v;
-    let u = (((p[0] as f64 / 1000.0 - 0.001) / 0.999 / 1.000_216_046_666_079_9) + 0.000216).cbrt();
-    v[delay::TIME] = (1.0 + 767.0 * ((u - 0.06) / 0.94).clamp(0.0, 1.0)).round() as i32;
-    v[delay::FEEDBACK] = (p[1] * 60.0) as i32;
-    v[delay::WET] = (p[2] * 60.0) as i32;
-    v[delay::FILTER] = delay::LOW_PASS;
-    // Posición del corte en la tabla por tramos del filtro.
-    let t = delay::LP;
-    let hz = p[3].clamp(t[0], t[4]);
-    let i = (0..4).find(|&i| hz <= t[i + 1]).unwrap_or(3);
-    let pos = (i as f32 + (hz - t[i]) / (t[i + 1] - t[i])) / 4.0;
-    v[delay::CUTOFF] = (pos * 6000.0) as i32;
-    v[delay::RESONANCE] = 0;
-    v[delay::TYPE] = if p[4] >= 0.5 { delay::PING_PONG } else { delay::TRUE_STEREO };
-    s
-}
-
-struct Eco(delay::Delay);
-
-impl Procesador for Eco {
+impl Procesador for sonido::Transitorios {
     fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
+        sonido::Transitorios::procesar(self, buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        self.0.set(&ajuste_eco(p));
+        (self.golpe, self.cola, self.salida) = (p[0] / 100.0, p[1] / 100.0, db(p[2]));
     }
     fn limpiar(&mut self) {
-        self.0.reset();
+        sonido::Transitorios::limpiar(self);
     }
 }
 
-// ---- Coro, fáser, saturador
+// ---- Espacio
 
-fn ajuste_coro(p: &[f32]) -> chorus::Settings {
-    let mut s = chorus::Settings::default();
-    let v = &mut s.v;
-    let vel = |hz: f32| ((hz / 5.0).sqrt() * 5000.0).clamp(0.0, 5000.0) as i32;
-    for (i, k) in [1.0, 0.73, 1.31].into_iter().enumerate() {
-        v[chorus::SPEED[i]] = vel(p[0] * k);
+impl Procesador for sonido::Sala {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        sonido::Sala::procesar(self, buf);
     }
-    v[chorus::DEPTH] = (p[1] * 50.0) as i32;
-    v[chorus::DELAY] = ((p[2] - 0.05) / 29.95 * 1024.0) as i32;
-    v[chorus::STEREO] = (p[3] * 10.24) as i32;
-    v[chorus::CROSS_CUTOFF] = 0;
-    v[chorus::WET_ONLY] = 1024;
-    s
-}
-
-fn mezclar(buf: &mut [f32], seco: &[f32], g_mojado: f32, g_seco: f32) {
-    for (b, s) in buf.iter_mut().zip(seco) {
-        *b = *b * g_mojado + s * g_seco;
+    fn ajustar(&mut self, p: &[f32]) {
+        sonido::Sala::ajustar(self, p[0] / 100.0, p[1], p[2] / 100.0, p[3], p[4], p[5]);
+    }
+    fn limpiar(&mut self) {
+        sonido::Sala::limpiar(self);
     }
 }
+
+impl Procesador for sonido::Eco {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        sonido::Eco::procesar(self, buf);
+    }
+    fn ajustar(&mut self, p: &[f32]) {
+        (self.ms, self.repite, self.mezcla, self.hz, self.rebote) = (p[0], p[1] / 100.0, p[2] / 100.0, p[3], p[4] >= 0.5);
+    }
+    fn limpiar(&mut self) {
+        sonido::Eco::limpiar(self);
+    }
+}
+
+// ---- Modulación
 
 struct Coro {
-    c: chorus::Chorus,
+    c: sonido::Coro,
     mezcla: f32,
-    seco: Vec<f32>,
 }
 
 impl Procesador for Coro {
     fn procesar(&mut self, buf: &mut [f32]) {
-        self.seco.clear();
-        self.seco.extend_from_slice(buf);
-        Effect::process(&mut self.c, buf);
-        mezclar(buf, &self.seco, self.mezcla, 1.0 - self.mezcla * 0.5);
+        self.c.procesar(buf, seco(self.mezcla), self.mezcla);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        self.mezcla = p[4] / 100.0;
-        self.c.set(&ajuste_coro(p));
+        (self.c.hz, self.c.hondo, self.c.ms, self.c.abierto, self.mezcla) = (p[0], p[1] / 100.0, p[2], p[3] / 100.0, p[4] / 100.0);
     }
     fn limpiar(&mut self) {
-        self.c.start();
+        self.c.limpiar();
     }
 }
 
-fn ajuste_faser(p: &[f32]) -> phaser::Settings {
-    let mut s = phaser::Settings::default();
-    let v = &mut s.v;
-    let x = (1.0 + p[0] / 2.0 * (4f32.exp() - 1.0)).ln() / 4.0;
-    v[phaser::SWEEP] = (x * 5000.0) as i32;
-    v[phaser::MIN_DEPTH] = 100;
-    v[phaser::MAX_DEPTH] = 100 + (p[1] * 8.5) as i32;
-    v[phaser::FEEDBACK] = (p[2] * 10.0) as i32;
-    v[phaser::DRY_WET] = 1024 - (p[3] * 10.24) as i32;
-    v[phaser::GAIN] = 2500;
-    s
-}
-
-struct Fas(phaser::Phaser);
-
-impl Procesador for Fas {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.0.set(&ajuste_faser(p));
-    }
-    fn limpiar(&mut self) {
-        self.0.start(phaser::IDLE);
-    }
-}
-
-struct Sat {
-    f: fast_dist::FastDist,
+struct Flanger {
+    f: sonido::Flanger,
     mezcla: f32,
-    post: f32,
-    seco: Vec<f32>,
 }
 
-impl Procesador for Sat {
+impl Procesador for Flanger {
     fn procesar(&mut self, buf: &mut [f32]) {
-        self.seco.clear();
-        self.seco.extend_from_slice(buf);
-        Effect::process(&mut self.f, buf);
-        mezclar(buf, &self.seco, self.mezcla * self.post, (1.0 - self.mezcla) * self.post);
+        self.f.procesar(buf, seco(self.mezcla) * 0.7, self.mezcla * 0.7);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        let mut v = fast_dist::DEFAULTS;
-        v[fast_dist::PRE] = 128 + (p[0] * 0.64) as i32;
-        v[fast_dist::THRESHOLD] = (10.0 - p[0] * 0.05).round() as i32;
-        self.f.set(&fast_dist::Settings { v });
-        self.mezcla = p[1] / 100.0;
-        self.post = db(p[2]);
+        (self.f.hz, self.f.hondo, self.f.ms, self.f.repite, self.mezcla) = (p[0], p[1], p[2], p[3] / 100.0, p[4] / 100.0);
     }
-    fn limpiar(&mut self) {}
+    fn limpiar(&mut self) {
+        self.f.limpiar();
+    }
 }
 
-
-// ---- Los demás efectos de `audio-fx`
-
-fn ajuste_multi(p: &[f32]) -> maximus::state::State {
-    use maximus::state as st;
-    let mut s = st::State::new_default();
-    let cruce = |hz: f32| (65536.0 * (hz / 30.0).ln() / (16000f32 / 30.0).ln()).round() as i32;
-    s.params[st::P_LOW_FREQ] = cruce(p[0]);
-    s.params[st::P_HIGH_FREQ] = cruce(p[1]);
-    for b in 0..4 {
-        s.params[st::band(b, st::B_PRE)] = perilla(db(p[2 + b]), 7.0, 2000.0);
-        s.params[st::band(b, st::B_REL)] = tiempo(p[6]);
-    }
-    s.params[st::band(st::MASTER, st::B_POST)] = perilla(db(p[7]), 7.0, 2000.0);
-    s
-}
-
-struct Multi(maximus::Maximus);
-
-impl Procesador for Multi {
+impl Procesador for sonido::Faser {
     fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
+        sonido::Faser::procesar(self, buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        let n = ajuste_multi(p);
-        for k in 0..n.params.len() {
-            if self.0.state().params[k] != n.params[k] {
-                self.0.set_param(k, n.params[k]);
+        (self.hz, self.hondo, self.repite, self.mezcla) = (p[0], p[1] / 100.0, p[2] / 100.0, p[3] / 100.0);
+    }
+    fn limpiar(&mut self) {
+        sonido::Faser::limpiar(self);
+    }
+}
+
+struct Filtro {
+    f: sonido::Variable,
+    /// Cuánto de graves, banda y agudos.
+    p: [f32; 3],
+}
+
+impl Procesador for Filtro {
+    fn procesar(&mut self, buf: &mut [f32]) {
+        for f in buf.chunks_exact_mut(2) {
+            for (k, x) in f.iter_mut().enumerate() {
+                let y = self.f.paso(k, *x);
+                *x = y[0] * self.p[0] + y[1] * self.p[1] + y[2] * self.p[2];
             }
         }
     }
-    fn limpiar(&mut self) {
-        self.0.reset();
-    }
-    fn latencia(&self) -> usize {
-        self.0.delay()
-    }
-}
-
-/// Busca la posición (0..max) cuya ley da `v`; las leyes crecen.
-fn inversa(max: i32, v: f32, ley: impl Fn(f32) -> f32) -> i32 {
-    let (mut a, mut b) = (0, max);
-    while a < b {
-        let m = (a + b) / 2;
-        if ley(m as f32 / max as f32) < v { a = m + 1 } else { b = m }
-    }
-    a
-}
-
-fn ajuste_flanger(p: &[f32]) -> flanger::Settings {
-    let mut v = flanger::DEFAULTS;
-    let r = |k: usize| flanger::RANGES[k].1;
-    v[flanger::RATE] = inversa(r(flanger::RATE), p[0], flanger::speed);
-    v[flanger::DEPTH] = inversa(r(flanger::DEPTH), p[1], flanger::ms);
-    v[flanger::DELAY] = inversa(r(flanger::DELAY), p[2], flanger::ms);
-    v[flanger::FEED] = (p[3] / 100.0 * r(flanger::FEED) as f32) as i32;
-    v[flanger::INVERT_FEED] = 0;
-    v[flanger::INVERT_WET] = 0;
-    v[flanger::DRY] = ((1.0 - p[4] / 200.0) * r(flanger::DRY) as f32 * 0.7) as i32;
-    v[flanger::WET] = (p[4] / 100.0 * r(flanger::WET) as f32 * 0.7) as i32;
-    v[flanger::CROSS] = 0;
-    flanger::Settings { v }
-}
-
-struct Fla(flanger::Flanger);
-
-impl Procesador for Fla {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
-    }
     fn ajustar(&mut self, p: &[f32]) {
-        self.0.set(&ajuste_flanger(p));
+        self.f.poner(p[0], p[1] / 100.0);
+        self.p = [p[2] / 100.0, p[3] / 100.0, p[4] / 100.0];
     }
     fn limpiar(&mut self) {
-        self.0.start();
+        self.f.limpiar();
     }
 }
 
-fn ajuste_filtro(p: &[f32]) -> filter::Settings {
-    let n = |x: f32| (x * 10.24) as i32;
-    let corte = inversa(1024, p[0], |t| filter::cutoff_hz((t * 1024.0) as i32, SR as f64) as f32);
-    filter::Settings { v: [corte, n(p[1]), n(p[2]), n(p[3]), n(p[4]), 0], center: false }
+// ---- Los que no guardan nada de una muestra a la otra
+
+struct Directo {
+    tipo: TipoFx,
+    p: Vec<f32>,
 }
 
-struct Fil(filter::Filter);
-
-impl Procesador for Fil {
+impl Procesador for Directo {
     fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.0.set(&ajuste_filtro(p));
-    }
-    fn limpiar(&mut self) {
-        Effect::reset(&mut self.0);
-    }
-}
-
-struct Rec {
-    c: soft_clipper::SoftClipper,
-    post: f32,
-}
-
-impl Procesador for Rec {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.c, buf);
-        buf.iter_mut().for_each(|x| *x *= self.post);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.c.set(&soft_clipper::Settings { v: [(p[0] * 1.27).round().max(1.0) as i32, 128] });
-        self.post = db(p[1]);
-    }
-    fn limpiar(&mut self) {}
-}
-
-fn ajuste_trans(p: &[f32]) -> trans::Settings {
-    let mut s = trans::Settings::default();
-    // El centro del control es neutro.
-    let mitad = |k: usize, x: f32| {
-        let (a, b) = trans::RANGES[k];
-        a + ((b - a) as f32 * (x + 100.0) / 200.0).round() as i32
-    };
-    s.v[trans::ATTACK] = mitad(trans::ATTACK, p[0]);
-    s.v[trans::RELEASE] = mitad(trans::RELEASE, p[1]);
-    s
-}
-
-struct Tra {
-    t: trans::TransientProcessor,
-    post: f32,
-}
-
-impl Procesador for Tra {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.t, buf);
-        buf.iter_mut().for_each(|x| *x *= self.post);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.t.set(&ajuste_trans(p));
-        self.post = db(p[2]);
-    }
-    fn limpiar(&mut self) {
-        Effect::reset(&mut self.t);
-    }
-}
-
-fn ajuste_amp(p: &[f32]) -> stereo_enhancer::Settings {
-    let mut v = stereo_enhancer::DEFAULTS;
-    // En `audio-fx`, separar es negativo y juntar es positivo.
-    v[stereo_enhancer::SEPARATION] = (-p[0] * 0.96).round() as i32;
-    stereo_enhancer::Settings { v }
-}
-
-struct Amp {
-    a: stereo_enhancer::StereoEnhancer,
-    post: f32,
-}
-
-impl Procesador for Amp {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.a, buf);
-        buf.iter_mut().for_each(|x| *x *= self.post);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.a.set(&ajuste_amp(p));
-        self.post = db(p[1]);
-    }
-    fn limpiar(&mut self) {
-        Effect::reset(&mut self.a);
-    }
-}
-
-// ---- De Beethoven DAW
-
-/// Nombres de los tipos de banda, en el orden del motor.
-pub const TIPOS_BANDA: [&str; 8] = ["Apagada", "Pasa graves", "Pasa banda", "Pasa agudos", "Quita banda", "Meseta grave", "Campana", "Meseta aguda"];
-pub const ACORDES: [&str; 5] = ["Una nota", "Quinta", "Mayor", "Menor", "Séptima"];
-
-pub fn ajuste_par(p: &[f32]) -> eq::Settings {
-    let mut s = eq::Settings::default();
-    for (k, b) in s.bands.iter_mut().enumerate() {
-        let q = &p[k * 4..k * 4 + 4];
-        let kind = (q[0].round() as i32).clamp(0, 7);
-        *b = eq::Band { db: if eq::has_level(kind) { q[2] as f64 } else { 0.0 }, freq: eq::freq_pos(q[1] as f64), width: (q[3] as f64 / 100.0).clamp(0.01, 1.0), kind, order: 0 };
-    }
-    s.main_db = p[28] as f64;
-    s
-}
-
-/// Curva del paramétrico en dB.
-pub fn curva_par(p: &[f32], hz: impl Iterator<Item = f64>) -> Vec<f64> {
-    let c = ajuste_par(p).curve(eq::design::Design::Ordinary(SR as f64));
-    hz.map(|h| c.db(h)).collect()
-}
-
-struct Par {
-    e: eq::equalizer::Equalizer,
-    l: Vec<f32>,
-    r: Vec<f32>,
-}
-
-impl Procesador for Par {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        separar(buf, &mut self.l, &mut self.r);
-        self.e.process(&mut self.l, &mut self.r);
-        juntar(buf, &self.l, &self.r, 1.0);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        let s = ajuste_par(p);
-        let nuevo = s.params();
-        for i in 0..nuevo.len() {
-            if self.e.params()[i] != nuevo[i] {
-                self.e.set_param(i, nuevo[i]);
+        let p = &self.p;
+        match self.tipo {
+            TipoFx::Saturador => {
+                let (empuje, m, g) = (1.0 + p[0] * 0.09, p[1] / 100.0, db(p[2]));
+                let norma = empuje.powf(-0.28);
+                buf.iter_mut().for_each(|x| *x = (*x * (1.0 - m) + (*x * empuje).tanh() * norma * m) * g);
+            }
+            TipoFx::RecorteSuave => {
+                let (u, g) = (p[0] / 100.0, db(p[1]));
+                buf.iter_mut().for_each(|x| *x = sonido::redondear(*x, u) * g);
+            }
+            TipoFx::Distorsion => {
+                // Menos umbral, más roto; y que el nivel no se dispare con el empuje.
+                let empuje = db(p[0] * 0.18) * 10.0 / p[1].max(1.0);
+                let (norma, rota, m, g) = (empuje.max(1.0).powf(-0.75) * 0.75, p[2] >= 0.5, p[3] / 100.0, p[4] / 100.0);
+                buf.iter_mut().for_each(|x| *x = (*x * (1.0 - m) + sonido::distorsion(*x, empuje, rota) * norma * m) * g);
+            }
+            TipoFx::Amplitud => {
+                let (a, g) = (p[0] / 100.0, db(p[1]));
+                // Al abrir, el centro baja un poco: así se oye más ancho y no más fuerte.
+                let (lados, centro) = (1.0 + a, 1.0 - a.max(0.0) * 0.4);
+                for f in buf.chunks_exact_mut(2) {
+                    let (c, l) = ((f[0] + f[1]) * 0.5 * centro, (f[0] - f[1]) * 0.5 * lados);
+                    (f[0], f[1]) = ((c + l) * g, (c - l) * g);
+                }
+            }
+            _ => {
+                let (b, g) = (p[0] / 100.0, p[1] / 100.0);
+                // De igual potencia: mover a un lado no cambia cuánto se oye.
+                let (s, c) = ((b + 1.0) * std::f32::consts::FRAC_PI_4).sin_cos();
+                let (gi, gd) = (c * std::f32::consts::SQRT_2 * g, s * std::f32::consts::SQRT_2 * g);
+                for f in buf.chunks_exact_mut(2) {
+                    f[0] *= gi.max(0.0);
+                    f[1] *= gd.max(0.0);
+                }
             }
         }
     }
-    fn limpiar(&mut self) {
-        self.e.reset();
-    }
-    fn latencia(&self) -> usize {
-        self.e.latency()
-    }
-}
-
-struct Dis {
-    f: fast_dist::FastDist,
-    l: Vec<f32>,
-    r: Vec<f32>,
-}
-
-impl Procesador for Dis {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        separar(buf, &mut self.l, &mut self.r);
-        self.f.process(&mut self.l, &mut self.r);
-        juntar(buf, &self.l, &self.r, 1.0);
-    }
     fn ajustar(&mut self, p: &[f32]) {
-        let mut v = fast_dist::DEFAULTS;
-        v[fast_dist::PRE] = (128.0 + p[0] * 0.64) as i32;
-        v[fast_dist::THRESHOLD] = p[1].round() as i32;
-        v[fast_dist::TYPE] = (p[2] >= 0.5) as i32;
-        v[fast_dist::MIX] = (p[3] * 1.28) as i32;
-        v[fast_dist::POST] = (p[4] * 1.28) as i32;
-        self.f.set(&fast_dist::Settings { v });
+        self.p.clear();
+        self.p.extend_from_slice(p);
     }
     fn limpiar(&mut self) {}
 }
 
-struct Mol(stereo_shaper::StereoShaper);
-
-impl Procesador for Mol {
+impl Procesador for sonido::Moldeador {
     fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
+        sonido::Moldeador::procesar(self, buf);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        use stereo_shaper as m;
-        let mut v = m::DEFAULTS;
-        for (k, i) in [m::RIGHT_INTO_LEFT, m::LEFT, m::RIGHT, m::LEFT_INTO_RIGHT, m::DELAY, m::PHASE].into_iter().enumerate() {
-            let (a, z) = m::RANGES[i];
-            // 100 % es el nivel de siempre en los cuatro caminos, y el extremo en retraso y fase.
-            let tope = if k < 4 { m::UNITY } else if p[k] < 0.0 { -a } else { z };
-            v[i] = ((p[k] / 100.0 * tope as f32) as i32).clamp(a, z);
-        }
-        self.0.set(&m::Settings { v });
+        self.p = std::array::from_fn(|k| p[k] / 100.0);
     }
     fn limpiar(&mut self) {
-        self.0.flush();
-    }
-}
-
-fn ajuste_bal(p: &[f32]) -> balance::Settings {
-    let mut v = balance::DEFAULTS;
-    v[balance::BALANCE] = (p[0] * 1.28) as i32;
-    v[balance::VOLUME] = (p[1] * 2.56) as i32;
-    balance::Settings { v }
-}
-
-struct Bal(balance::Balance);
-
-impl Procesador for Bal {
-    fn procesar(&mut self, buf: &mut [f32]) {
-        Effect::process(&mut self.0, buf);
-    }
-    fn ajustar(&mut self, p: &[f32]) {
-        self.0.set(&ajuste_bal(p));
-    }
-    fn limpiar(&mut self) {
-        self.0.flush();
+        sonido::Moldeador::limpiar(self);
     }
 }
 
 /// La voz modula un acorde de sierras que el efecto mismo toca.
 struct Voc {
-    v: vocoder::Vocoder,
+    v: sonido::Vocoder,
     p: Vec<f32>,
     fases: [f64; 8],
-    l: Vec<f32>,
-    r: Vec<f32>,
-    pl: Vec<f32>,
-    pr: Vec<f32>,
-    sl: Vec<f32>,
-    sr: Vec<f32>,
+    otro: Vec<f32>,
 }
 
 impl Voc {
-    fn nuevo(p: &[f32]) -> Voc {
-        Voc { v: vocoder::Vocoder::new(SR, Self::params(p)), p: p.to_vec(), fases: std::array::from_fn(|i| i as f64 * 0.13), l: vec![], r: vec![], pl: vec![], pr: vec![], sl: vec![], sr: vec![] }
-    }
-
-    fn params(p: &[f32]) -> vocoder::Params {
-        vocoder::Params {
-            bands: p[2].round() as usize,
-            attack_ms: p[3] as f64,
-            release_ms: p[4] as f64,
-            noise: p[5] as f64 / 100.0 * 0.6,
-            // Las consonantes pasan solas por arriba.
-            mod_level: p[5] as f64 / 100.0 * 0.5,
-            ..Default::default()
-        }
+    fn nuevo() -> Voc {
+        Voc { v: sonido::Vocoder::nuevo(), p: vec![], fases: std::array::from_fn(|i| i as f64 * 0.13), otro: vec![] }
     }
 }
 
 impl Procesador for Voc {
     fn procesar(&mut self, buf: &mut [f32]) {
-        separar(buf, &mut self.l, &mut self.r);
-        let n = self.l.len();
-        for v in [&mut self.pl, &mut self.pr, &mut self.sl, &mut self.sr] {
-            v.clear();
-            v.resize(n, 0.0);
-        }
+        self.otro.clear();
+        self.otro.resize(buf.len(), 0.0);
         let notas: &[f64] = match self.p[1].round() as i32 {
             0 => &[0.0],
             1 => &[0.0, 7.0],
@@ -1277,27 +960,22 @@ impl Procesador for Voc {
             for (lado, des) in [(0usize, 0.9985), (1, 1.0015)] {
                 let paso = hz * des / SR as f64;
                 let f = &mut self.fases[k * 2 + lado];
-                let sal = if lado == 0 { &mut self.pl } else { &mut self.pr };
-                for x in sal.iter_mut() {
+                for x in self.otro.iter_mut().skip(lado).step_by(2) {
                     *f = (*f + paso).fract();
                     *x += ((*f * 2.0 - 1.0) * 0.35) as f32;
                 }
             }
         }
-        self.v.process((&self.l, &self.r), (&self.pl, &self.pr), (&mut self.sl, &mut self.sr));
+        self.v.procesar(buf, &mut self.otro);
         let m = self.p[6] / 100.0;
-        for (i, f) in buf.chunks_exact_mut(2).enumerate() {
-            f[0] += (self.sl[i] - f[0]) * m;
-            f[1] += (self.sr[i] - f[1]) * m;
-        }
+        buf.iter_mut().zip(&self.otro).for_each(|(x, y)| *x += (y - *x) * m);
     }
     fn ajustar(&mut self, p: &[f32]) {
-        if Self::params(p) != Self::params(&self.p) {
-            self.v.set(Self::params(p));
-        }
-        self.p = p.to_vec();
+        self.v.ajustar(p[2].round() as usize, p[3], p[4], p[5] / 100.0);
+        self.p.clear();
+        self.p.extend_from_slice(p);
     }
     fn limpiar(&mut self) {
-        self.v.reset();
+        self.v.limpiar();
     }
 }

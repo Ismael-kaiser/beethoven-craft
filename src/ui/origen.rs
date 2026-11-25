@@ -135,7 +135,7 @@ impl App {
         let (mut tocar, mut meter) = (false, None);
         u.horizontal(|ui| {
             ui.label(RichText::new(tiempo(o.t)).color(MAIN));
-            if boton_color(ui, &tabler::PLAYER_PLAY, o.tocando, "Reproducir el origen", GLYPH, 24.0).clicked() {
+            if boton_color(ui, &iconos::PLAYER_PLAY, o.tocando, "Reproducir el origen", GLYPH, 24.0).clicked() {
                 tocar = true;
             }
             if ui.button(crate::idioma::t("Entrada")).on_hover_text(crate::idioma::t("Marca el principio del tramo")).clicked() {

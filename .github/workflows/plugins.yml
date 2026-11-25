@@ -1,0 +1,86 @@
+# Arma los plugins VST3 y CLAP de Beethoven para Mac (Apple e Intel), Windows y Linux, y los abre en cada sistema para
+# comprobar que cargan. A mano solo arma; con una etiqueta los agrega a la versión publicada.
+name: Plugins
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  armar:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sistema: macos-latest, nombre: mac }
+          - { sistema: windows-latest, nombre: windows }
+          - { sistema: ubuntu-22.04, nombre: linux }
+    runs-on: ${{ matrix.sistema }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paquetes para compilar
+        if: matrix.nombre == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libpulse-dev libjack-jackd2-dev libudev-dev \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgtk-3-dev libxcb1-dev
+      - name: Rust
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: plugins-${{ matrix.nombre }}-${{ hashFiles('daw-demo/Cargo.lock', 'daw-demo/plugins/Cargo.lock') }}
+      - name: Armar
+        if: matrix.nombre != 'windows'
+        env:
+          MAC_UNIVERSAL: ${{ matrix.nombre == 'mac' && '1' || '' }}
+        run: daw-demo/plugins/empacar.sh
+      - name: Armar en Windows
+        if: matrix.nombre == 'windows'
+        run: daw-demo\plugins\empacar.ps1
+      - name: Abrirlos como otro programa
+        working-directory: daw-demo
+        run: cargo run --release --example paquete plugins/salida
+      - name: Juntar
+        shell: bash
+        run: |
+          mkdir -p listo
+          cp LICENSE-MIT LICENSE-APACHE daw-demo/plugins/salida/ 2>/dev/null || true
+          cp daw-demo/AVISOS.md daw-demo/plugins/salida/AVISOS.md
+          cd daw-demo/plugins/salida
+          f="BeethovenPlugins-${{ matrix.nombre }}"
+          case "${{ matrix.nombre }}" in
+            mac) ditto -c -k . "../../../listo/$f.zip" ;;
+            windows) 7z a -tzip "../../../listo/$f.zip" . ;;
+            linux) tar -czf "../../../listo/$f.tar.gz" . ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugins-${{ matrix.nombre }}
+          path: listo/*
+
+  publicar:
+    needs: armar
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquetes
+          merge-multiple: true
+      - name: Agregar a la versión
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        # La versión la crea «Publicar», que tarda más: se espera.
+        run: |
+          for i in $(seq 60); do gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 && break; sleep 60; done
+          gh release upload "$TAG" paquetes/* --clobber -R "$REPO"

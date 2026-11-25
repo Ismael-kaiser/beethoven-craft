@@ -80,7 +80,13 @@ impl App {
             self.pista = i;
         }
         let m = &mut self.p.mezcla[i];
-        x.context_menu(|ui| _ = ui.text_edit_singleline(&mut m.nombre));
+        x.context_menu(|ui| {
+            ui.text_edit_singleline(&mut m.nombre);
+            if (1..PRIMER_ENVIO).contains(&i) && ui.button(t("Pasar la pista a audio")).clicked() {
+                self.pasar = Some(i);
+                ui.close();
+            }
+        });
         let area = Rect::from_min_size(pos2(r.center().x - 16.0, n.bottom() + 5.0), vec2(32.0, 32.0));
         let mut c = ui.new_child(UiBuilder::new().max_rect(area).id_salt(("pan", i)));
         perilla(&mut c, "", &mut m.pan, -1.0, 1.0, 0.0, ACENTO, 32.0).on_hover_text(t("Izquierda · derecha"));
@@ -370,24 +376,38 @@ impl App {
     /// Las ventanas de los efectos abiertos.
     pub(super) fn ver_efectos(&mut self, ui: &mut Ui, z: Rect) {
         self.fx_abiertos.retain(|(i, k)| self.p.mezcla.get(*i).is_some_and(|m| *k < m.efectos.len()));
-        let mira = self.fx_abiertos.iter().rev().find(|(i, k)| self.p.mezcla[*i].efectos[*k].efecto == "ecualizador").map(|x| x.0);
+        // Se escucha la pista del ecualizador o de la interfaz propia que esté más al frente.
+        let mira = self
+            .fx_abiertos
+            .clone()
+            .into_iter()
+            .rev()
+            .find(|(i, k)| {
+                let e = self.p.mezcla[*i].efectos[*k].efecto.clone();
+                self.lienzo(&e).is_some()
+            })
+            .map(|x| x.0)
+            // Si no, la del instrumento que se está viendo.
+            .or_else(|| {
+                let c = self.p.canales.iter().find(|c| c.id == self.canal).map(|c| (c.instrumento.clone(), c.pista))?;
+                (self.abierta(Vista::Canal) && self.lienzo(&c.0).is_some()).then_some(c.1)
+            });
         self.estado.escucha.store(mira.map_or(u32::MAX, |i| i as u32), Relaxed);
         let mut cerrar = None;
         for (n, (i, k)) in self.fx_abiertos.clone().into_iter().enumerate() {
             let e = self.p.mezcla[i].efectos[k].clone();
             let nombre = format!("{} · {}", self.nombre_efecto(&e), self.p.mezcla[i].nombre);
             let logo = if e.plugin.is_none() { self.logo_de(ui.ctx(), &e.efecto) } else { None };
-            let lienzo = self.lienzo(&e.efecto).map(|x| vec2(x.ancho + 24.0, x.alto + 82.0));
+            let lienzo = self.lienzo(&e.efecto).map(|x| vec2((x.ancho + 24.0).max(460.0), x.alto + 82.0));
             let g = self.bib.ver(&e.efecto);
             let tam = match (&e.plugin, e.efecto.as_str(), g) {
                 (Some(_), ..) => vec2(340.0, 420.0),
                 _ if lienzo.is_some() => lienzo.unwrap_or_default(),
-                (_, "ecualizador", _) => vec2(620.0, 360.0),
-                (_, "compresor", _) => vec2(440.0, 330.0),
                 (.., Some(g)) => {
                     // A la medida de sus perillas, en filas de cinco.
                     let c = g.ficha.controles.len().max(1);
-                    vec2(c.clamp(3, 5) as f32 * 70.0 + 24.0, c.div_ceil(5) as f32 * 78.0 + 86.0)
+                    let grafica = if super::grafica::Clase::de(&g.ficha.grupo.es).is_some() { 118.0 } else { 0.0 };
+                    vec2((c.min(6) as f32 * 70.0 + 76.0).max(480.0), c.div_ceil(6) as f32 * 80.0 + 130.0 + grafica)
                 }
                 _ => vec2(300.0, 140.0),
             };
@@ -434,9 +454,24 @@ impl App {
     fn cuerpo_efecto(&mut self, ui: &mut Ui, i: usize, k: usize) {
         let onda = (self.estado.escucha.load(Relaxed) == i as u32 && self.tocando()).then(|| self.estado.onda());
         let sr = self.bib.sr;
-        let momento = self.momento(ui, i);
+        let mut momento = self.momento(ui, i);
+        if let Some(g) = self.bib.ver(&self.p.mezcla[i].efectos[k].efecto)
+            && let Some(r) = g.receta.clone()
+        {
+            if let Some(x) = self.bib.medidas.get(&(i, k)) {
+                momento.medidas = r.nombres_medidas().zip(x.iter()).map(|(n, v)| (n.to_string(), f32::from_bits(v.load(Relaxed)))).collect();
+            }
+            if r.con_huella() {
+                let e = self.p.mezcla[i].efectos[k].clone();
+                momento.huella = self.bib.huella(&e).and_then(|m| m.impulso.as_ref().map(|h| h.picos.clone())).unwrap_or_default();
+                momento.archivo = e.muestra.map_or(String::new(), |r| Path::new(&r).file_name().unwrap_or_default().to_string_lossy().into());
+            }
+        }
         let clave = self.p.mezcla[i].efectos[k].efecto.clone();
         self.lienzo(&clave);
+        let ficha = self.bib.ver(&clave).map(|g| g.ficha.clone());
+        let controladores: Vec<_> = self.controladores().into_iter().filter(|c| c.0 != (i, k)).collect();
+        let pistas: Vec<String> = self.p.mezcla.iter().map(|m| m.nombre.clone()).collect();
         let e = &mut self.p.mezcla[i].efectos[k];
         ui.horizontal(|ui| {
             if foco(ui, e.activo, t(if e.activo { "Prendido" } else { "Apagado" }), ACENTO).clicked() {
@@ -445,6 +480,18 @@ impl App {
             ui.add(Slider::new(&mut e.mezcla, 0.0..=1.0).show_value(false).text(t("Cuánto efecto")));
             if e.plugin.is_none() && ui.button(t("Reiniciar")).clicked() {
                 e.controles.clear();
+            }
+            if e.plugin.is_none()
+                && let Some(f) = ficha.as_ref().filter(|f| !f.presets.is_empty())
+            {
+                ui.menu_button(t("Preajustes"), |ui| {
+                    for (nombre, v) in &f.presets {
+                        if ui.button(nombre.ver()).clicked() {
+                            e.controles = v.clone();
+                            ui.close();
+                        }
+                    }
+                });
             }
         });
         ui.add_space(4.0);
@@ -459,19 +506,58 @@ impl App {
             return;
         };
         if let Some((_, Some(it))) = self.lienzos.get_mut(&clave) {
-            return lienzo::pintar(ui, it, &g.ficha, &mut e.controles, momento);
-        }
-        if g.clave == "ecualizador" && !g.propio {
-            let alto = (ui.available_height() - 4.0).max(120.0);
-            ecualizador::curva(ui, &g.ficha, &mut e.controles, ui.id().with(("eq", i, k)), alto, onda.as_deref(), sr);
-            if ui.rect_contains_pointer(ui.max_rect()) {
-                self.pista_ayuda = t("Arrastra cada punto: frecuencia y ganancia · rueda sobre un punto: ancho · doble clic: en cero").into();
+            let mut ent = lienzo::Entorno {
+                activo: Some(&mut e.activo),
+                datos: Some(e.datos.clone()),
+                receta: g.receta.as_deref(),
+                onda: onda.clone(),
+                sr,
+                pistas,
+                controladores,
+                vinculados: e.vinculos.keys().cloned().collect(),
+                ..Default::default()
+            };
+            lienzo::pintar(ui, it, &g.ficha, &mut e.controles, momento, &mut ent);
+            let (elegir, quitar, vincular, datos) = (ent.elegir, ent.quitar, ent.vincular.take(), ent.datos.take());
+            if let Some(d) = datos {
+                e.datos = d;
+            }
+            if quitar {
+                e.muestra = None;
+            }
+            if elegir && let Some(r) = rfd::FileDialog::new().add_filter("Audio", crate::decodificar::EXTENSIONES).pick_file() {
+                e.muestra = Some(r.to_string_lossy().into());
+            }
+            if let Some((c, de)) = vincular {
+                let id = de.map(|d| self.id_de(d));
+                let v = &mut self.p.mezcla[i].efectos[k].vinculos;
+                match id {
+                    Some(id) => _ = v.insert(c, id),
+                    None => _ = v.remove(&c),
+                }
             }
             return;
         }
-        if g.clave == "compresor" && !g.propio {
-            ecualizador::codo(ui, &g.ficha, &e.controles);
+        // El mismo panel de metal que los que traen su diseño, con un color por familia.
+        let tinte = match g.ficha.grupo.es.as_str() {
+            "Dinámica" => Color32::from_rgb(0x55, 0x40, 0x5e),
+            "Tono" => Color32::from_rgb(0x3c, 0x55, 0x38),
+            "Espacio" => Color32::from_rgb(0x2e, 0x46, 0x70),
+            "Movimiento" => Color32::from_rgb(0x24, 0x5a, 0x58),
+            "Carácter" => Color32::from_rgb(0x74, 0x40, 0x2e),
+            _ => Color32::from_rgb(0x4c, 0x50, 0x58),
+        };
+        let panel = ui.available_rect_before_wrap();
+        torno::acero(ui.painter(), panel, 9.0, tinte, 1.0);
+        let mut ui = ui.new_child(UiBuilder::new().max_rect(panel.shrink2(vec2(18.0, 17.0))));
+        let ui = &mut ui;
+        if let (Some(c), Some(r)) = (super::grafica::Clase::de(&g.ficha.grupo.es), g.receta.as_deref()) {
+            super::grafica::pintar(ui, c, r, &e.controles, sr, false, ui.id().with(("grafica", i, k, &clave)));
         }
-        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| lado::controles(ui, &g.ficha, &mut e.controles, ACENTO));
+        ui.add_space(7.0);
+        let charola = ui.available_rect_before_wrap();
+        torno::bandeja(ui.painter(), charola, 7.0, Color32::from_rgb(0x2a, 0x2c, 0x30), 1.0);
+        let mut ui = ui.new_child(UiBuilder::new().max_rect(charola.shrink2(vec2(8.0, 6.0))));
+        ScrollArea::vertical().auto_shrink(false).show(&mut ui, |ui| lado::controles(ui, &g.ficha, &mut e.controles, ACENTO));
     }
 }

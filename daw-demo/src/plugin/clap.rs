@@ -123,6 +123,7 @@ union Ev {
     cab: clap_event_header,
     nota: clap_event_note,
     control: clap_event_param_value,
+    midi: clap_event_midi,
 }
 
 struct Lista {
@@ -230,6 +231,14 @@ impl Clap {
             }
             c.activo = true;
             Ok(c)
+        }
+    }
+
+    pub fn latencia(&self) -> u32 {
+        unsafe {
+            let ext = (*self.p).get_extension.map_or(null(), |g| g(self.p, clap_sys::ext::latency::CLAP_EXT_LATENCY.as_ptr()));
+            let l = ext as *const clap_sys::ext::latency::clap_plugin_latency;
+            l.as_ref().and_then(|l| l.get).map_or(0, |g| g(self.p))
         }
     }
 
@@ -343,6 +352,8 @@ impl Clap {
                     velocity: fuerza,
                 },
             };
+            let midi =
+                |data: [u8; 3]| Ev { midi: clap_event_midi { header: cab(CLAP_EVENT_MIDI, size_of::<clap_event_midi>()), port_index: 0, data } };
             for e in ev {
                 self.lista.v.push(match *e {
                     Evento::Nota { tono, fuerza } => nota(CLAP_EVENT_NOTE_ON, tono, fuerza as f64),
@@ -359,6 +370,11 @@ impl Clap {
                             value: valor,
                         },
                     },
+                    Evento::Rueda(v) => {
+                        let q = ((v.clamp(-1.0, 1.0) * 8191.0) as i32 + 8192) as u16;
+                        midi([0xE0, (q & 127) as u8, (q >> 7) as u8])
+                    }
+                    Evento::Mando { n, v } => midi([0xB0, n & 127, (v.clamp(0.0, 1.0) * 127.0) as u8]),
                 });
             }
             let en = clap_input_events { ctx: &mut *self.lista as *mut Lista as *mut c_void, size: Some(cuantos), get: Some(uno) };

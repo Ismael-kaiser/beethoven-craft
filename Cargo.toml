@@ -1,20 +1,19 @@
 [workspace]
-members = ["crates/audio-fx", "crates/craft-gpu", "crates/craft-trans"]
+members = ["crates/craft-gpu", "crates/craft-trans"]
 # Beethoven DAW (daw-demo) es otro proyecto de Cargo y se compila aparte (comparte target/).
 exclude = ["daw-demo"]
 
 [package]
 name = "toma-uno"
-version = "0.12.0"
+version = "0.12.4"
 edition = "2024"
-license = "(MIT OR Apache-2.0) AND GPL-3.0-or-later"
+license = "MIT OR Apache-2.0"
 description = "Compositor de video y audio"
 
 [lib]
 name = "toma_uno"
 
 [dependencies]
-audio-fx = { path = "crates/audio-fx" }
 craft-gpu = { path = "crates/craft-gpu" }
 craft-trans = { path = "crates/craft-trans" }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu"] }

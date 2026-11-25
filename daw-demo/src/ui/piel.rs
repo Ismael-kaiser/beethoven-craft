@@ -118,6 +118,12 @@ pub fn pantalla(ui: &mut Ui, s: &str, ancho: f32, n: f32) -> Response {
 
 /// Perilla de consola. Arrastrar arriba o abajo la mueve, Mayús afina y doble clic la regresa.
 pub fn perilla(ui: &mut Ui, nombre: &str, v: &mut f32, min: f32, max: f32, fabrica: f32, c: Color32, tam: f32) -> Response {
+    perilla_de(ui, nombre, v, min, max, fabrica, c, tam, Color32::from_gray(0x50))
+}
+
+/// La misma, con la tapa de otro metal.
+#[allow(clippy::too_many_arguments)]
+pub fn perilla_de(ui: &mut Ui, nombre: &str, v: &mut f32, min: f32, max: f32, fabrica: f32, c: Color32, tam: f32, metal: Color32) -> Response {
     let con = !nombre.is_empty();
     let ancho = if con { (tam + 22.0).max(60.0) } else { tam };
     let (r, mut resp) = ui.allocate_exact_size(vec2(ancho, tam + if con { 30.0 } else { 0.0 }), Sense::click_and_drag());
@@ -156,29 +162,12 @@ pub fn perilla(ui: &mut Ui, nombre: &str, v: &mut f32, min: f32, max: f32, fabri
     };
     let hover = resp.hovered() || resp.dragged();
     let cero = if min < 0.0 && max > 0.0 { a01(0.0) } else { 0.0 };
-    arco(0.0, 1.0, 4.0, Color32::from_rgb(0x10, 0x10, 0x12));
-    arco(cero, x, 6.0, c.gamma_multiply(0.18));
-    arco(cero, x, 2.6, if hover { mezcla(c, Color32::WHITE, 0.3) } else { c });
-    // La tapa: sombra, canto, cuerpo que aclara hacia arriba, estrías y brillo.
-    let d = rad - 4.0;
-    p.circle_filled(o + vec2(0.0, d * 0.16), d + 1.0, Color32::from_black_alpha(130));
-    p.circle_filled(o, d, Color32::from_rgb(0x1c, 0x1c, 0x1e));
-    let (claro, oscuro) = if hover { (0x92, 0x3e) } else { (0x7c, 0x34) };
-    for i in 0..6 {
-        let f = i as f32 / 5.0;
-        let rr = (d - 1.0) * (1.0 - 0.45 * f);
-        p.circle_filled(o - vec2(0.0, (d - 1.0 - rr) * 0.55), rr, mezcla(Color32::from_gray(oscuro), Color32::from_gray(claro), f));
-    }
-    if d > 8.0 {
-        for i in 0..18 {
-            let u = Vec2::angled(i as f32 / 18.0 * 2.0 * PI);
-            p.line_segment([o + u * (d - 2.2), o + u * (d - 0.8)], Stroke::new(0.8, Color32::from_black_alpha(80)));
-        }
-    }
-    p.circle_filled(o + vec2(-d * 0.22, -d * 0.36), d * 0.3, Color32::from_white_alpha(18));
-    let u = Vec2::angled(ang(x));
-    p.line_segment([o + u * d * 0.2, o + u * (d - 1.5)], Stroke::new(3.2, Color32::from_black_alpha(150)));
-    p.line_segment([o + u * d * 0.2, o + u * (d - 1.5)], Stroke::new(1.8, Color32::from_gray(0xf4)));
+    let g = (tam * 0.07).clamp(2.6, 5.0);
+    super::torno::canal(p, o, rad - 1.0, g + 1.6);
+    arco(cero, x, g + 3.6, c.gamma_multiply(0.16));
+    arco(cero, x, g, if hover { mezcla(c, Color32::WHITE, 0.35) } else { c });
+    arco(cero, x, g * 0.35, mezcla(c, Color32::WHITE, 0.55));
+    super::torno::tapa(p, o, rad - g - 2.0, ang(x), metal, c, hover);
     if con {
         let pone = |s: String, y: f32, col: Color32| {
             let g = p.layout_no_wrap(s, letra(12.0), col);
@@ -307,6 +296,7 @@ pub fn titulo(ui: &mut Ui, todo: Rect, nombre: &str, activa: bool, id: Id, enter
     for i in 0..if entera { 3 } else { 1 } {
         let q = Rect::from_center_size(barra.right_center() - vec2(17.0 + 26.0 * i as f32, 0.0), vec2(20.0, 18.0));
         let b = ui.interact(q, id.with(i), Sense::click()).on_hover_text(crate::idioma::t(ayuda[i]));
+        b.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, crate::idioma::t(ayuda[i])));
         relieve(ui.painter(), q, 4, CAJA, b.hovered(), b.is_pointer_button_down_on());
         let (o, st, p) = (q.center(), Stroke::new(1.4, TEXTO), ui.painter());
         match i {

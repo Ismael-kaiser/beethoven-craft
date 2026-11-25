@@ -1,7 +1,8 @@
-//! Instrumentos: el sintetizador de tres osciladores de `audio-fx` (GPL-3.0), una batería propia y muestras.
+// Beethoven Craft. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
+//! Instrumentos: un sintetizador de tres osciladores, una batería y muestras.
 use crate::medios::Audio;
 use crate::modelo::{Instrumento, SR};
-use audio_fx::trio::{dsp, envelope, modelo::Envelope};
+use crate::sonido::{Sinte, Timbre};
 use std::sync::{Arc, OnceLock};
 
 /// Piezas de la batería: tecla, nombre.
@@ -104,45 +105,16 @@ pub fn nombre_sonido(i: &Instrumento) -> String {
     }
 }
 
-/// Valor de perilla del sintetizador para `s` segundos.
-fn perilla(s: f32) -> i32 {
-    let (mut a, mut b) = (100, 65536);
-    while a < b {
-        let m = (a + b) / 2;
-        if (envelope::knob_seconds(m) as f32) < s { a = m + 1 } else { b = m }
+fn timbre(v: &[f32]) -> Timbre {
+    Timbre {
+        onda: std::array::from_fn(|k| v[k].round().clamp(0.0, 5.0) as u8),
+        semitonos: [0.0, v[3], v[4]],
+        mezcla: [v[5] / 100.0, v[6] / 100.0],
+        abierto: v[7] / 100.0,
+        adsr: [v[8] / 1000.0, v[9] / 1000.0, v[10] / 100.0, v[11] / 1000.0],
+        corte: (v[12] < 99.5).then(|| 40.0 * 400f32.powf(v[12] / 100.0)),
+        filo: v[13] / 100.0,
     }
-    a
-}
-
-fn bloque(v: &[f32]) -> dsp::Block {
-    let osc = |n: usize, semis: f32| dsp::Osc {
-        shape: v[n].round().clamp(0.0, 5.0) as u8,
-        semis: semis as f64 - 12.0,
-        pan: if n == 2 { 0.0 } else { (if n == 0 { -1.0 } else { 1.0 }) * v[7] as f64 / 200.0 },
-        detune: v[7] as f64 / 12.0,
-        ..Default::default()
-    };
-    let mut b = dsp::Block {
-        osc: [osc(0, 0.0), osc(1, v[3]), osc(2, v[4])],
-        m2: v[5] as f64 / 100.0,
-        m3: v[6] as f64 / 100.0,
-        hq: true,
-        cutoff: if v[12] >= 99.5 { 256.0 } else { v[12] as f64 * 2.56 },
-        resonance: v[13] as f64 * 2.56,
-        rand: 0.2,
-        ..Default::default()
-    };
-    b.targets[dsp::T_VOL].env = envelope::Params::new(&Envelope {
-        enabled: true,
-        delay: 100,
-        attack: perilla(v[8] / 1000.0),
-        hold: 100,
-        decay: perilla(v[9] / 1000.0),
-        sustain: (v[10] * 1.28) as i32,
-        release: perilla(v[11] / 1000.0),
-        ..Default::default()
-    });
-    b
 }
 
 /// Sonidos de batería hechos al vuelo una vez.
@@ -223,12 +195,10 @@ struct VozMuestra {
 /// Un instrumento sonando.
 pub struct InstrRT {
     tipo: Instrumento,
-    trio: dsp::Engine,
-    bloque: dsp::Block,
+    sinte: Sinte,
+    timbre: Timbre,
     muestra: Option<Arc<Audio>>,
     voces: Vec<VozMuestra>,
-    l: Vec<f32>,
-    r: Vec<f32>,
 }
 
 const APAGADO: f32 = 1200.0;
@@ -238,12 +208,10 @@ impl InstrRT {
         let _ = bateria();
         let mut i = InstrRT {
             tipo: tipo.clone(),
-            trio: dsp::Engine::new(SR as f32),
-            bloque: dsp::Block::default(),
+            sinte: Sinte::nuevo(),
+            timbre: Timbre::default(),
             muestra,
             voces: Vec::with_capacity(64),
-            l: vec![],
-            r: vec![],
         };
         i.ajustar(tipo, None);
         i
@@ -252,7 +220,7 @@ impl InstrRT {
     pub fn ajustar(&mut self, tipo: &Instrumento, muestra: Option<Arc<Audio>>) {
         if let Instrumento::Trio(v) = tipo {
             if v.len() == TRIO.len() {
-                self.bloque = bloque(v);
+                self.timbre = timbre(v);
             }
         }
         if std::mem::discriminant(tipo) != std::mem::discriminant(&self.tipo) {
@@ -265,7 +233,7 @@ impl InstrRT {
     }
 
     pub fn callar(&mut self) {
-        self.trio.reset();
+        self.sinte.callar();
         self.voces.clear();
     }
 
@@ -273,9 +241,9 @@ impl InstrRT {
         match &self.tipo {
             Instrumento::Trio(_) => {
                 if on {
-                    self.trio.note_on(tecla, vel as f32 / 128.0, None, &self.bloque);
+                    self.sinte.tocar(tecla, vel as f32 / 128.0);
                 } else {
-                    self.trio.note_off(tecla);
+                    self.sinte.soltar(tecla);
                 }
             }
             Instrumento::Bateria => {
@@ -308,19 +276,8 @@ impl InstrRT {
 
     /// Suma el instrumento en `out` (estéreo intercalado).
     pub fn sonar(&mut self, out: &mut [f32]) {
-        let n = out.len() / 2;
         match &self.tipo {
-            Instrumento::Trio(_) => {
-                self.l.clear();
-                self.l.resize(n, 0.0);
-                self.r.clear();
-                self.r.resize(n, 0.0);
-                self.trio.render(&mut self.l, &mut self.r, &self.bloque);
-                for (i, f) in out.chunks_exact_mut(2).enumerate() {
-                    f[0] += self.l[i] * 0.35;
-                    f[1] += self.r[i] * 0.35;
-                }
-            }
+            Instrumento::Trio(_) => self.sinte.sonar(out, &self.timbre, 0.35),
             _ => {
                 let bat = matches!(self.tipo, Instrumento::Bateria);
                 let muestra = self.muestra.clone();

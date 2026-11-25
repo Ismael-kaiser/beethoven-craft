@@ -1,5 +1,6 @@
 -- Toca el WAV del canal; la nota Do5 (60) lo toca tal cual.
 return {
+  oculto = true,
   nombre = "Muestra", grupo = "Muestras", voces = 8,
   controles = {
     { "tono", "Tono", -24, 24, 0 },

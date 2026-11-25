@@ -21,18 +21,18 @@ pub enum Herramienta {
 }
 
 /// (herramienta, ícono, tecla, ayuda)
-pub const HERRAMIENTAS: [(Herramienta, &tabler::TablerIcon, egui::Key, &str); 11] = [
-    (Herramienta::Flecha, &tabler::HAND_FINGER, egui::Key::V, "Selección (V): mover, recortar y elegir; Shift suma a la selección"),
-    (Herramienta::Adelante, &tabler::ARROW_AUTOFIT_RIGHT, egui::Key::A, "Selección hacia adelante (A): mueve el clip y todo lo que sigue"),
-    (Herramienta::Ondulado, &tabler::ARROWS_HORIZONTAL, egui::Key::B, "Recorte ondulado (B): recorta y recorre lo demás, sin huecos"),
-    (Herramienta::Rodar, &tabler::BLEND_MODE, egui::Key::N, "Rodar (N): mueve el corte entre dos clips"),
-    (Herramienta::Estirar, &tabler::STOPWATCH, egui::Key::X, "Estirar (X): cambia la velocidad jalando la orilla"),
-    (Herramienta::Cuchilla, &tabler::SLICE, egui::Key::C, "Cuchilla (C): corta; con Shift corta todas las pistas"),
-    (Herramienta::Deslizar, &tabler::ROTATE_CLOCKWISE_2, egui::Key::Y, "Deslizar (Y): cambia qué parte del archivo se ve, sin mover el clip"),
-    (Herramienta::Correr, &tabler::REPEAT, egui::Key::U, "Correr (U): mueve el clip y ajusta a sus vecinos"),
-    (Herramienta::Mano, &tabler::MAXIMIZE, egui::Key::H, "Mano (H): desplaza la vista"),
-    (Herramienta::Lupa, &tabler::ZOOM_IN, egui::Key::Z, "Lupa (Z): acerca; con Alt aleja"),
-    (Herramienta::Texto, &tabler::FILE_TYPOGRAPHY, egui::Key::T, "Texto (T): clic en una pista de video pone un título"),
+pub const HERRAMIENTAS: [(Herramienta, &iconos::Icono, egui::Key, &str); 11] = [
+    (Herramienta::Flecha, &iconos::HAND_FINGER, egui::Key::V, "Selección (V): mover, recortar y elegir; Shift suma a la selección"),
+    (Herramienta::Adelante, &iconos::ARROW_AUTOFIT_RIGHT, egui::Key::A, "Selección hacia adelante (A): mueve el clip y todo lo que sigue"),
+    (Herramienta::Ondulado, &iconos::ARROWS_HORIZONTAL, egui::Key::B, "Recorte ondulado (B): recorta y recorre lo demás, sin huecos"),
+    (Herramienta::Rodar, &iconos::BLEND_MODE, egui::Key::N, "Rodar (N): mueve el corte entre dos clips"),
+    (Herramienta::Estirar, &iconos::STOPWATCH, egui::Key::X, "Estirar (X): cambia la velocidad jalando la orilla"),
+    (Herramienta::Cuchilla, &iconos::SLICE, egui::Key::C, "Cuchilla (C): corta; con Shift corta todas las pistas"),
+    (Herramienta::Deslizar, &iconos::ROTATE_CLOCKWISE_2, egui::Key::Y, "Deslizar (Y): cambia qué parte del archivo se ve, sin mover el clip"),
+    (Herramienta::Correr, &iconos::REPEAT, egui::Key::U, "Correr (U): mueve el clip y ajusta a sus vecinos"),
+    (Herramienta::Mano, &iconos::MAXIMIZE, egui::Key::H, "Mano (H): desplaza la vista"),
+    (Herramienta::Lupa, &iconos::ZOOM_IN, egui::Key::Z, "Lupa (Z): acerca; con Alt aleja"),
+    (Herramienta::Texto, &iconos::FILE_TYPOGRAPHY, egui::Key::T, "Texto (T): clic en una pista de video pone un título"),
 ];
 
 pub struct Estado {
@@ -1432,7 +1432,7 @@ impl App {
             }
             let tr = tit.intersect(carril);
             let pt = ui.painter_at(tr);
-            icono(&pt, &tabler::WAVE_SINE, Rect::from_min_size(tr.min + vec2(5.0, 3.0), Vec2::splat(12.0)), Color32::WHITE);
+            icono(&pt, &iconos::WAVE_SINE, Rect::from_min_size(tr.min + vec2(5.0, 3.0), Vec2::splat(12.0)), Color32::WHITE);
             let mut tags: Vec<(String, Color32)> = vec![];
             if let Some(b) = q.bus.and_then(|b| self.p.bus(b)) {
                 tags.push((format!("→ {}", b.nombre), TAG_FX));
@@ -1604,10 +1604,10 @@ impl App {
             au.activa = !au.activa;
         }
         u.label(RichText::new(crate::idioma::t(&nombre)).size(13.0).color(HIGHLIGHT));
-        if boton_color(&mut u, &tabler::MINUS, false, "Ocultar la curva", TEXT_DIM, 18.0).clicked() {
+        if boton_color(&mut u, &iconos::MINUS, false, "Ocultar la curva", TEXT_DIM, 18.0).clicked() {
             ac.push(Accion::AutoOcultar(id));
         }
-        if boton_color(&mut u, &tabler::X, false, "Borrar la automatización", TEXT_DIM, 18.0).clicked() {
+        if boton_color(&mut u, &iconos::X, false, "Borrar la automatización", TEXT_DIM, 18.0).clicked() {
             ac.push(Accion::AutoBorrar(id));
         }
     }

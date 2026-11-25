@@ -3,8 +3,7 @@
 use super::*;
 use crate::receta::{Banda, banda, respuesta};
 
-const BANDAS: [(Banda, &str); 6] =
-    [(Banda::Graves, "1"), (Banda::Campana, "2"), (Banda::Campana, "3"), (Banda::Campana, "4"), (Banda::Campana, "5"), (Banda::Agudos, "6")];
+const TIPOS: [Banda; 4] = [Banda::Campana, Banda::Graves, Banda::Agudos, Banda::Muesca];
 const TONOS: [Color32; 6] = [
     Color32::from_rgb(0xff, 0x8a, 0x6a),
     Color32::from_rgb(0xff, 0xc8, 0x5e),
@@ -18,7 +17,7 @@ const DB: f32 = 20.0;
 pub fn curva(ui: &mut Ui, f: &crate::lua::Ficha, v: &mut BTreeMap<String, f32>, id: Id, alto: f32, onda: Option<&[f32]>, sr: f32) {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), alto), Sense::click_and_drag());
     let p = ui.painter_at(r.expand(1.0));
-    hueco(&p, r, 5, HUECO);
+    torno::pantalla(ui.painter(), r, 5.0, 1.0);
     let x_de = |hz: f32| r.left() + r.width() * (hz / 20.0).ln() / 1000f32.ln();
     let hz_de = |x: f32| 20.0 * ((x - r.left()) / r.width() * 1000f32.ln()).exp();
     let y_de = |db: f32| r.center().y - db / DB * r.height() / 2.0;
@@ -56,11 +55,21 @@ pub fn curva(ui: &mut Ui, f: &crate::lua::Ficha, v: &mut BTreeMap<String, f32>, 
     p.add(Shape::mesh(m));
     ui.data_mut(|d| d.insert_temp(memoria, esp));
     let lee = |v: &BTreeMap<String, f32>, k: String| v.get(&k).copied().or(f.controles.iter().find(|c| c.clave == k).map(|c| c.valor)).unwrap_or(0.0);
-    let b: [(f32, f32, f32); 6] =
-        std::array::from_fn(|i| (lee(v, format!("h{}", i + 1)), lee(v, format!("g{}", i + 1)), lee(v, format!("q{}", i + 1))));
-    let k = std::array::from_fn::<_, 6, _>(|i| banda(BANDAS[i].0, b[i].0, b[i].1, b[i].2, 48000.0));
+    // Tantas bandas como «h1», «h2»… tenga el guion.
+    let bandas = (1..=16).take_while(|i| f.controles.iter().any(|c| c.clave == format!("h{i}"))).count();
+    let b: Vec<(f32, f32, f32)> =
+        (0..bandas).map(|i| (lee(v, format!("h{}", i + 1)), lee(v, format!("g{}", i + 1)), lee(v, format!("q{}", i + 1)))).collect();
+    let tipo = |i: usize| TIPOS[(lee(v, format!("t{}", i + 1)).round() as usize).min(3)];
+    let k: Vec<[f32; 5]> =
+        (0..bandas).map(|i| banda(tipo(i), b[i].0, b[i].1, if tipo(i) == Banda::Muesca { b[i].2 * 2.0 } else { b[i].2 }, 48000.0)).collect();
+    let (corta, tope) = (lee(v, "corta".into()), lee(v, "tope".into()));
     let punto = |i: usize| pos2(x_de(b[i].0), y_de(b[i].1));
-    let en = |x: f32| k.iter().map(|k| respuesta(k, hz_de(x), 48000.0)).sum::<f32>();
+    let corte = |r: f32| -10.0 * (1.0 + r.powi(4)).log10();
+    let en = |x: f32| {
+        let hz = hz_de(x);
+        let suma = k.iter().map(|k| respuesta(k, hz, 48000.0)).sum::<f32>();
+        suma + if corta > 20.5 { corte(corta / hz) } else { 0.0 } + if tope > 0.0 && tope < 19900.0 { corte(hz / tope) } else { 0.0 }
+    };
     let pts: Vec<Pos2> = (0..=r.width() as usize / 2)
         .map(|i| r.left() + i as f32 * 2.0)
         .map(|x| pos2(x, y_de(en(x)).clamp(r.top() + 1.0, r.bottom() - 1.0)))
@@ -81,19 +90,19 @@ pub fn curva(ui: &mut Ui, f: &crate::lua::Ficha, v: &mut BTreeMap<String, f32>, 
     let o = ui.input(|i| i.pointer.interact_pos());
     let cerca = o
         .filter(|o| r.contains(*o))
-        .and_then(|o| (0..6).map(|i| (i, punto(i).distance(o))).filter(|x| x.1 < 14.0).min_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0));
+        .and_then(|o| (0..bandas).map(|i| (i, punto(i).distance(o))).filter(|x| x.1 < 14.0).min_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0));
     let dato = id.with("banda");
     if resp.drag_started() || resp.is_pointer_button_down_on() && ui.input(|i| i.pointer.any_pressed()) {
         ui.data_mut(|d| d.insert_temp(dato, cerca));
     }
     let tomada: Option<usize> = ui.data(|d| d.get_temp(dato)).flatten();
-    for i in 0..6 {
+    for i in 0..bandas {
         let q = punto(i);
         let el = tomada == Some(i) || cerca == Some(i);
-        p.circle_filled(q, if el { 8.0 } else { 6.5 }, TONOS[i]);
+        p.circle_filled(q, if el { 8.0 } else { 6.5 }, TONOS[i % TONOS.len()]);
         p.circle_filled(q - vec2(1.5, 2.0), 2.2, Color32::from_white_alpha(130));
         p.circle_stroke(q, if el { 8.0 } else { 6.5 }, Stroke::new(1.0, Color32::BLACK));
-        p.text(q, Align2::CENTER_CENTER, BANDAS[i].1, letra(11.0), FONDO);
+        p.text(q, Align2::CENTER_CENTER, format!("{}", i + 1), letra(11.0), FONDO);
     }
     let mut pone = |i: usize, k: &str, x: f32| {
         let clave = format!("{k}{}", i + 1);
@@ -155,25 +164,4 @@ pub fn espectro(x: &[f32], sr: f32, n: usize) -> Vec<f32> {
             20.0 * (m * 4.0 / l as f32).max(1e-5).log10()
         })
         .collect()
-}
-
-/// La curva de un compresor: lo que entra contra lo que sale.
-pub fn codo(ui: &mut Ui, f: &crate::lua::Ficha, v: &BTreeMap<String, f32>) {
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 120.0), Sense::hover());
-    let p = ui.painter_at(r.expand(1.0));
-    hueco(&p, r, 5, HUECO);
-    let lee = |k: &str| v.get(k).copied().or(f.controles.iter().find(|c| c.clave == k).map(|c| c.valor)).unwrap_or(0.0);
-    let (u, z, s) = (lee("umbral"), lee("razon"), lee("sube"));
-    let x = |db: f32| r.left() + (db + 60.0) / 60.0 * r.width();
-    let y = |db: f32| r.bottom() - (db + 60.0) / 66.0 * r.height();
-    for db in [-48.0, -36.0, -24.0, -12.0, 0.0] {
-        p.vline(x(db), r.y_range(), Stroke::new(1.0, Color32::from_white_alpha(12)));
-        p.hline(r.x_range(), y(db), Stroke::new(1.0, Color32::from_white_alpha(12)));
-    }
-    p.line_segment([pos2(x(-60.0), y(-60.0)), pos2(x(0.0), y(0.0))], Stroke::new(1.0, Color32::from_white_alpha(40)));
-    let sale = |db: f32| if db > u { u + (db - u) / z } else { db } + s;
-    let pts = (0..=120).map(|i| -60.0 + i as f32 * 0.5).map(|db| pos2(x(db), y(sale(db)))).collect();
-    p.add(Shape::line(pts, Stroke::new(2.0, ACENTO)));
-    p.vline(x(u), r.y_range(), Stroke::new(1.0, ACENTO.gamma_multiply(0.4)));
-    p.circle_filled(pos2(x(u), y(sale(u))), 4.5, ACENTO);
 }

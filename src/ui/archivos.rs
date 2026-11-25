@@ -340,17 +340,17 @@ impl Estado {
     }
 }
 
-fn dibujo(tipo: Tipo, abierta: bool) -> &'static tabler::TablerIcon {
+fn dibujo(tipo: Tipo, abierta: bool) -> &'static iconos::Icono {
     match tipo {
-        Tipo::Carpeta if abierta => &tabler::FOLDER_OPEN,
-        Tipo::Carpeta => &tabler::FOLDER,
-        Tipo::Video => &tabler::MOVIE,
-        Tipo::Audio => &tabler::FILE_MUSIC,
-        Tipo::Imagen => &tabler::SQUARES,
-        Tipo::Proyecto => &tabler::FILE_STAR,
-        Tipo::Midi => &tabler::PIANO,
-        Tipo::Subtitulos => &tabler::FILE_TEXT,
-        Tipo::Otro => &tabler::FILE,
+        Tipo::Carpeta if abierta => &iconos::FOLDER_OPEN,
+        Tipo::Carpeta => &iconos::FOLDER,
+        Tipo::Video => &iconos::MOVIE,
+        Tipo::Audio => &iconos::FILE_MUSIC,
+        Tipo::Imagen => &iconos::SQUARES,
+        Tipo::Proyecto => &iconos::FILE_STAR,
+        Tipo::Midi => &iconos::PIANO,
+        Tipo::Subtitulos => &iconos::FILE_TEXT,
+        Tipo::Otro => &iconos::FILE,
     }
 }
 
@@ -487,16 +487,16 @@ impl App {
     fn cabecera_archivos(&mut self, ui: &mut Ui, amplio: bool) {
         ui.spacing_mut().item_spacing.x = 3.0;
         let a = &mut self.archivos;
-        if boton_color(ui, &tabler::ARROW_LEFT, false, "Carpeta anterior", if a.atras.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+        if boton_color(ui, &iconos::ARROW_LEFT, false, "Carpeta anterior", if a.atras.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
             a.volver(true);
         }
-        if boton_color(ui, &tabler::CARET_RIGHT, false, "Carpeta siguiente", if a.adelante.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+        if boton_color(ui, &iconos::CARET_RIGHT, false, "Carpeta siguiente", if a.adelante.is_empty() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
             a.volver(false);
         }
-        if boton_color(ui, &tabler::CARET_UP, false, "Subir una carpeta", if a.rec.carpeta.is_none() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
+        if boton_color(ui, &iconos::CARET_UP, false, "Subir una carpeta", if a.rec.carpeta.is_none() { TEXT_FAINT } else { GLYPH }, 24.0).clicked() {
             a.subir();
         }
-        if !amplio && boton_color(ui, &tabler::FOLDERS, a.rec.carpeta.is_none(), "Lugares y favoritos", GLYPH, 24.0).clicked() {
+        if !amplio && boton_color(ui, &iconos::FOLDERS, a.rec.carpeta.is_none(), "Lugares y favoritos", GLYPH, 24.0).clicked() {
             a.ir_a(None);
         }
         let derecha = 4.0 * 27.0;
@@ -505,17 +505,17 @@ impl App {
             self.ruta_ui(&mut u);
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if boton_color(ui, &tabler::X, false, "Cerrar el panel de archivos", GLYPH, 24.0).clicked() {
+            if boton_color(ui, &iconos::X, false, "Cerrar el panel de archivos", GLYPH, 24.0).clicked() {
                 self.archivos.rec.abierto = false;
             }
             let a = &mut self.archivos;
-            if boton_color(ui, &tabler::LAYOUT_ROWS, a.rec.anclado, if a.rec.anclado { "Que flote en su ventana" } else { "Pegar a la izquierda" }, GLYPH, 24.0).clicked() {
+            if boton_color(ui, &iconos::LAYOUT_ROWS, a.rec.anclado, if a.rec.anclado { "Que flote en su ventana" } else { "Pegar a la izquierda" }, GLYPH, 24.0).clicked() {
                 a.rec.anclado = !a.rec.anclado;
             }
-            if boton_color(ui, &tabler::GRID_DOTS, a.rec.cuadricula, "Ver como cuadrícula", GLYPH, 24.0).clicked() {
+            if boton_color(ui, &iconos::GRID_DOTS, a.rec.cuadricula, "Ver como cuadrícula", GLYPH, 24.0).clicked() {
                 a.rec.cuadricula = !a.rec.cuadricula;
             }
-            let r = boton_color(ui, &tabler::ADJUSTMENTS_HORIZONTAL, false, "Orden y qué se muestra", GLYPH, 24.0);
+            let r = boton_color(ui, &iconos::ADJUSTMENTS_HORIZONTAL, false, "Orden y qué se muestra", GLYPH, 24.0);
             Popup::menu(&r).show(|ui| {
                 ui.set_min_width(190.0);
                 ui.label(RichText::new(t("Ordenar por")).color(TEXT_FAINT).size(13.0));
@@ -602,7 +602,7 @@ impl App {
         let actual = self.archivos.rec.carpeta.clone();
         ScrollArea::vertical().id_salt("archivos-lugares").auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
-            let mut grupo = |ui: &mut Ui, titulo: &str, v: Vec<(String, PathBuf, &'static tabler::TablerIcon)>, fav: bool| {
+            let mut grupo = |ui: &mut Ui, titulo: &str, v: Vec<(String, PathBuf, &'static iconos::Icono)>, fav: bool| {
                 if v.is_empty() {
                     return;
                 }
@@ -636,16 +636,16 @@ impl App {
             let nombre = |r: &Path| r.file_name().map_or_else(|| r.display().to_string(), |n| n.to_string_lossy().into_owned());
             let mut proyecto = vec![];
             if let Some(c) = self.ruta.as_ref().and_then(|r| r.parent()) {
-                proyecto.push((t("Carpeta del proyecto").to_string(), c.to_path_buf(), &tabler::FILE_STAR));
+                proyecto.push((t("Carpeta del proyecto").to_string(), c.to_path_buf(), &iconos::FILE_STAR));
             }
             let nuestra = carpeta();
             if nuestra.is_dir() {
-                proyecto.push(("Beethoven Craft".into(), nuestra, &tabler::FOLDER));
+                proyecto.push(("Beethoven Craft".into(), nuestra, &iconos::FOLDER));
             }
             grupo(ui, "Proyecto", proyecto, false);
-            grupo(ui, "Favoritos", self.archivos.rec.favoritos.iter().map(|r| (nombre(r), r.clone(), &tabler::STAR)).collect(), true);
-            grupo(ui, "Lugares", ex::lugares().into_iter().map(|(n, r)| (t(n).to_string(), r, &tabler::FOLDER)).collect(), false);
-            grupo(ui, "Discos", discos.iter().map(|r| (nombre(r), r.clone(), &tabler::BOX)).collect(), false);
+            grupo(ui, "Favoritos", self.archivos.rec.favoritos.iter().map(|r| (nombre(r), r.clone(), &iconos::STAR)).collect(), true);
+            grupo(ui, "Lugares", ex::lugares().into_iter().map(|(n, r)| (t(n).to_string(), r, &iconos::FOLDER)).collect(), false);
+            grupo(ui, "Discos", discos.iter().map(|r| (nombre(r), r.clone(), &iconos::BOX)).collect(), false);
         });
         if let Some(r) = quitar {
             self.archivos.rec.favoritos.retain(|f| *f != r);
@@ -1025,7 +1025,7 @@ impl App {
         let mut u = ui.new_child(UiBuilder::new().max_rect(abajo));
         u.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
-            if !imagen && boton_color(ui, if v.tocando || v.espera { &tabler::PLAYER_STOP } else { &tabler::PLAYER_PLAY }, v.tocando || v.espera, "Ver y oír este archivo", GLYPH, 24.0).clicked() {
+            if !imagen && boton_color(ui, if v.tocando || v.espera { &iconos::PLAYER_STOP } else { &iconos::PLAYER_PLAY }, v.tocando || v.espera, "Ver y oír este archivo", GLYPH, 24.0).clicked() {
                 tocar = true;
             }
             if ui.button(RichText::new(t("Poner en el cursor")).color(MAIN).size(13.5)).clicked() {

@@ -2,8 +2,8 @@
 
 Beethoven DAW Demo © 2026 mixter-ha99. MIT (`LICENSE-MIT`) o / or Apache-2.0 (`LICENSE-APACHE`).
 
-Escrito desde cero: no contiene código de Lemon Studio ni de la carpeta `daw/`.
-Written from scratch: it contains no code from Lemon Studio or from the `daw/` folder.
+Escrito desde cero: no contiene código de otros programas.
+Written from scratch: it contains no code from other programs.
 
 - Lua 5.4 (MIT), © 1994–2025 Lua.org, PUC-Rio, con / with `mlua` (MIT).
 - `clap-sys` (MIT / Apache-2.0) y / and `vst3` (MIT / Apache-2.0). VST es una marca de / is a trademark of Steinberg Media Technologies GmbH.

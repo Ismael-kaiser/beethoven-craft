@@ -18,11 +18,14 @@ macro_rules! en_carpetas {
 }
 
 const FABRICA: &[(&str, &str)] = fabrica! {
-    "instrumentos": "muestra";
+    "instrumentos": "muestra", "tresondas", "frecuencias", "muralla", "acido", "retumbo", "pulsada", "barras", "muestreador", "pads", "cortador", "monoanalogico", "arpegiador", "acordes";
     "herramientas": "acorde", "arpegio", "cuadrar", "humano", "reves";
 };
 const EFECTOS: &[(&str, &str)] = en_carpetas! {
-    "efectos": "vozencaja", "vozgruesa", "ecualizador", "filtro", "aire", "gravesextra", "compresor", "limitador", "compuerta", "multibanda", "deseseo", "transitorios", "eco", "pingpong", "reverb", "coro", "flanger", "faser", "vibrato", "tremolo", "autopan", "ancho", "fuego", "cinta", "trituradora", "lofi", "anillo"
+    "efectos": "vozencaja", "vozgruesa", "ecualizador", "filtro", "aire", "gravesextra", "compresor", "limitador", "compuerta", "multibanda", "deseseo", "transitorios", "eco", "pingpong", "reverb", "coro", "flanger", "faser", "vibrato", "tremolo", "autopan", "ancho", "fuego", "cinta", "trituradora", "lofi", "anillo",
+    "pasos", "empujon", "filtrovivo", "pedalera", "cambiatono", "visor",
+    "balance", "distorsion", "recortador", "matriz", "ducker", "vocoder", "filtropatron", "convolucion", "ctlnivel", "ctllfo", "ctlformula",
+    "escalera", "afinador", "quitaruido", "congelar"
 };
 /// Lo demás que traen las carpetas de fábrica: (efecto, archivo, contenido).
 const EXTRAS: &[(&str, &str, &[u8])] = &[
@@ -56,6 +59,9 @@ pub struct Guion {
     pub carpeta: Option<PathBuf>,
 }
 
+/// Los valores que un guion deja ver con `mide`, del hilo de audio a la ventana.
+pub type Medidas = [std::sync::atomic::AtomicU32; crate::lua::MAX_MEDIDAS];
+
 pub struct Biblioteca {
     pub guiones: Vec<Guion>,
     pub avisos: Vec<String>,
@@ -63,12 +69,36 @@ pub struct Biblioteca {
     pub carpeta: Option<PathBuf>,
     pub rack: crate::plugin::Rack,
     muestras: HashMap<(String, usize), Option<Arc<Muestra>>>,
+    huellas: HashMap<(String, usize, u32, bool), Arc<Muestra>>,
+    armadas: HashMap<String, Option<Arc<Muestra>>>,
+    /// Los guiones en vivo, por su lugar: siguen siendo los mismos aunque se mueva una perilla.
+    vivos: HashMap<String, (Arc<Receta>, BTreeMap<String, String>, Arc<crate::vivo::Vivo>)>,
+    /// Cómo estaba la carpeta de plugins la última vez que se miró.
+    pub(crate) visto: crate::instalar::Vista,
+    /// Lo que mide cada efecto puesto, por pista y ranura.
+    pub medidas: HashMap<(usize, usize), Arc<Medidas>>,
 }
 
 impl Biblioteca {
     /// `carpeta`: de dónde se leen (y dónde se guardan) los guiones del usuario.
+    fn vacia(sr: f32, carpeta: Option<PathBuf>) -> Biblioteca {
+        Biblioteca {
+            guiones: vec![],
+            avisos: vec![],
+            sr,
+            carpeta,
+            rack: Default::default(),
+            muestras: HashMap::new(),
+            huellas: HashMap::new(),
+            armadas: HashMap::new(),
+            vivos: HashMap::new(),
+            visto: Default::default(),
+            medidas: HashMap::new(),
+        }
+    }
+
     pub fn nueva(sr: f32, carpeta: Option<PathBuf>) -> Biblioteca {
-        let mut b = Biblioteca { guiones: vec![], avisos: vec![], sr, carpeta, rack: Default::default(), muestras: HashMap::new() };
+        let mut b = Biblioteca::vacia(sr, carpeta);
         for (clave, fuente) in FABRICA {
             b.poner(clave, fuente, false, Archivos::nuevos(), None).expect("los guiones de fábrica sirven");
         }
@@ -79,24 +109,59 @@ impl Biblioteca {
         b
     }
 
+    /// Solo lo que hace falta para uno: así un plugin en otro programa abre al instante.
+    pub fn solo(sr: f32, carpeta: Option<PathBuf>, clave: &str) -> Option<Biblioteca> {
+        let mut b = Biblioteca::vacia(sr, carpeta);
+        for (k, fuente) in FABRICA.iter().filter(|x| x.0 == clave || x.0 == "muestra").chain(EFECTOS.iter().filter(|x| x.0 == clave)) {
+            b.poner(k, fuente, false, extras(k), None).ok()?;
+        }
+        if let Some(d) = b.carpeta.clone() {
+            for p in [d.join(clave), d.join(format!("{clave}.lua"))].into_iter().filter(|p| p.exists()) {
+                let _ = b.leer_uno(&p);
+            }
+        }
+        b.ver(clave)?;
+        Some(b)
+    }
+
     /// Lee los guiones del usuario: cada uno en su carpeta (con sus imágenes y otros `.lua`) o, como antes, un `.lua`
     /// suelto. Los que fallan quedan en `avisos`.
     pub fn leer_carpeta(&mut self) {
         let Some(dir) = self.carpeta.clone() else { return };
         let mut v: Vec<PathBuf> = std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
         v.sort();
-        for p in v {
-            let clave = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
-            let r = if p.is_dir() {
-                crate::paquete::leer(&p).and_then(|(f, a)| self.poner(&clave, &f, true, a, Some(p.clone())))
-            } else if p.extension().is_some_and(|e| e == "lua") {
-                std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|f| self.poner(&clave, &f, true, Archivos::nuevos(), None))
-            } else {
+        for p in v.into_iter().filter(|p| p.is_dir() || p.extension().is_some_and(|e| e == "lua")) {
+            let n = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+            if n.starts_with('.') || n == crate::instalar::QUITADOS {
                 continue;
-            };
-            if let Err(e) = r {
-                self.avisos.push(format!("{clave}: {e}"));
             }
+            if let Err(e) = self.leer_uno(&p) {
+                self.avisos.push(format!("{}: {e}", p.file_stem().unwrap_or_default().to_string_lossy()));
+            }
+        }
+        self.mirado();
+    }
+
+    /// Carga un plugin del disco. Si está mal, el que ya estuviera se queda como estaba.
+    pub(crate) fn leer_uno(&mut self, p: &std::path::Path) -> Result<(), String> {
+        let clave = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        if p.is_dir() {
+            let (f, a) = crate::paquete::leer(p)?;
+            return self.poner(&clave, &f, true, a, Some(p.to_path_buf()));
+        }
+        let f = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
+        self.poner(&clave, &f, true, Archivos::nuevos(), None)
+    }
+
+    pub(crate) fn mirado(&mut self) {
+        self.visto = self.carpeta.as_ref().map(|d| crate::instalar::mirar(d)).unwrap_or_default();
+    }
+
+    /// Lo quita de la lista; si tapaba a uno de fábrica, ese regresa.
+    pub(crate) fn olvidar(&mut self, clave: &str) {
+        self.guiones.retain(|g| !(g.propio && g.clave == clave));
+        for (k, fuente) in FABRICA.iter().chain(EFECTOS).filter(|x| x.0 == clave) {
+            let _ = self.poner(k, fuente, false, extras(k), None);
         }
     }
 
@@ -104,6 +169,9 @@ impl Biblioteca {
         let (ficha, receta) = armar_con(fuente, self.sr, &archivos)?;
         if let Some(l) = ficha.logo.as_ref().filter(|l| archivos.imagen(l).is_none()) {
             return Err(crate::idioma::tf("el logo «{}» no está en la carpeta", &[l]));
+        }
+        if let Some(n) = ficha.audios().into_iter().find(|n| !archivos.audios.contains_key(n)) {
+            return Err(crate::idioma::tf("falta el audio «{}» en la carpeta", &[&n]));
         }
         let archivos = Arc::new(archivos);
         // Que la interfaz, si trae, también esté bien escrita.
@@ -124,7 +192,12 @@ impl Biblioteca {
         let previo = self.ver(clave).filter(|g| g.propio);
         let Some(d) = self.carpeta.clone() else {
             let a = previo
-                .map(|g| Archivos { id: Archivos::nuevos().id, lua: g.archivos.lua.clone(), imagenes: g.archivos.imagenes.clone() })
+                .map(|g| Archivos {
+                    id: Archivos::nuevos().id,
+                    lua: g.archivos.lua.clone(),
+                    imagenes: g.archivos.imagenes.clone(),
+                    audios: g.archivos.audios.clone(),
+                })
                 .unwrap_or_else(Archivos::nuevos);
             return self.poner(clave, fuente, true, a, None);
         };
@@ -153,6 +226,7 @@ impl Biblioteca {
         std::fs::create_dir_all(&carpeta).map_err(|e| e.to_string())?;
         std::fs::write(carpeta.join(format!("{nombre}.lua")), fuente).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(d.join(format!("{clave}.lua")));
+        self.mirado();
         Ok(())
     }
 
@@ -163,11 +237,19 @@ impl Biblioteca {
         Some(d)
     }
 
-    /// Una clave libre a partir de un nombre.
-    pub fn clave_libre(&self, nombre: &str) -> String {
+    /// La clave que le toca a un nombre, esté libre o no.
+    pub fn clave_de(&self, nombre: &str) -> String {
         let base: String = nombre.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
-        let base = if base.trim_matches('_').is_empty() { "mio".to_string() } else { base };
-        (1..).map(|i| if i == 1 { base.clone() } else { format!("{base}_{i}") }).find(|c| self.ver(c).is_none()).unwrap()
+        if base.trim_matches('_').is_empty() { "mio".to_string() } else { base }
+    }
+
+    /// Una clave libre a partir de un nombre. Tampoco choca con las de los instrumentos grabados.
+    pub fn clave_libre(&self, nombre: &str) -> String {
+        let base = self.clave_de(nombre);
+        (1..)
+            .map(|i| if i == 1 { base.clone() } else { format!("{base}_{i}") })
+            .find(|c| self.ver(c).is_none() && crate::banco::de(c).is_none())
+            .unwrap()
     }
 
     pub fn ver(&self, clave: &str) -> Option<&Guion> {
@@ -179,11 +261,10 @@ impl Biblioteca {
     }
 
     /// Agrupados para mostrar.
-    /// Los guiones de ese tipo por grupo. Los instrumentos de fábrica son grabaciones (`banco`): de Lua solo
-    /// quedan los tuyos.
+    /// Los guiones de ese tipo por grupo. El muestreador no se ofrece: toca las grabaciones del `banco`.
     pub fn grupos(&self, t: Tipo) -> BTreeMap<&str, Vec<&Guion>> {
         let mut m: BTreeMap<&str, Vec<&Guion>> = BTreeMap::new();
-        for g in self.de_tipo(t).filter(|g| t != Tipo::Instrumento || g.propio) {
+        for g in self.de_tipo(t).filter(|g| !g.ficha.oculto) {
             m.entry(g.ficha.grupo.ver()).or_default().push(g);
         }
         m
@@ -211,6 +292,143 @@ impl Biblioteca {
     pub fn banco(&mut self, x: &crate::banco::Instrumento) -> Option<Arc<Muestra>> {
         let r = crate::banco::archivo()?.to_string_lossy().to_string();
         self.muestra(&r, crate::banco::indice(x.preset)?)
+    }
+
+    /// La huella para un efecto de convolución: la de su archivo o, si no tiene, la del lugar que diga su control
+    /// «espacio». También mira «largo» y «reves».
+    pub fn huella(&mut self, e: &crate::modelo::EfectoPuesto) -> Option<Arc<Muestra>> {
+        use crate::impulso::{Impulso, LUGARES, recortar};
+        let ficha = &self.ver(&e.efecto)?.ficha;
+        let lee = |k: &str, v: f32| e.controles.get(k).copied().or(ficha.controles.iter().find(|c| c.clave == k).map(|c| c.valor)).unwrap_or(v);
+        let (cual, reves) = ((lee("espacio", 0.0).round().max(0.0) as usize).min(LUGARES - 1), lee("reves", 0.0) > 0.5);
+        // En pasos de 2 %: mover la perilla no llena la memoria.
+        let largo = (lee("largo", 1.0) * 50.0).round().clamp(1.0, 50.0) as u32;
+        // Su audio, o el que traiga el plugin, o uno de los lugares de fábrica.
+        let g = self.ver(&e.efecto)?;
+        let suya = ficha.huella.as_ref().and_then(|n| g.archivos.audios.get(n)).map(|p| p.to_string_lossy().to_string());
+        let ruta = e.muestra.clone().or(suya).unwrap_or_default();
+        let clave = (ruta.clone(), if ruta.is_empty() { cual } else { 0 }, largo, reves);
+        if let Some(m) = self.huellas.get(&clave) {
+            return Some(m.clone());
+        }
+        let k = largo as f32 / 50.0;
+        let i = if ruta.is_empty() {
+            Impulso::de_fabrica(cual, self.sr, k, reves)
+        } else {
+            match crate::decodificar::leer(std::path::Path::new(&ruta)) {
+                Ok(w) => {
+                    let x: Vec<[f32; 2]> = w.izq.iter().zip(&w.der).take((w.sr * crate::impulso::MAX_SEG) as usize).map(|(a, b)| [*a, *b]).collect();
+                    let x = crate::editar::remuestrear(&x, (x.len() as f64 * (self.sr / w.sr) as f64) as usize);
+                    Impulso::nuevo(recortar([x.iter().map(|v| v[0]).collect(), x.iter().map(|v| v[1]).collect()], k, reves), self.sr)
+                }
+                Err(x) => {
+                    self.avisos.push(format!("{ruta}: {x}"));
+                    Impulso::de_fabrica(cual, self.sr, k, reves)
+                }
+            }
+        };
+        if self.huellas.len() >= 24 {
+            self.huellas.clear();
+        }
+        let m = Arc::new(Muestra { impulso: Some(Box::new(i)), ..Default::default() });
+        self.huellas.insert(clave, m.clone());
+        Some(m)
+    }
+
+    /// Los audios de los pads, cada uno en su tecla.
+    pub fn pads(&mut self, rutas: &[String]) -> Option<Arc<Muestra>> {
+        let clave = format!("pads:{}", rutas.join("\n"));
+        if let Some(m) = self.armadas.get(&clave) {
+            return m.clone();
+        }
+        let mut m = Muestra::default();
+        for (i, r) in rutas.iter().enumerate().take(crate::motor::PADS).filter(|(_, r)| !r.is_empty()) {
+            if let Some(x) = self.muestra(r, 0) {
+                m.agregar_en(&x, crate::motor::PRIMER_PAD + i as u8);
+            }
+        }
+        let m = Some(Arc::new(m));
+        self.guardar_armada(clave, m.clone());
+        m
+    }
+
+    /// El audio cortado en partes, una por tecla. Iguales, o donde hay golpes.
+    pub fn cortes(&mut self, ruta: &str, v: &BTreeMap<String, f32>) -> Option<Arc<Muestra>> {
+        let lee = |k: &str, x: f32| v.get(k).copied().unwrap_or(x);
+        let (partes, golpes, fino) =
+            (lee("partes", 16.0).round().clamp(2.0, 32.0) as usize, lee("donde", 1.0) > 0.5, (lee("fino", 0.5) * 20.0).round() / 20.0);
+        let clave = format!("cortes:{partes}:{golpes}:{fino}:{ruta}");
+        if let Some(m) = self.armadas.get(&clave) {
+            return m.clone();
+        }
+        let m = self.muestra(ruta, 0).map(|x| Arc::new(x.cortada(partes, golpes, fino)));
+        self.guardar_armada(clave, m.clone());
+        m
+    }
+
+    /// Los audios que trae un instrumento en su carpeta.
+    pub fn propias(&mut self, clave: &str) -> Option<Arc<Muestra>> {
+        let g = self.ver(clave)?;
+        let crate::lua::Muestras::Propias(v) = g.ficha.muestras.clone() else { return None };
+        let a = g.archivos.clone();
+        let nombre = format!("propias:{}:{clave}", a.id);
+        if let Some(m) = self.armadas.get(&nombre) {
+            return m.clone();
+        }
+        let mut m = Muestra::default();
+        for x in &v {
+            let Some(s) = a.audios.get(&x.archivo).and_then(|p| self.muestra(&p.to_string_lossy(), 0)) else { continue };
+            m.agregar_entre(&s, x.nota, x.teclas, x.fuerzas);
+        }
+        let m = Some(Arc::new(m));
+        self.guardar_armada(nombre, m.clone());
+        m
+    }
+
+    /// El guion en vivo de ese lugar; se arma la primera vez, o si cambió.
+    pub fn vivo(
+        &mut self,
+        lugar: &str,
+        clave: &str,
+        datos: &BTreeMap<String, String>,
+        medidas: Option<Arc<Medidas>>,
+    ) -> Option<Arc<crate::vivo::Vivo>> {
+        let g = self.ver(clave)?;
+        let r = g.receta.clone().filter(|r| r.vivo)?;
+        if let Some((a, b, v)) = self.vivos.get(lugar)
+            && Arc::ptr_eq(a, &r)
+            && b == datos
+        {
+            return Some(v.clone());
+        }
+        let claves: Vec<String> = r.controles.iter().map(|c| c.clave.clone()).collect();
+        match crate::vivo::Vivo::nuevo(&g.fuente, &g.archivos, self.sr, &claves, datos, (&r.medidas_vivo, medidas, r.medidas.len())) {
+            Ok(v) => {
+                let v = Arc::new(v);
+                self.vivos.insert(lugar.into(), (r, datos.clone(), v.clone()));
+                Some(v)
+            }
+            Err(e) => {
+                self.avisos.push(crate::vivo::mensaje(g.ficha.nombre.ver(), &e).to_string());
+                None
+            }
+        }
+    }
+
+    /// Los guiones en vivo que hay, con el nombre de su lugar.
+    pub fn vivos(&self) -> impl Iterator<Item = (&str, &Arc<crate::vivo::Vivo>)> {
+        self.vivos.iter().map(|(k, v)| (k.as_str(), &v.2))
+    }
+
+    pub fn soltar_vivos(&mut self) {
+        self.vivos.clear();
+    }
+
+    fn guardar_armada(&mut self, clave: String, m: Option<Arc<Muestra>>) {
+        if self.armadas.len() >= 16 {
+            self.armadas.clear();
+        }
+        self.armadas.insert(clave, m);
     }
 
     pub fn muestra(&mut self, ruta: &str, preset: usize) -> Option<Arc<Muestra>> {

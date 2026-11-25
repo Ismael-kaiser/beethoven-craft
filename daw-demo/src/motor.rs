@@ -1,10 +1,12 @@
 // Beethoven DAW Demo. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
 //! El motor: toca una `Escena` ya lista. Aquí no se pide ni se suelta memoria ni se espera a nadie.
 use crate::biblioteca::Biblioteca;
+use crate::lua::Muestras;
 use crate::modelo::*;
 use crate::muestrario::Muestra;
 use crate::plugin::{EVENTOS, Evento as EvPlugin, Plugin, Tiempo};
 use crate::receta::{self, BLOQUE, Buf, DatosVoz, Receta};
+use crate::vivo::{Emitida, Momento as EnVivo, Vivo};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
@@ -37,7 +39,55 @@ struct Voz {
     suelta: u64,
 }
 
+/// Un control que mueve otro efecto con lo que mide como «control».
+struct Vinculo {
+    ctl: usize,
+    de: Arc<crate::biblioteca::Medidas>,
+    k: usize,
+    min: f32,
+    max: f32,
+}
+
+impl Vinculo {
+    fn mover(&self, meta: &mut [f32]) {
+        let v = f32::from_bits(self.de[self.k].load(Relaxed));
+        let v = if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
+        // Como las perillas: las frecuencias van en octavas.
+        meta[self.ctl] = if self.min > 0.0 && self.max / self.min > 20.0 {
+            self.min * (self.max / self.min).powf(v)
+        } else {
+            self.min + (self.max - self.min) * v
+        };
+    }
+}
+
+/// Los vínculos puestos, ya con su lugar. Los que apuntan a algo que ya no está no cuentan.
+fn vinculos(p: &Proyecto, bib: &mut Biblioteca, r: &Receta, v: &std::collections::BTreeMap<String, u64>) -> Vec<Vinculo> {
+    let mut sale = vec![];
+    for (clave, id) in v {
+        let Some(ctl) = r.controles.iter().position(|c| c.clave == *clave) else { continue };
+        let Some((i, k)) = p.controlador(*id) else { continue };
+        let Some(g) = bib.ver(&p.mezcla[i].efectos[k].efecto).and_then(|g| g.receta.clone()) else { continue };
+        let Some(m) = g.nombres_medidas().position(|m| m == "control") else { continue };
+        let de = bib.medidas.entry((i, k)).or_default().clone();
+        sale.push(Vinculo { ctl, de, k: m, min: r.controles[ctl].min, max: r.controles[ctl].max });
+    }
+    sale
+}
+
 struct CanalE {
+    rueda: f32,
+    /// Lua en vivo: el instrumento mismo, o lo que cambia sus notas.
+    vivo: Option<Arc<Vivo>>,
+    notas: Option<(Arc<Vivo>, Vec<f32>)>,
+    /// Lo que llegó para cambiar, y lo que falta por soltar: tono y cuadros.
+    llegan: Vec<EvPlugin>,
+    sueltan: Vec<(u8, f64)>,
+    dio: Vec<Emitida>,
+    vinculos: Vec<Vinculo>,
+    /// Volumen, velocidad y lado de cada pad, y su grupo de corte.
+    pads: Vec<([f32; 3], u8)>,
+    desde: f32,
     id: u32,
     receta: Arc<Receta>,
     plugin: Option<Arc<Plugin>>,
@@ -58,17 +108,29 @@ struct CanalE {
 }
 
 struct EfectoE {
+    vivo: Option<Arc<Vivo>>,
+    latencia: u32,
+    vinculos: Vec<Vinculo>,
+    /// La otra pista que oye.
+    lateral: usize,
     receta: Option<Arc<Receta>>,
     plugin: Option<Arc<Plugin>>,
     ctl: Vec<f32>,
     meta: Vec<f32>,
     mem: Vec<f32>,
+    /// La huella del lugar, si hace convolución.
+    huella: Option<Arc<Muestra>>,
+    medidas: Option<Arc<crate::biblioteca::Medidas>>,
     /// Cuánto efecto: lo que suena y a dónde va.
     mezcla: f32,
     mezcla_meta: f32,
 }
 
 struct PistaE {
+    /// Lo que espera para salir parejo con las más tardadas, y lo que espera además para llegar a la general junto con los
+    /// envíos.
+    espera: Espera,
+    junta: Espera,
     /// Ecualizador de la pista; nada si está plano.
     eq: Option<[[f32; 5]; 3]>,
     eq_mem: [[[f32; 2]; 3]; 2],
@@ -81,6 +143,8 @@ struct PistaE {
     mezcla: [Buf; 2],
     /// Cuadros seguidos en silencio: si son muchos, no se procesa.
     callada: u32,
+    /// Trae un controlador: no descansa.
+    controla: bool,
 }
 
 /// Un audio de la playlist. Su lugar sale de la posición, así que saltar no requiere nada.
@@ -108,6 +172,30 @@ pub struct Escena {
     sr: f32,
 }
 
+fn hz_de(tono: u8) -> f32 {
+    440.0 * 2f32.powf((tono as f32 - 69.0) / 12.0)
+}
+
+/// Espera para emparejar las pistas cuyos efectos se tardan.
+#[derive(Default)]
+struct Espera {
+    v: Vec<[f32; 2]>,
+    p: usize,
+}
+
+impl Espera {
+    fn pasar(&mut self, m: &mut [Buf; 2], n: usize) {
+        if self.v.is_empty() {
+            return;
+        }
+        for j in 0..n {
+            let x = std::mem::replace(&mut self.v[self.p], [m[0][j], m[1][j]]);
+            (m[0][j], m[1][j]) = (x[0], x[1]);
+            self.p = (self.p + 1) % self.v.len();
+        }
+    }
+}
+
 fn balance(v: f32, pan: f32) -> [f32; 2] {
     let pan = pan.clamp(-1.0, 1.0);
     [v * (1.0 - pan.max(0.0)), v * (1.0 + pan.min(0.0))]
@@ -131,11 +219,23 @@ impl Escena {
                 (Some(_), _) | (_, Some(_)) => None,
                 _ => bib.del_banco(&c.instrumento).or_else(|| bib.ver(&c.instrumento).is_none().then(|| crate::banco::de("piano")).flatten()),
             };
-            let clave = if banco.is_some() { "muestra" } else { c.instrumento.as_str() };
+            // Un plugin no usa receta, pero el canal necesita una: sin esto se descartaba y no sonaba.
+            let clave = if banco.is_some() || c.plugin.is_some() { "muestra" } else { c.instrumento.as_str() };
             let Some(receta) = bib.ver(clave).and_then(|g| g.receta.clone()) else { continue };
             let plugin = c.plugin.as_ref().and_then(|x| bib.rack.dar(x, sr).ok());
-            let voces = if plugin.is_some() { EVENTOS / 2 } else { receta.voces };
+            let vivo = if plugin.is_none() && banco.is_none() { bib.vivo(&format!("canal {}", c.id), clave, &c.datos, None) } else { None };
+            let notas = c.notas.as_ref().and_then(|k| {
+                let v = bib.vivo(&format!("notas {}", c.id), k, &c.datos, None)?;
+                let r = bib.ver(k)?.receta.clone()?;
+                Some((v, valores(&r, &c.notas_controles)))
+            });
+            let voces = if plugin.is_some() || vivo.is_some() { EVENTOS / 2 } else { receta.voces };
+            let suyas = if c.plugin.is_none() && banco.is_none() { bib.ver(clave).map(|g| g.ficha.muestras.clone()) } else { None };
+            let pads = suyas == Some(Muestras::Pads);
             let muestra = match banco {
+                None if pads => bib.pads(&c.pads),
+                None if suyas == Some(Muestras::Cortes) => c.muestra.as_ref().and_then(|r| bib.cortes(r, &c.controles)),
+                None if c.muestra.is_none() && matches!(suyas, Some(Muestras::Propias(_))) => bib.propias(clave),
                 Some(x) => bib.banco(x),
                 None => c.muestra.as_ref().and_then(|r| bib.muestra(r, c.preset)),
             };
@@ -148,7 +248,26 @@ impl Escena {
             let meta = valores(&receta, &puestos);
             let gan = balance(if suena { c.volumen } else { 0.0 }, c.pan);
             lugar.insert(c.id, canales.len());
+            let lee = |k: &str| meta.get(receta.controles.iter().position(|x| x.clave == k).unwrap_or(usize::MAX)).copied().unwrap_or(0.0);
+            let ajustes = if pads {
+                (1..=PADS)
+                    .map(|i| {
+                        (
+                            [lee(&format!("v{i}")) - 1.0, 2f32.powf(lee(&format!("t{i}")) / 12.0) - 1.0, lee(&format!("l{i}"))],
+                            lee(&format!("g{i}")).round() as u8,
+                        )
+                    })
+                    .collect()
+            } else {
+                vec![]
+            };
+            let desde = lee("inicio").clamp(0.0, 0.99);
+            let vinculos = vinculos(p, bib, &receta, &c.vinculos);
             canales.push(CanalE {
+                rueda: 1.0,
+                vinculos,
+                pads: ajustes,
+                desde,
                 id: c.id,
                 muestra,
                 fija: banco.and_then(|x| x.nota),
@@ -158,7 +277,12 @@ impl Escena {
                 gan_meta: gan,
                 pista: c.pista.min(p.mezcla.len() - 1),
                 voces: vec![Voz::default(); voces],
-                mem: vec![0.0; if plugin.is_some() { 0 } else { receta.memoria * voces }],
+                mem: vec![0.0; if plugin.is_some() || vivo.is_some() { 0 } else { receta.memoria * voces }],
+                vivo,
+                notas,
+                llegan: Vec::with_capacity(EVENTOS),
+                sueltan: Vec::with_capacity(EVENTOS),
+                dio: Vec::with_capacity(EVENTOS),
                 avisos: Vec::with_capacity(EVENTOS),
                 callada: 0,
                 plugin,
@@ -169,15 +293,22 @@ impl Escena {
         let solo = p.mezcla[..PRIMER_ENVIO].iter().any(|m| m.solo);
         for (i, m) in p.mezcla.iter().enumerate() {
             let mut efectos = vec![];
-            for e in m.efectos.iter().filter(|e| e.activo) {
+            for (k, e) in m.efectos.iter().enumerate().filter(|(_, e)| e.activo) {
                 if let Some(x) = &e.plugin {
                     if let Ok(plugin) = bib.rack.dar(x, sr) {
+                        let latencia = plugin.latencia();
                         efectos.push(EfectoE {
                             receta: None,
                             plugin: Some(plugin),
                             ctl: vec![],
                             meta: vec![],
                             mem: vec![],
+                            huella: None,
+                            medidas: None,
+                            vinculos: vec![],
+                            lateral: 0,
+                            vivo: None,
+                            latencia,
                             mezcla: e.mezcla,
                             mezcla_meta: e.mezcla,
                         });
@@ -186,7 +317,20 @@ impl Escena {
                 }
                 let Some(receta) = bib.ver(&e.efecto).and_then(|g| g.receta.clone()) else { continue };
                 let meta = valores(&receta, &e.controles);
+                let huella = if receta.con_huella() { bib.huella(e) } else { None };
+                let medidas = (receta.nombres_medidas().next().is_some()).then(|| bib.medidas.entry((i, k)).or_default().clone());
+                let vivo = bib.vivo(&format!("efecto {i} {k}"), &e.efecto, &e.datos, medidas.clone());
+                let latencia = vivo.as_ref().map_or(0, |v| v.latencia);
+                let vinculos = vinculos(p, bib, &receta, &e.vinculos);
+                let pista = receta.controles.iter().position(|c| c.clave == "pista").map_or(0.0, |k| meta[k]);
+                let lateral = if receta.con_lateral() { (pista.round().max(0.0) as usize).min(p.mezcla.len() - 1) } else { 0 };
                 efectos.push(EfectoE {
+                    vivo,
+                    latencia,
+                    vinculos,
+                    lateral,
+                    huella,
+                    medidas,
                     ctl: meta.clone(),
                     meta,
                     mem: vec![0.0; receta.memoria],
@@ -200,6 +344,8 @@ impl Escena {
             let gan = balance(if calla { 0.0 } else { m.volumen }, m.pan);
             let eq = m.eq.iter().any(|x| *x != 0.0).then(|| eq_de_pista(&m.eq, sr));
             pistas.push(PistaE {
+                espera: Espera::default(),
+                junta: Espera::default(),
                 eq,
                 eq_mem: Default::default(),
                 ancho: m.ancho,
@@ -210,7 +356,18 @@ impl Escena {
                 efectos,
                 mezcla: [[0.0; BLOQUE]; 2],
                 callada: u32::MAX,
+                controla: m.efectos.iter().any(|e| e.activo && e.id != 0),
             });
+        }
+        // Emparejar: cada pista espera lo que le falta para la más tardada.
+        let tarda = |p: &PistaE| (p.efectos.iter().map(|e| e.latencia as usize).sum::<usize>()).min(sr as usize);
+        let tope = pistas[1..PRIMER_ENVIO].iter().map(tarda).max().unwrap_or(0);
+        let tope_envios = pistas[PRIMER_ENVIO..].iter().map(tarda).max().unwrap_or(0);
+        for (i, p) in pistas.iter_mut().enumerate().skip(1) {
+            let t = tarda(p);
+            let (a, b) = if i < PRIMER_ENVIO { (tope - t, tope_envios) } else { (0, tope_envios - t) };
+            p.espera.v = vec![[0.0; 2]; a];
+            p.junta.v = vec![[0.0; 2]; b];
         }
         let mut eventos = vec![];
         let mut audios = vec![];
@@ -271,14 +428,22 @@ impl Escena {
                 std::mem::swap(&mut c.avisos, &mut o.avisos);
                 c.callada = o.callada;
                 std::mem::swap(&mut c.voces, &mut o.voces);
+                std::mem::swap(&mut c.llegan, &mut o.llegan);
+                std::mem::swap(&mut c.sueltan, &mut o.sueltan);
                 std::mem::swap(&mut c.mem, &mut o.mem);
                 std::mem::swap(&mut c.ctl, &mut o.ctl);
                 c.gan = o.gan;
+                c.rueda = o.rueda;
             }
         }
         for (p, o) in self.pistas.iter_mut().zip(&mut v.pistas) {
             p.gan = o.gan;
             p.eq_mem = o.eq_mem;
+            for (a, b) in [(&mut p.espera, &mut o.espera), (&mut p.junta, &mut o.junta)] {
+                if a.v.len() == b.v.len() {
+                    std::mem::swap(a, b);
+                }
+            }
             p.callada = o.callada;
             for (i, e) in p.efectos.iter_mut().enumerate() {
                 if let Some(x) = o.efectos.get_mut(i).filter(|x| matches!((&x.receta, &e.receta), (Some(a), Some(b)) if Arc::ptr_eq(a, b))) {
@@ -291,14 +456,43 @@ impl Escena {
     }
 }
 
+/// Pads de la batería y la tecla del primero.
+pub const PADS: usize = 16;
+pub const PRIMER_PAD: u8 = 36;
+/// Cuántas ranuras de una pista pueden oír otra.
+const LATERALES: usize = 16;
+
 pub enum Orden {
     Escena(Box<Escena>),
     Tocar(bool),
     Ir(f64),
-    Nota { canal: u32, tono: u8, fuerza: f32 },
-    Soltar { canal: u32, tono: u8 },
+    Nota {
+        canal: u32,
+        tono: u8,
+        fuerza: f32,
+    },
+    Soltar {
+        canal: u32,
+        tono: u8,
+    },
     Silencio,
     Metronomo(bool),
+    /// La rueda o un mando MIDI, para un canal.
+    Mando {
+        canal: u32,
+        evento: EvPlugin,
+    },
+    /// Oír un trozo de audio suelto (el del editor), o callarlo.
+    Oir(Option<Escucha>),
+}
+
+/// Lo que suena desde el editor de audio, aparte de la canción.
+pub struct Escucha {
+    pub datos: Arc<Vec<[f32; 2]>>,
+    pub pos: f64,
+    pub fin: f64,
+    /// Cuadros del audio por cada cuadro de salida.
+    pub paso: f64,
 }
 
 /// Muestras que guarda el analizador.
@@ -327,6 +521,8 @@ pub struct Estado {
     onda_pos: AtomicU32,
     /// Milésimas del tiempo disponible que usa el audio.
     pub carga: AtomicU32,
+    /// Por qué cuadro va lo que se oye desde el editor; `u32::MAX` si no suena.
+    pub oyendo: AtomicU32,
 }
 
 impl Default for Estado {
@@ -343,6 +539,7 @@ impl Default for Estado {
             onda: (0..ONDA).map(|_| AtomicU32::new(0)).collect(),
             onda_pos: Default::default(),
             carga: Default::default(),
+            oyendo: AtomicU32::new(u32::MAX),
         }
     }
 }
@@ -381,6 +578,7 @@ impl Estado {
 pub struct Mando {
     ordenes: Sender<Orden>,
     viejas: Receiver<Box<Escena>>,
+    oidos: Receiver<Escucha>,
     pub estado: Arc<Estado>,
 }
 
@@ -393,14 +591,26 @@ impl Mando {
     pub fn mandar(&self, o: Orden) -> bool {
         // Las escenas viejas se sueltan aquí, no en el hilo de audio.
         while self.viejas.try_recv().is_ok() {}
+        while self.oidos.try_recv().is_ok() {}
         self.ordenes.try_send(o).is_ok()
     }
 }
 
+/// Cuando el motor vive dentro de un plugin: lo que entra y el tiempo los pone otro programa.
+pub struct Externo {
+    pub tiempo: Tiempo,
+    /// A la pista 1, y de lateral a la 2.
+    pub entra: [Buf; 2],
+    pub lateral: [Buf; 2],
+}
+
 pub struct Motor {
+    pub externo: Option<Box<Externo>>,
     escena: Box<Escena>,
     ordenes: Receiver<Orden>,
     viejas: Sender<Box<Escena>>,
+    escucha: Option<Escucha>,
+    oidos: Sender<Escucha>,
     pub estado: Arc<Estado>,
     tocando: bool,
     pos: f64,
@@ -409,6 +619,8 @@ pub struct Motor {
     /// Llegó al final sin bucle.
     pub acabo: bool,
     metronomo: bool,
+    /// Negras que van contadas mientras la canción está parada.
+    libre: f64,
     azar: u32,
     reloj: u64,
     limite: f32,
@@ -418,11 +630,15 @@ impl Motor {
     pub fn nuevo(e: Escena) -> (Motor, Mando) {
         let (ordenes, recibe) = bounded(256);
         let (viejas, sueltas) = bounded(64);
+        let (oidos, oidas) = bounded(64);
         let estado = Arc::new(Estado::default());
         let m = Motor {
+            externo: None,
             escena: Box::new(e),
             ordenes: recibe,
             viejas,
+            escucha: None,
+            oidos,
             estado: estado.clone(),
             tocando: false,
             pos: 0.0,
@@ -430,11 +646,12 @@ impl Motor {
             bucle: true,
             acabo: false,
             metronomo: false,
+            libre: 0.0,
             azar: 1,
             reloj: 0,
             limite: 1.0,
         };
-        (m, Mando { ordenes, viejas: sueltas, estado })
+        (m, Mando { ordenes, viejas: sueltas, oidos: oidas, estado })
     }
 
     fn buscar_cursor(&mut self) {
@@ -443,8 +660,15 @@ impl Motor {
     }
 
     fn atender(&mut self) {
-        while !self.viejas.is_full() {
+        while !self.viejas.is_full() && !self.oidos.is_full() {
             let Ok(o) = self.ordenes.try_recv() else { break };
+            self.hacer(o);
+        }
+    }
+
+    /// Hace una orden ya. Solo en el hilo de audio.
+    pub fn hacer(&mut self, o: Orden) {
+        {
             match o {
                 Orden::Escena(mut e) => {
                     e.heredar(&mut self.escena);
@@ -476,14 +700,39 @@ impl Motor {
                 }
                 Orden::Soltar { canal, tono } => {
                     for c in self.escena.canales.iter_mut().filter(|c| c.id == canal) {
+                        if c.notas.is_some() && c.llegan.len() < EVENTOS {
+                            c.llegan.push(EvPlugin::Suelta { tono });
+                        }
                         let tono = c.fija.unwrap_or(tono);
-                        c.voces.iter_mut().filter(|v| v.a_mano && v.tono == tono).for_each(|v| v.d.puerta = false);
+                        let libres = c.pads.is_empty();
+                        c.voces.iter_mut().filter(|v| libres && v.a_mano && v.tono == tono).for_each(|v| v.d.puerta = false);
+                    }
+                }
+                Orden::Mando { canal, evento } => {
+                    for c in self.escena.canales.iter_mut().filter(|c| c.id == canal) {
+                        if (c.plugin.is_some() || c.vivo.is_some()) && c.avisos.len() < EVENTOS {
+                            c.avisos.push(evento);
+                        }
+                        if c.notas.is_some() && c.llegan.len() < EVENTOS {
+                            c.llegan.push(evento);
+                        }
+                        if let EvPlugin::Rueda(v) = evento {
+                            // Dos semitonos por lado, como siempre.
+                            c.rueda = 2f32.powf(v.clamp(-1.0, 1.0) / 6.0);
+                            c.voces.iter_mut().for_each(|x| x.d.hz = hz_de(x.tono) * c.rueda);
+                        }
                     }
                 }
                 Orden::Metronomo(si) => self.metronomo = si,
+                Orden::Oir(x) => {
+                    // El anterior se suelta en el hilo de la ventana.
+                    if let Some(v) = std::mem::replace(&mut self.escucha, x) {
+                        let _ = self.oidos.try_send(v);
+                    }
+                }
                 Orden::Silencio => {
                     for c in &mut self.escena.canales {
-                        c.voces.iter_mut().for_each(|v| if c.plugin.is_some() { v.d.puerta = false } else { v.viva = false });
+                        c.voces.iter_mut().for_each(|v| if c.plugin.is_some() || c.vivo.is_some() { v.d.puerta = false } else { v.viva = false });
                     }
                     for e in self.escena.pistas.iter_mut().flat_map(|p| &mut p.efectos) {
                         e.mem.fill(0.0);
@@ -493,13 +742,61 @@ impl Motor {
         }
     }
 
+    /// Mueve un control del único efecto (o del único instrumento). Para cuando el motor vive dentro de un plugin.
+    pub fn control(&mut self, k: usize, v: f32) {
+        let e = self.escena.pistas.get_mut(1).and_then(|p| p.efectos.first_mut()).map(|e| &mut e.meta);
+        let m = e.or_else(|| self.escena.canales.first_mut().map(|c| &mut c.meta));
+        if let Some(x) = m.and_then(|m| m.get_mut(k)) {
+            *x = v;
+        }
+    }
+
     fn soltar_todo(&mut self) {
         for c in &mut self.escena.canales {
             c.voces.iter_mut().for_each(|v| v.d.puerta = false);
         }
     }
 
+    /// Una nota para ese canal: directo, o por su guion de notas.
     fn sonar(&mut self, i: usize, tono: u8, fuerza: f32, dur: Option<f64>) {
+        let c = &mut self.escena.canales[i];
+        if c.notas.is_none() {
+            return self.sonar_directo(i, tono, fuerza, dur);
+        }
+        if c.llegan.len() < EVENTOS && c.sueltan.len() < EVENTOS {
+            c.llegan.push(EvPlugin::Nota { tono, fuerza });
+            if let Some(d) = dur {
+                c.sueltan.push((tono, d));
+            }
+        }
+    }
+
+    /// Corre los guiones de notas y suena lo que manden.
+    fn notas_en_vivo(&mut self, n: usize, t: &EnVivo) {
+        for i in 0..self.escena.canales.len() {
+            let sr = self.escena.sr;
+            let c = &mut self.escena.canales[i];
+            let Some((v, ctl)) = c.notas.take() else { continue };
+            c.sueltan.iter_mut().for_each(|s| s.1 -= n as f64);
+            while let Some(k) = c.sueltan.iter().position(|s| s.1 <= 0.0) {
+                let tono = c.sueltan.swap_remove(k).0;
+                if c.llegan.len() < EVENTOS {
+                    c.llegan.push(EvPlugin::Suelta { tono });
+                }
+            }
+            let mut dio = std::mem::take(&mut c.dio);
+            let mut nada = [[0.0; BLOQUE]; 2];
+            v.procesar(&c.llegan, &ctl, t, &mut nada, &[[0.0; BLOQUE]; 2], n, &mut dio);
+            c.llegan.clear();
+            c.notas = Some((v, ctl));
+            for e in dio.drain(..) {
+                self.sonar_directo(i, e.tono, e.fuerza, Some((e.segundos * sr) as f64));
+            }
+            self.escena.canales[i].dio = dio;
+        }
+    }
+
+    fn sonar_directo(&mut self, i: usize, tono: u8, fuerza: f32, dur: Option<f64>) {
         let c = &mut self.escena.canales[i];
         let tono = c.fija.unwrap_or(tono);
         self.reloj += 1;
@@ -514,7 +811,7 @@ impl Motor {
         self.azar ^= self.azar << 13;
         self.azar ^= self.azar >> 17;
         self.azar ^= self.azar << 5;
-        if c.plugin.is_some() {
+        if c.plugin.is_some() || c.vivo.is_some() {
             // Cada voz aquí solo recuerda qué tecla hay que soltar.
             if c.avisos.len() + 2 > EVENTOS {
                 return;
@@ -527,14 +824,31 @@ impl Motor {
             let m = c.receta.memoria;
             c.mem[k * m..(k + 1) * m].fill(0.0);
         }
+        let golpe = tono.checked_sub(PRIMER_PAD).map(|k| k as usize).filter(|k| *k < c.pads.len());
+        if let Some(k) = golpe.filter(|k| c.pads[*k].1 > 0) {
+            // Los del mismo grupo se callan, como un platillo al cerrarse.
+            let g = c.pads[k].1;
+            for v in c.voces.iter_mut().filter(|v| v.viva) {
+                if v.tono.checked_sub(PRIMER_PAD).and_then(|q| c.pads.get(q as usize)).is_some_and(|q| q.1 == g) {
+                    v.d.puerta = false;
+                }
+            }
+        }
+        let pad = golpe.map_or([0.0; 3], |k| c.pads[k].0);
+        // Los pads suenan completos aunque la nota sea corta.
+        let dur = if c.pads.is_empty() { dur } else { dur.map(|_| f64::MAX) };
         let (zonas, cuantas) = c.muestra.as_ref().map_or(Default::default(), |x| x.elegir(tono, fuerza));
         c.voces[k] = Voz {
             viva: true,
             d: DatosVoz {
-                hz: 440.0 * 2f32.powf((tono as f32 - 69.0) / 12.0),
+                bpm: self.escena.bpm,
+                negra: (self.pos / PPQ as f64) as f32,
+                hz: hz_de(tono) * c.rueda,
                 fuerza,
                 azar: self.azar as f32 / u32::MAX as f32,
                 puerta: true,
+                pad,
+                desde: c.desde,
                 zonas,
                 cuantas,
             },
@@ -550,7 +864,7 @@ impl Motor {
     /// Llena `sale`. Es lo único que corre en el hilo de audio.
     pub fn tocar(&mut self, sale: &mut [[f32; 2]]) {
         self.atender();
-        let mut resto = sale;
+        let mut resto = &mut sale[..];
         while !resto.is_empty() {
             let mut n = resto.len().min(BLOQUE);
             let paso = self.escena.bpm as f64 * PPQ as f64 / 60.0 / self.escena.sr as f64;
@@ -574,27 +888,67 @@ impl Motor {
                 }
             }
             let (ahora, luego) = resto.split_at_mut(n);
-            let t =
-                Tiempo { bpm: self.escena.bpm as f64, pos: self.pos / PPQ as f64, tocando: self.tocando && !self.acabo, sr: self.escena.sr as f64 };
+            if let Some(x) = &self.externo {
+                self.escena.bpm = if x.tiempo.bpm > 1.0 { x.tiempo.bpm as f32 } else { 120.0 };
+            }
+            let t = if let Some(x) = &self.externo {
+                x.tiempo
+            } else {
+                Tiempo { bpm: self.escena.bpm as f64, pos: self.pos / PPQ as f64, tocando: self.tocando && !self.acabo, sr: self.escena.sr as f64 }
+            };
+            let en = EnVivo { bpm: self.escena.bpm, pos: if t.tocando { t.pos } else { self.libre }, tocando: t.tocando };
+            self.notas_en_vivo(n, &en);
             self.bloque(ahora, &t);
             if self.tocando && !self.acabo {
                 self.pos += n as f64 * paso;
             }
             resto = luego;
         }
+        self.oir_suelto(sale);
         self.estado.tocando.store(self.tocando && !self.acabo, Relaxed);
         self.estado.tick.store((self.pos as f32).to_bits(), Relaxed);
         self.estado.hora.store(self.estado.base.elapsed().as_micros() as u64, Relaxed);
     }
 
+    fn oir_suelto(&mut self, sale: &mut [[f32; 2]]) {
+        let mut va = u32::MAX;
+        if let Some(e) = &mut self.escucha {
+            let fin = e.fin.min(e.datos.len() as f64);
+            for s in sale.iter_mut() {
+                if e.pos >= fin {
+                    break;
+                }
+                let (i, f) = (e.pos as usize, e.pos.fract() as f32);
+                let (a, b) = (e.datos[i], e.datos.get(i + 1).copied().unwrap_or([0.0; 2]));
+                *s = [0, 1].map(|l| (s[l] + a[l] + (b[l] - a[l]) * f).clamp(-1.0, 1.0));
+                e.pos += e.paso;
+            }
+            if e.pos < fin {
+                va = e.pos as u32;
+            }
+        }
+        self.estado.oyendo.store(va, Relaxed);
+    }
+
     fn bloque(&mut self, sale: &mut [[f32; 2]], t: &Tiempo) {
         let n = sale.len();
         let Escena { canales, audios, pistas, bufs, sr, bpm, .. } = &mut *self.escena;
+        let negra = if t.tocando { t.pos } else { self.libre } as f32;
+        if !t.tocando {
+            self.libre += n as f64 * *bpm as f64 / 60.0 / *sr as f64;
+        }
+        let en = EnVivo { bpm: *bpm, pos: negra as f64, tocando: t.tocando };
         // Suaviza en unos 5 ms.
         let k = 1.0 - (-(n as f32) / (0.005 * *sr)).exp();
         for p in pistas.iter_mut() {
             p.mezcla[0][..n].fill(0.0);
             p.mezcla[1][..n].fill(0.0);
+        }
+        if let Some(x) = &self.externo {
+            for (k, b) in [(1, &x.entra), (2, &x.lateral)] {
+                pistas[k].mezcla = *b;
+                pistas[k].callada = 0;
+            }
         }
         let mut vivas = 0;
         let mudo = [[0.0; BLOQUE]; 2];
@@ -603,10 +957,13 @@ impl Motor {
             for l in 0..2 {
                 c.gan[l] += (c.gan_meta[l] - c.gan[l]) * k;
             }
+            for v in &c.vinculos {
+                v.mover(&mut c.meta);
+            }
             for (v, m) in c.ctl.iter_mut().zip(&c.meta) {
                 *v += (*m - *v) * k;
             }
-            if let Some(p) = &c.plugin {
+            if c.plugin.is_some() || c.vivo.is_some() {
                 for v in c.voces.iter_mut().filter(|v| v.viva) {
                     if !v.a_mano {
                         v.restan -= n as f64;
@@ -625,7 +982,11 @@ impl Motor {
                     continue;
                 }
                 let mut b = [[0.0; BLOQUE]; 2];
-                p.procesar(&c.avisos, t, &mudo, &mut b, n);
+                match (&c.plugin, &c.vivo) {
+                    (Some(p), _) => p.procesar(&c.avisos, t, &mudo, &mut b, n),
+                    (_, Some(v)) => v.procesar(&c.avisos, &c.ctl, &en, &mut b, &mudo, n, &mut c.dio),
+                    _ => {}
+                }
                 c.avisos.clear();
                 let pico = b.iter().flat_map(|x| &x[..n]).fold(0f32, |m, x| m.max(x.abs()));
                 if b.iter().flat_map(|x| &x[..n]).any(|x| !x.is_finite()) {
@@ -718,7 +1079,14 @@ impl Motor {
             }
         }
         // Primero las pistas, luego los envíos y al final la general.
+        let mut nada: Vec<Emitida> = Vec::new();
+        let mut laterales = [[[0.0; BLOQUE]; 2]; LATERALES];
         for i in (1..pistas.len()).chain([0]) {
+            // Lo que oyen de otras pistas sus efectos, antes de tomar esta.
+            laterales.iter_mut().for_each(|x| *x = [[0.0; BLOQUE]; 2]);
+            for (k, e) in pistas[i].efectos.iter().enumerate().take(LATERALES).filter(|(_, e)| e.lateral > 0) {
+                laterales[k] = pistas[e.lateral].mezcla;
+            }
             let (general, otras) = pistas.split_at_mut(1);
             let p = if i == 0 { &mut general[0] } else { &mut otras[i - 1] };
             let antes = p.gan;
@@ -726,11 +1094,14 @@ impl Motor {
                 p.gan[l] += (p.gan_meta[l] - p.gan[l]) * k;
             }
             // Diez segundos callada: ni sus efectos tienen cola.
-            if i > 0 && p.callada as f32 > 10.0 * *sr {
+            if i > 0 && !p.controla && p.callada as f32 > 10.0 * *sr {
                 continue;
             }
             p.callada = p.callada.saturating_add(n as u32);
-            for e in &mut p.efectos {
+            for (ranura, e) in p.efectos.iter_mut().enumerate() {
+                for v in &e.vinculos {
+                    v.mover(&mut e.meta);
+                }
                 let seco = p.mezcla;
                 e.mezcla += (e.mezcla_meta - e.mezcla) * k;
                 let mojado = e.mezcla;
@@ -754,8 +1125,27 @@ impl Motor {
                     continue;
                 }
                 let Some(r) = e.receta.as_deref() else { continue };
+                let otra = laterales.get(ranura).copied().unwrap_or([[0.0; BLOQUE]; 2]);
+                let entra = [p.mezcla[0], p.mezcla[1], otra[0], otra[1]];
                 receta::comunes(r, &e.ctl, bufs, n);
-                let [a, b] = receta::voz(r, &DatosVoz::default(), &e.ctl, None, Some(&p.mezcla), &mut e.mem, bufs, n);
+                let [a, b] = receta::voz(
+                    r,
+                    &DatosVoz { bpm: *bpm, negra, ..Default::default() },
+                    &e.ctl,
+                    e.huella.as_deref(),
+                    Some(&entra),
+                    &mut e.mem,
+                    bufs,
+                    n,
+                );
+                if let Some(v) = &e.vivo {
+                    let mut x = [bufs[a as usize], bufs[b as usize]];
+                    v.procesar(&[], &e.ctl, &en, &mut x, &otra, n, &mut nada);
+                    (bufs[a as usize], bufs[b as usize]) = (x[0], x[1]);
+                }
+                if let Some(x) = &e.medidas {
+                    r.medidas.iter().zip(x.iter()).for_each(|((_, off), x)| x.store(e.mem[*off].to_bits(), Relaxed));
+                }
                 let mut bien = true;
                 for (l, s) in [a, b].into_iter().enumerate() {
                     p.mezcla[l][..n].copy_from_slice(&bufs[s as usize][..n]);
@@ -801,6 +1191,7 @@ impl Motor {
                     a.store(pico.to_bits(), Relaxed);
                 }
             }
+            p.espera.pasar(&mut p.mezcla, n);
             if (1..PRIMER_ENVIO).contains(&i) {
                 let (x, envios) = (otras[i - 1].mezcla, otras[i - 1].envios);
                 for (k, e) in envios.into_iter().enumerate().filter(|e| e.1 > 0.0) {
@@ -812,6 +1203,8 @@ impl Motor {
                 }
             }
             if i > 0 {
+                let q = &mut otras[i - 1];
+                q.junta.pasar(&mut q.mezcla, n);
                 for l in 0..2 {
                     for (d, s) in general[0].mezcla[l][..n].iter_mut().zip(&otras[i - 1].mezcla[l][..n]) {
                         *d += s;
@@ -824,6 +1217,10 @@ impl Motor {
         let g = &pistas[0].mezcla;
         for (j, s) in sale.iter_mut().enumerate() {
             let (a, b) = (g[0][j], g[1][j]);
+            if self.externo.is_some() {
+                *s = [a, b];
+                continue;
+            }
             let pico = a.abs().max(b.abs());
             self.limite += (1.0 - self.limite) * vuelve;
             if pico * self.limite > 0.98 {

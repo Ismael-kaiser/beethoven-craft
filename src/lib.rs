@@ -34,6 +34,7 @@ pub mod propios;
 pub mod proyectos;
 pub mod recuperacion;
 pub mod separar;
+pub mod sonido;
 pub mod vgpu;
 pub mod video;
 pub mod vpropios;

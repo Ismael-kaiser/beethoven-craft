@@ -55,37 +55,21 @@ pub enum Cual {
     Archivo(PathBuf),
 }
 
-const NUEVO_EFECTO: &str = "-- Beethoven DAW Demo
-return {
-  nombre = { es = \"Mi efecto\", en = \"My effect\" },
-  tipo = \"efecto\",
-  grupo = { es = \"Míos\", en = \"Mine\" },
-  controles = {
-    -- clave, nombre, mínimo, máximo, valor
-    { \"calor\", { es = \"Calor\", en = \"Warmth\" }, 1, 10, 3 },
-    { \"mezcla\", { es = \"Mezcla\", en = \"Mix\" }, 0, 1, 0.5 },
-  },
-  sonido = function(e, c)
-    local function f(x) return mezclar(x, tanh(x * c.calor), c.mezcla) end
-    return f(e.izq), f(e.der)
-  end,
-}
-";
+/// Un plugin completo para empezar: con su ventana, sus preajustes y todo explicado.
+const NUEVO_EFECTO: &str = include_str!("../../plantillas/efecto.lua");
+const NUEVO: &str = include_str!("../../plantillas/instrumento.lua");
 
-const NUEVO: &str = "-- Beethoven DAW Demo
-return {
-  nombre = { es = \"Mi sonido\", en = \"My sound\" },
-  grupo = { es = \"Míos\", en = \"Mine\" },
-  controles = {
-    -- clave, nombre, mínimo, máximo, valor
-    { \"corte\", { es = \"Corte\", en = \"Cutoff\" }, 100, 12000, 3000 },
-  },
-  sonido = function(n, c)
-    local x = sierra(n.hz) + sierra(n.hz * 1.005)
-    return pasabajos(x, c.corte, 0.2) * adsr(0.01, 0.3, 0.7, 0.2) * n.fuerza * 0.3
-  end,
+/// La grabación resumida en 256 picos, de 0 a 1.
+pub fn picos(m: &crate::muestrario::Muestra) -> Vec<f32> {
+    let Some(z) = m.zonas.first() else { return vec![] };
+    let x = &m.datos[z.ini..z.fin];
+    let n = x.len().max(1);
+    let v: Vec<f32> = (0..256)
+        .map(|k| x[(k * n / 256).min(x.len())..((k + 1) * n / 256).min(x.len())].iter().step_by(1 + n / 100_000).fold(0f32, |m, v| m.max(v.abs())))
+        .collect();
+    let alto = v.iter().cloned().fold(1e-6, f32::max);
+    v.into_iter().map(|x| x / alto).collect()
 }
-";
 
 pub fn controles(ui: &mut Ui, f: &Ficha, v: &mut BTreeMap<String, f32>, c: Color32) {
     ui.horizontal_wrapped(|ui| {
@@ -160,10 +144,35 @@ impl App {
         let q = self.buscar.to_lowercase();
         let pasa = |s: &str| q.is_empty() || s.to_lowercase().contains(&q);
         let (mut ins, mut fx, mut plug, mut edita, mut nuevo) = (None, None, None, None, None);
+        let (mut tuyo, mut instala) = (None::<(String, u8)>, 0u8);
+        let mut notas = None;
         ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             CollapsingHeader::new(t("Instrumentos")).id_salt("Instrumentos").default_open(true).show(ui, |ui| {
                 if crate::banco::archivo().is_none() {
                     ui.label(RichText::new(t("Falta el banco de instrumentos grabados (sonidos/MuseScore_General.sf3)")).size(11.0).color(ROJO));
+                }
+                // Los sintetizadores de fábrica, antes que las grabaciones.
+                for (g, v) in self.bib.grupos(Tipo::Instrumento) {
+                    let v: Vec<_> = v.into_iter().filter(|x| !x.propio && (pasa(x.ficha.nombre.ver()) || pasa(g))).collect();
+                    if v.is_empty() {
+                        continue;
+                    }
+                    CollapsingHeader::new(g).id_salt("sintes").open(if q.is_empty() { None } else { Some(true) }).show(ui, |ui| {
+                        for x in v {
+                            let b = renglon(ui, x.ficha.nombre.ver(), ACENTO, None);
+                            if b.clicked() {
+                                ins = Some(x.clave.clone());
+                            }
+                            b.context_menu(|ui| {
+                                if ui.button(t("Editar en Lua")).clicked() {
+                                    edita = Some(x.clave.clone());
+                                }
+                            });
+                            if b.hovered() {
+                                self.pista_ayuda = t("Clic: agregar como canal").into();
+                            }
+                        }
+                    });
                 }
                 for (fam, v) in crate::banco::familias() {
                     let v: Vec<_> = v.into_iter().filter(|x| pasa(t(x.nombre)) || pasa(t(fam))).collect();
@@ -183,7 +192,7 @@ impl App {
                     });
                 }
             });
-            // Los de fábrica arriba; los tuyos, en «Crear en Lua».
+            // Los de fábrica arriba; los tuyos, en «Tus plugins».
             CollapsingHeader::new(t("Efectos")).id_salt("Efectos").default_open(true).show(ui, |ui| {
                 for (g, v) in self.bib.grupos(Tipo::Efecto) {
                     let v: Vec<_> = v.into_iter().filter(|x| !x.propio && (pasa(x.ficha.nombre.ver()) || pasa(g))).collect();
@@ -208,24 +217,39 @@ impl App {
                     }
                 }
             });
-            CollapsingHeader::new(t("Crear en Lua")).id_salt("crear").default_open(true).show(ui, |ui| {
-                ui.label(RichText::new(t("Tus propios instrumentos y efectos de sonido, escritos en Lua.")).size(11.0).color(TENUE));
-                let tuyos: Vec<_> =
-                    self.bib.guiones.iter().filter(|g| g.propio && g.ficha.tipo != Tipo::Herramienta && pasa(g.ficha.nombre.ver())).collect();
+            CollapsingHeader::new(t("Tus plugins")).id_salt("crear").default_open(true).show(ui, |ui| {
+                ui.label(
+                    RichText::new(t("Los que instalas o haces en Lua. Suelta aquí una carpeta, un .zip o un .lua y queda listo."))
+                        .size(11.0)
+                        .color(TENUE),
+                );
+                let tuyos: Vec<_> = self
+                    .bib
+                    .guiones
+                    .iter()
+                    .filter(|g| g.propio && !matches!(g.ficha.tipo, Tipo::Herramienta) && pasa(g.ficha.nombre.ver()))
+                    .collect();
                 for x in tuyos {
                     let es_ins = x.ficha.tipo == Tipo::Instrumento;
                     let logo = self.logo_de(ui.ctx(), &x.clave);
                     let b = renglon(ui, x.ficha.nombre.ver(), if es_ins { ACENTO } else { Color32::from_rgb(0x8c, 0xb8, 0xff) }, logo);
                     if b.clicked() {
-                        if es_ins {
+                        if x.ficha.tipo == Tipo::Notas {
+                            notas = Some(x.clave.clone());
+                        } else if es_ins {
                             ins = Some(x.clave.clone());
                         } else {
                             fx = Some(x.clave.clone());
                         }
                     }
                     b.context_menu(|ui| {
-                        if ui.button(t("Editar en Lua")).clicked() {
-                            edita = Some(x.clave.clone());
+                        for (s, que) in
+                            [("Editar en Lua", 0), ("Abrir su carpeta", 1), ("Empacar para compartir…", 2), ("Quitar (va a «Quitados»)", 3)]
+                        {
+                            if ui.button(t(s)).clicked() {
+                                tuyo = Some((x.clave.clone(), que));
+                                ui.close();
+                            }
                         }
                     });
                     if b.hovered() {
@@ -243,6 +267,16 @@ impl App {
                     }
                     if ui.button(t("+ Efecto en Lua")).clicked() {
                         nuevo = Some(NUEVO_EFECTO);
+                    }
+                    if ui.button(t("Instalar plugin…")).clicked() {
+                        instala = 1;
+                    }
+                    if ui
+                        .button(t("Abrir la carpeta"))
+                        .on_hover_text(t("Lo que pongas ahí se carga solo, y al guardar un cambio se oye de una vez"))
+                        .clicked()
+                    {
+                        instala = 2;
                     }
                 });
             });
@@ -280,9 +314,83 @@ impl App {
         if let Some(k) = edita {
             self.editar(&k);
         }
+        if let (Some(k), Some(c)) = (notas, self.p.canales.iter_mut().find(|c| c.id == self.canal)) {
+            c.notas = Some(k);
+            self.mostrar(Vista::Canal);
+        }
+        match tuyo {
+            Some((k, 0)) => self.editar(&k),
+            Some((k, 1)) => _ = self.bib.carpeta_de(&k).map(|d| mostrar_carpeta(&d)),
+            Some((k, 2)) => self.empacar_plugin(&k),
+            Some((k, _)) => match self.bib.quitar(&k) {
+                Ok(()) => {
+                    self.cambio_bib += 1;
+                    self.avisar(tf("«{}» se quitó; quedó en la carpeta «Quitados»", &[&k]), false);
+                }
+                Err(e) => self.avisar(e, true),
+            },
+            None => {}
+        }
+        match instala {
+            1 => {
+                if let Some(r) = rfd::FileDialog::new().add_filter("Plugin", &["zip", "bplugin", "lua"]).pick_file() {
+                    self.instalar_plugin(&r);
+                }
+            }
+            2 => {
+                if let Some(d) = self.bib.carpeta.clone() {
+                    let _ = std::fs::create_dir_all(&d);
+                    mostrar_carpeta(&d);
+                }
+            }
+            _ => {}
+        }
         if let Some(texto) = nuevo {
             let clave = self.bib.clave_libre(if idioma::actual() == Idioma::En { "my_sound" } else { "mi_sonido" });
             self.editor = Some(Editor { clave, texto: texto.into(), error: None, canal: (texto == NUEVO).then_some(0) });
+        }
+    }
+
+    /// Instala una carpeta, un paquete o un guion, y dice cómo quedó.
+    pub fn instalar_plugin(&mut self, r: &Path) {
+        match self.bib.instalar(r) {
+            Ok((clave, inf)) => {
+                self.cambio_bib += 1;
+                let Some(g) = self.bib.ver(&clave) else { return };
+                let (nombre, autor) = (g.ficha.nombre.ver().to_string(), g.ficha.autor.clone());
+                let quien = if autor.is_empty() { nombre } else { format!("{nombre} · {autor}") };
+                self.avisar(tf("«{}» quedó instalado: está en «Tus plugins» ({} % de procesador)", &[&quien, &format!("{:.1}", inf.cpu)]), false);
+                inf.avisos.into_iter().for_each(|a| self.avisar(a, true));
+            }
+            Err(e) => self.avisar(tf("No se instaló «{}»: {}", &[&r.file_name().unwrap_or_default().to_string_lossy(), &e]), true),
+        }
+    }
+
+    fn empacar_plugin(&mut self, clave: &str) {
+        let b = match self.bib.empacar(clave) {
+            Ok(b) => b,
+            Err(e) => return self.avisar(e, true),
+        };
+        let Some(r) = rfd::FileDialog::new().set_file_name(format!("{clave}.zip")).add_filter("Plugin", &["zip", "bplugin"]).save_file() else {
+            return;
+        };
+        match std::fs::write(&r, b) {
+            Ok(()) => self.avisar(t("Listo para compartir: quien lo reciba solo tiene que soltarlo en el programa"), false),
+            Err(e) => self.avisar(tf("No se pudo guardar: {}", &[&e]), true),
+        }
+    }
+
+    /// Carga lo que cambió en la carpeta de plugins.
+    pub fn vigilar_plugins(&mut self) {
+        use crate::instalar::Cambio;
+        for c in self.bib.vigilar() {
+            self.cambio_bib += 1;
+            match c {
+                Cambio::Nuevo(k) => self.avisar(tf("Plugin nuevo: «{}»", &[&self.bib.nombre(&k)]), false),
+                Cambio::Mejor(k) => self.avisar(tf("«{}» se actualizó", &[&self.bib.nombre(&k)]), false),
+                Cambio::Fuera(k) => self.avisar(tf("«{}» ya no está en la carpeta", &[&k]), false),
+                Cambio::Mal(k, e) => self.avisar(format!("{k}: {e}"), true),
+            }
         }
     }
 
@@ -501,6 +609,55 @@ impl App {
         }
     }
 
+    /// Los efectos que pueden mover controles de otros.
+    pub(super) fn controladores(&self) -> Vec<((usize, usize), String)> {
+        let mut v = vec![];
+        for (i, m) in self.p.mezcla.iter().enumerate() {
+            for (k, e) in m.efectos.iter().enumerate().filter(|(_, e)| e.activo) {
+                let Some(g) = self.bib.ver(&e.efecto) else { continue };
+                if g.receta.as_ref().is_some_and(|r| r.nombres_medidas().any(|m| m == "control")) {
+                    v.push(((i, k), format!("{} · {}", g.ficha.nombre.ver(), m.nombre)));
+                }
+            }
+        }
+        v
+    }
+
+    /// El `id` de un efecto; si no tenía, se le pone.
+    pub(super) fn id_de(&mut self, (i, k): (usize, usize)) -> u64 {
+        let nuevo = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64);
+        let e = &mut self.p.mezcla[i].efectos[k];
+        if e.id == 0 {
+            e.id = nuevo;
+        }
+        e.id
+    }
+
+    /// Le pone un audio a un pad.
+    pub fn poner_pad(&mut self, canal: usize, pad: usize, ruta: String) {
+        let c = &mut self.p.canales[canal];
+        c.pads.resize(crate::motor::PADS, String::new());
+        c.pads[pad] = ruta;
+    }
+
+    /// Escribe en el patrón una nota por corte, donde cae cada uno en el audio.
+    pub fn escribir_cortes(&mut self, canal: usize) {
+        let c = self.p.canales[canal].clone();
+        let Some(m) = c.muestra.as_ref().and_then(|r| self.bib.cortes(r, &c.controles)) else { return };
+        let seg = c.muestra.as_ref().and_then(|r| self.bib.muestra(r, 0)).map_or(0.0, |m| m.segundos());
+        let total = self.p.pulsos(seg);
+        let Some(x) = self.p.patrones.iter_mut().find(|x| x.id == self.patron) else { return };
+        let en = |f: f32| (f * total as f32).round() as u32;
+        let notas = m.cortes.iter().enumerate().map(|(i, a)| {
+            let fin = m.cortes.get(i + 1).map_or(total, |b| en(*b));
+            Nota { tick: en(*a), dur: fin.saturating_sub(en(*a)).max(1), tono: 48 + i as u8, fuerza: 0.9 }
+        });
+        x.notas.insert(c.id, notas.collect());
+        x.compases = x.compases.max(total.div_ceil(COMPAS));
+        let nombre = x.nombre.clone();
+        self.avisar(tf("{} cortes escritos en «{}»", &[&m.cortes.len(), &nombre]), false);
+    }
+
     pub(super) fn ver_canal(&mut self, ui: &mut Ui) {
         if let Some(i) = self.clip.filter(|_| self.clip_audio().is_some()) {
             return self.ver_clip(ui, i);
@@ -509,7 +666,26 @@ impl App {
         let (mut edita, mut abrir) = (None, None);
         let clave = self.p.canales[k].instrumento.clone();
         self.lienzo(&clave);
-        let momento = self.momento(ui, self.p.canales[k].pista);
+        let mut momento = self.momento(ui, self.p.canales[k].pista);
+        if let Some(n) = self.p.canales[k].notas.clone() {
+            self.lienzo(&n);
+        }
+        if let Some(r) = self.p.canales[k].muestra.clone() {
+            momento.archivo = Path::new(&r).file_name().unwrap_or_default().to_string_lossy().into();
+            if self.lienzo(&clave).is_some() {
+                momento.huella = self.bib.muestra(&r, self.p.canales[k].preset).map_or(vec![], |m| picos(&m));
+                if self.bib.ver(&clave).is_some_and(|g| g.ficha.muestras == crate::lua::Muestras::Cortes) {
+                    let c = self.p.canales[k].controles.clone();
+                    momento.cortes = self.bib.cortes(&r, &c).map_or(vec![], |m| m.cortes.clone());
+                }
+            }
+        }
+        let mut ent = lienzo::Entorno {
+            pads: self.p.canales[k].pads.clone(),
+            controladores: self.controladores(),
+            vinculados: self.p.canales[k].vinculos.keys().cloned().collect(),
+            ..Default::default()
+        };
         ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             let c = &mut self.p.canales[k];
             let col = color(c.color);
@@ -566,12 +742,42 @@ impl App {
                 }
             });
             if let Some(g) = self.bib.sonido(&c.instrumento) {
+                if !g.ficha.presets.is_empty() {
+                    ui.menu_button(t("Preajustes"), |ui| {
+                        for (nombre, v) in &g.ficha.presets {
+                            if ui.button(nombre.ver()).clicked() {
+                                c.controles = v.clone();
+                                ui.close();
+                            }
+                        }
+                    });
+                }
                 match self.lienzos.get_mut(&g.clave) {
-                    Some((_, Some(it))) => lienzo::pintar(ui, it, &g.ficha, &mut c.controles, momento),
+                    // Entero en lo que se ve; en ventanas muy chaparras, lo que sobra se recorre.
+                    Some((_, Some(it))) => {
+                        let ancho = ui.available_width().max(220.0);
+                        let alto = (ui.clip_rect().bottom() - ui.cursor().top() - 8.0).max(230.0);
+                        let tam = vec2(it.ancho, it.alto) * (ancho / it.ancho).min(alto / it.alto);
+                        ui.allocate_ui(tam, |ui| {
+                            ui.set_min_size(tam);
+                            {
+                                ent.datos = Some(c.datos.clone());
+                                lienzo::pintar(ui, it, &g.ficha, &mut c.controles, momento.clone(), &mut ent);
+                                if let Some(d) = ent.datos.take() {
+                                    c.datos = d;
+                                }
+                            }
+                        });
+                    }
                     _ => controles(ui, &g.ficha, &mut c.controles, ACENTO),
                 }
             }
-            if c.instrumento == "muestra" || c.muestra.is_some() {
+            if c.muestra.is_some()
+                || self
+                    .bib
+                    .ver(&c.instrumento)
+                    .is_some_and(|g| g.ficha.muestras == crate::lua::Muestras::Archivo && g.receta.as_ref().is_some_and(|r| r.usa_muestra()))
+            {
                 ui.separator();
                 let n = c
                     .muestra
@@ -600,12 +806,67 @@ impl App {
                 }
             }
             ui.separator();
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(t("Notas en vivo")).size(11.0).color(TENUE));
+                let actual = c.notas.as_ref().map_or(t("Nada").to_string(), |k| self.bib.nombre(k));
+                ComboBox::from_id_salt("notas-en-vivo").selected_text(actual).width(170.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.notas, None, t("Nada"));
+                    for g in self.bib.de_tipo(Tipo::Notas) {
+                        ui.selectable_value(&mut c.notas, Some(g.clave.clone()), g.ficha.nombre.ver());
+                    }
+                });
+            });
+            if let Some(g) = c.notas.as_ref().and_then(|k| self.bib.ver(k)) {
+                match self.lienzos.get_mut(&g.clave) {
+                    Some((_, Some(it))) => {
+                        let ancho = ui.available_width().clamp(220.0, 520.0);
+                        let tam = vec2(ancho, ancho * it.alto / it.ancho);
+                        ui.allocate_ui(tam, |ui| {
+                            ui.set_min_size(tam);
+                            lienzo::pintar(ui, it, &g.ficha, &mut c.notas_controles, Default::default(), &mut Default::default())
+                        });
+                    }
+                    _ => controles(ui, &g.ficha, &mut c.notas_controles, ACENTO),
+                }
+            }
+            ui.separator();
             if let Some(m) = self.teclados.as_ref().filter(|m| !m.nombres.is_empty()) {
                 ui.add(Label::new(RichText::new(format!("MIDI: {}", m.nombres.join(", "))).size(12.0).color(VERDE)).truncate());
             }
             ui.label(RichText::new(t("Octava del teclado")).size(11.0).color(TENUE));
             ui.add(Slider::new(&mut self.octava, 2..=8));
         });
+        for (tono, si) in std::mem::take(&mut ent.toca) {
+            if si { self.sonar(self.canal, tono, 0.9) } else { self.callar(self.canal, tono) }
+        }
+        let audio = |ui: &Ui| {
+            let _ = ui;
+            rfd::FileDialog::new().add_filter("Audio", crate::decodificar::EXTENSIONES).pick_file().map(|r| r.to_string_lossy().to_string())
+        };
+        if let Some(i) = ent.pad_archivo
+            && let Some(r) = audio(ui)
+        {
+            self.poner_pad(k, i, r);
+        }
+        if ent.elegir
+            && let Some(r) = audio(ui)
+        {
+            (self.p.canales[k].muestra, self.p.canales[k].preset) = (Some(r), 0);
+        }
+        if ent.quitar {
+            self.p.canales[k].muestra = None;
+        }
+        if ent.escribir {
+            self.escribir_cortes(k);
+        }
+        if let Some((c, de)) = ent.vincular.take() {
+            let id = de.map(|d| self.id_de(d));
+            let v = &mut self.p.canales[k].vinculos;
+            match id {
+                Some(id) => _ = v.insert(c, id),
+                None => _ = v.remove(&c),
+            }
+        }
         if let Some(x) = edita {
             self.editar(&x);
         }
@@ -640,7 +901,11 @@ impl App {
         });
         if probar {
             let archivos = self.bib.ver(&e.clave).map(|g| g.archivos.clone()).unwrap_or_default();
-            e.error = Some(crate::lua::armar_con(&e.texto, self.bib.sr, &archivos).map_or_else(|x| x, |_| t("Todo bien").into()));
+            e.error = Some(match crate::instalar::revisar(&e.texto, &archivos, self.bib.sr) {
+                Ok((_, inf)) if inf.avisos.is_empty() => t("Todo bien").into(),
+                Ok((_, inf)) => inf.avisos.join(" · "),
+                Err(x) => x,
+            });
         }
         if guardar {
             match self.bib.guardar(&e.clave, &e.texto) {

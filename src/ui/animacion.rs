@@ -513,7 +513,7 @@ impl App {
                     self.anim.grafica = true;
                 }
                 ui.separator();
-                if boton_color(ui, &tabler::CARET_LEFT, false, "Cuadro clave anterior", GLYPH, 26.0).clicked() {
+                if boton_color(ui, &iconos::CARET_LEFT, false, "Cuadro clave anterior", GLYPH, 26.0).clicked() {
                     self.saltar_clave(-1);
                 }
                 // El botón grande: guarda el objeto como está.
@@ -528,7 +528,7 @@ impl App {
                 if resp.on_hover_text(t("Guarda en el cursor todo lo que tiene el objeto: lugar, tamaño, giro, transparencia, color, recorte y efectos animados (Shift+K)")).clicked() {
                     self.clave_de_todo();
                 }
-                if boton_color(ui, &tabler::CARET_RIGHT, false, "Cuadro clave siguiente", GLYPH, 26.0).clicked() {
+                if boton_color(ui, &iconos::CARET_RIGHT, false, "Cuadro clave siguiente", GLYPH, 26.0).clicked() {
                     self.saltar_clave(1);
                 }
                 let on = self.anim.clic_pone;

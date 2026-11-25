@@ -50,6 +50,19 @@ pub struct Canal {
     /// Pista de mezcla (0 es la general).
     #[serde(default)]
     pub pista: usize,
+    /// Los audios de cada pad de la batería.
+    #[serde(default)]
+    pub pads: Vec<String>,
+    /// El guion que cambia las notas antes de que suenen, y sus controles.
+    #[serde(default)]
+    pub notas: Option<String>,
+    #[serde(default)]
+    pub notas_controles: BTreeMap<String, f32>,
+    #[serde(default)]
+    pub datos: BTreeMap<String, String>,
+    /// Qué controlador mueve cada control, por su `id`.
+    #[serde(default)]
+    pub vinculos: BTreeMap<String, u64>,
 }
 
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
@@ -188,11 +201,33 @@ pub struct EfectoPuesto {
     pub mezcla: f32,
     #[serde(default)]
     pub plugin: Option<PluginPuesto>,
+    /// El audio que usa de huella un efecto de convolución.
+    #[serde(default)]
+    pub muestra: Option<String>,
+    /// Para que otros lo encuentren aunque cambie de lugar; 0 si nadie lo necesita.
+    #[serde(default)]
+    pub id: u64,
+    /// Qué controlador mueve cada control, por su `id`.
+    #[serde(default)]
+    pub vinculos: BTreeMap<String, u64>,
+    /// Textos que guarda su guion.
+    #[serde(default)]
+    pub datos: BTreeMap<String, String>,
 }
 
 impl EfectoPuesto {
     pub fn nuevo(efecto: &str) -> EfectoPuesto {
-        EfectoPuesto { efecto: efecto.into(), controles: BTreeMap::new(), activo: true, mezcla: 1.0, plugin: None }
+        EfectoPuesto {
+            efecto: efecto.into(),
+            controles: BTreeMap::new(),
+            activo: true,
+            mezcla: 1.0,
+            plugin: None,
+            muestra: None,
+            id: 0,
+            vinculos: BTreeMap::new(),
+            datos: BTreeMap::new(),
+        }
     }
 }
 
@@ -310,6 +345,11 @@ impl Proyecto {
             mudo: false,
             solo: false,
             pista: 0,
+            pads: vec![],
+            notas: None,
+            notas_controles: BTreeMap::new(),
+            datos: BTreeMap::new(),
+            vinculos: BTreeMap::new(),
         });
         id
     }
@@ -346,6 +386,12 @@ impl Proyecto {
         let Some(i) = (1..PRIMER_ENVIO).find(|i| !usada(*i)) else { return 0 };
         self.mezcla[i].nombre = nombre.chars().take(24).collect();
         i
+    }
+
+    /// Dónde está el controlador con ese `id`, si sigue puesto y prendido.
+    pub fn controlador(&self, id: u64) -> Option<(usize, usize)> {
+        let de = |m: &PistaMezcla| m.efectos.iter().position(|e| e.id == id && e.activo);
+        self.mezcla.iter().enumerate().find_map(|(i, m)| Some((i, de(m)?))).filter(|_| id != 0)
     }
 
     /// Pulsos que dura un audio de esos segundos.

@@ -319,10 +319,10 @@ impl App {
                             }
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 ui.spacing_mut().item_spacing.x = 2.0;
-                                if boton_color(ui, &tabler::X, false, "Quitar efecto", TEXT_DIM, 22.0).clicked() {
+                                if boton_color(ui, &iconos::X, false, "Quitar efecto", TEXT_DIM, 22.0).clicked() {
                                     quitar = Some(i);
                                 }
-                                if boton_color(ui, &tabler::CARET_UP, false, "Subir en la cadena", TEXT_DIM, 22.0).clicked() && i > 0 {
+                                if boton_color(ui, &iconos::CARET_UP, false, "Subir en la cadena", TEXT_DIM, 22.0).clicked() && i > 0 {
                                     mover = Some(i);
                                 }
                                 if !f.tipo.ajustes().is_empty() {

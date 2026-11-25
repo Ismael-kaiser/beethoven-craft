@@ -49,7 +49,23 @@ fn afinacion(x: &[[f32; 2]], sr: f32, lo: f32, hi: f32) -> f32 {
 #[test]
 fn todos_los_instrumentos_suenan_y_se_apagan() {
     // De fábrica solo queda el muestreador en Lua; los instrumentos son grabaciones del banco.
-    assert_eq!(bib().de_tipo(Tipo::Instrumento).map(|g| g.clave.as_str()).collect::<Vec<_>>(), ["muestra"]);
+    assert_eq!(
+        bib().de_tipo(Tipo::Instrumento).map(|g| g.clave.as_str()).collect::<Vec<_>>(),
+        [
+            "muestra",
+            "tresondas",
+            "frecuencias",
+            "muralla",
+            "acido",
+            "retumbo",
+            "pulsada",
+            "barras",
+            "muestreador",
+            "pads",
+            "cortador",
+            "monoanalogico"
+        ]
+    );
     if beethoven_daw_demo::banco::archivo().is_none() {
         return eprintln!("sin banco: corre empaque/sonidos.sh");
     }

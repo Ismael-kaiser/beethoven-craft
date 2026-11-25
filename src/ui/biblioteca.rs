@@ -67,7 +67,7 @@ fn contiene(t: &str, q: &str) -> bool {
 }
 
 /// Renglón arrastrable. Devuelve verdadero con doble clic.
-fn renglon(ui: &mut Ui, icon: &tabler::TablerIcon, t: &str, s: Soltar) -> bool {
+fn renglon(ui: &mut Ui, icon: &iconos::Icono, t: &str, s: Soltar) -> bool {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
     resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, t));
     if resp.hovered() || resp.dragged() {
@@ -93,16 +93,16 @@ impl App {
     /// `solo_fx`: en la ventana de Efectos no salen medios ni grabación.
     pub fn biblioteca(&mut self, ui: &mut Ui, solo_fx: bool) {
         use Seccion::*;
-        let todas: [(Seccion, &str, &tabler::TablerIcon); 9] = [
-            (Medios, "Medios", &tabler::FOLDERS),
-            (Estilos, "Estilos", &tabler::STAR),
-            (Filtros, "Filtros", &tabler::ADJUSTMENTS),
-            (FxVideo, "Efectos de video", &tabler::FLASK_2),
-            (Transiciones, "Transiciones", &tabler::BLEND_MODE),
-            (Titulos, "Títulos", &tabler::FILE_TYPOGRAPHY),
-            (Texto, "Texto", &tabler::FILE_TEXT),
-            (FxAudio, "Efectos de audio", &tabler::PLUG),
-            (Grabar, "Grabar", &tabler::MICROPHONE),
+        let todas: [(Seccion, &str, &iconos::Icono); 9] = [
+            (Medios, "Medios", &iconos::FOLDERS),
+            (Estilos, "Estilos", &iconos::STAR),
+            (Filtros, "Filtros", &iconos::ADJUSTMENTS),
+            (FxVideo, "Efectos de video", &iconos::FLASK_2),
+            (Transiciones, "Transiciones", &iconos::BLEND_MODE),
+            (Titulos, "Títulos", &iconos::FILE_TYPOGRAPHY),
+            (Texto, "Texto", &iconos::FILE_TEXT),
+            (FxAudio, "Efectos de audio", &iconos::PLUG),
+            (Grabar, "Grabar", &iconos::MICROPHONE),
         ];
         let visibles: Vec<_> = todas.into_iter().filter(|(s, ..)| !solo_fx || !matches!(s, Medios | Grabar)).collect();
         if solo_fx && matches!(self.lib.seccion, Medios | Grabar) {
@@ -156,7 +156,7 @@ impl App {
         let mut abrir = None;
         for r in rutas {
             let video = self.p.video.iter().any(|c| c.ruta == r);
-            let ic = if video { &tabler::LAYOUT_ROWS } else { &tabler::FILE_MUSIC };
+            let ic = if video { &iconos::LAYOUT_ROWS } else { &iconos::FILE_MUSIC };
             if renglon(ui, ic, &nombre_de(&r), Soltar::Medio(r.clone())) {
                 abrir = Some(r);
             }
@@ -395,7 +395,7 @@ impl App {
         }
         ui.horizontal(|ui| {
             ui.add(TextEdit::singleline(&mut self.lib.buscar).hint_text(crate::idioma::t("Buscar efecto…")).margin(Margin::symmetric(8, 4)).desired_width(ui.available_width() - 26.0 - ui.spacing().item_spacing.x - 2.0));
-            if boton_color(ui, &super::tabler::ROTATE_CLOCKWISE_2, false, "Muestras con este cuadro: rehace las miniaturas con lo que se está viendo", GLYPH, 26.0).clicked() {
+            if boton_color(ui, &super::iconos::ROTATE_CLOCKWISE_2, false, "Muestras con este cuadro: rehace las miniaturas con lo que se está viendo", GLYPH, 26.0).clicked() {
                 self.pedir_muestras();
             }
         });

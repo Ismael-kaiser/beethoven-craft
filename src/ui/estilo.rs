@@ -1,650 +1,266 @@
-// Copyright (C) 2026 ItsAlphaNeon (diseño y colores de la piel «Lemon» de Lemon Studio)
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Adapted for Toma Uno on 2026-11-23 from Lemon Studio (https://github.com/ItsAlphaNeon/Lemon-Studio, commit 349c6ba):
-// crates/os-theme/src/design.rs (colours) and crates/os-ui/src/kit/lemon.rs (knob, fader, LED, buttons), repainted
-// with egui. Fonts: Cuprum and Barlow (OFL 1.1). Icons: Tabler (MIT).
-#![allow(dead_code)]
-use super::tabler::TablerIcon;
-use eframe::egui::{self, *};
-use std::f32::consts::PI;
+// Beethoven Craft. Copyright (C) 2026 mixter-ha99. SPDX-License-Identifier: MIT OR Apache-2.0
+//! Colores, letra y controles de Movie. El metal y el vidrio están en `metal.rs`.
+use super::iconos::Icono;
+pub use super::metal::{degradado, degradado_en, encendido, engrane, esfera, hueco, indice, metalizar, mezcla, relieve, tornillo, vidrio, vidrio_en};
+use eframe::egui::*;
+use std::f32::consts::{PI, TAU};
 
-/// Un color. Los grises de las superficies se llevan al modo oscuro: más abajo y con un toque frío; los de las letras
-/// se quedan.
+/// Un color. Los grises oscuros de las superficies bajan más y toman un tono frío; lo demás queda igual.
 pub const fn c(h: u32) -> Color32 {
     let (r, g, b) = ((h >> 16) as u8, (h >> 8) as u8, h as u8);
     if r == g && g == b && r < 0x70 {
         let v = r as u32;
-        let n = v * 58 / 100;
-        return Color32::from_rgb(n as u8, (n + n / 22) as u8, (n + n / 7 + 1) as u8);
+        return Color32::from_rgb((v * 147 / 256) as u8, (v * 151 / 256) as u8, (v * 169 / 256 + 1) as u8);
     }
     Color32::from_rgb(r, g, b)
 }
-pub const MAIN: Color32 = c(0xffe066);
-pub const HIGHLIGHT: Color32 = c(0xfff1b8);
-pub const COLORED_DARK: Color32 = c(0x473900);
-pub const DEEP: Color32 = c(0xc9a92c);
-pub const TOOLBAR: Color32 = c(0x3b3b3b);
-pub const TOOLBAR_LINE: Color32 = c(0x2a2a2a);
-pub const SUNKEN: Color32 = c(0x2b2b2b);
-pub const TIME_PANEL: Color32 = c(0x232323);
-pub const BUTTON: Color32 = c(0x474747);
-pub const BUTTON_HI: Color32 = c(0x555555);
-pub const GLYPH: Color32 = c(0xe6e6e6);
-pub const TEXT: Color32 = c(0xececec);
-pub const TEXT_DIM: Color32 = c(0xa3a3a3);
-pub const TEXT_FAINT: Color32 = c(0x7f7f7f);
-pub const RECORD: Color32 = c(0xff6159);
-pub const WORKSPACE: Color32 = c(0x262626);
-pub const WINDOW_TITLE: Color32 = c(0x333333);
-pub const WINDOW_BODY: Color32 = c(0x2e2e2e);
-pub const TRACK_HEADER: Color32 = c(0x383838);
-pub const RULER: Color32 = c(0x232323);
-pub const RULER_TEXT: Color32 = c(0x9e9e9e);
-pub const GRID: Color32 = c(0x282828);
-pub const GRID_ALT: Color32 = c(0x2d2d2d);
-pub const GRID_GAP: Color32 = c(0x202020);
-pub const GRID_BAR: Color32 = c(0x161616);
-pub const STRIP: Color32 = c(0x303030);
-pub const STRIP_DARK: Color32 = c(0x242424);
-pub const SLOT: Color32 = c(0x2b2b2b);
-pub const WELL: Color32 = c(0x1f1f1f);
-pub const WELL_LINE: Color32 = c(0x181818);
-pub const METER_CLIP: Color32 = c(0xf05040);
+
+const fn x(h: u32) -> Color32 {
+    Color32::from_rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
+}
+
+pub const MAIN: Color32 = x(0xffd95e);
+pub const HIGHLIGHT: Color32 = x(0xfff0bd);
+pub const COLORED_DARK: Color32 = x(0x2e2808);
+pub const DEEP: Color32 = x(0xbd9d33);
+pub const TOOLBAR: Color32 = x(0x222327);
+pub const TOOLBAR_LINE: Color32 = x(0x111215);
+pub const SUNKEN: Color32 = x(0x18191d);
+pub const BUTTON: Color32 = x(0x38393e);
+pub const BUTTON_HI: Color32 = x(0x45464c);
+pub const GLYPH: Color32 = x(0xdedcd6);
+pub const TEXT: Color32 = x(0xecebe6);
+pub const TEXT_DIM: Color32 = x(0x96979e);
+pub const TEXT_FAINT: Color32 = x(0x6e6f76);
+pub const RECORD: Color32 = x(0xff5f5a);
+pub const WORKSPACE: Color32 = x(0x16171a);
+pub const WINDOW_TITLE: Color32 = x(0x1e1f23);
+pub const WINDOW_BODY: Color32 = x(0x1b1c20);
+pub const TRACK_HEADER: Color32 = x(0x27282d);
+pub const RULER: Color32 = x(0x141519);
+pub const RULER_TEXT: Color32 = x(0x8e9098);
+pub const GRID: Color32 = x(0x17181b);
+pub const GRID_ALT: Color32 = x(0x1a1b1f);
+pub const GRID_GAP: Color32 = x(0x101114);
+pub const GRID_BAR: Color32 = x(0x0a0b0d);
+pub const STRIP: Color32 = x(0x26272b);
+pub const STRIP_DARK: Color32 = x(0x17181b);
+pub const SLOT: Color32 = x(0x1b1c20);
+pub const WELL: Color32 = x(0x0c0d0f);
+pub const METER_CLIP: Color32 = x(0xff4538);
 
 /// Colores de pista, en el orden en que se crean.
-pub const PISTAS: [Color32; 8] = [
-    c(0xe0564f),
-    c(0x43c0c8),
-    c(0x9b63d6),
-    c(0xe8b842),
-    c(0x4a90e0),
-    c(0x5cc46a),
-    c(0xe27a3f),
-    c(0xd667ac),
-];
+pub const PISTAS: [Color32; 8] = [x(0xd4766e), x(0xd99a55), x(0xc9b84f), x(0x7fb46a), x(0x55b3a6), x(0x6a9fd4), x(0x9a86d6), x(0xcf7fb2)];
 
-/// Apagados hacia el gris para que no compitan con la imagen.
 pub fn color_pista(i: usize) -> Color32 {
-    mezcla(PISTAS[i % PISTAS.len()], c(0x8a8a8a), 0.4)
+    PISTAS[i % PISTAS.len()]
 }
 
-pub fn aplicar(ctx: &Context) {
-    let mut f = FontDefinitions::default();
-    let mut pon = |n: &str, b: &'static [u8]| {
-        f.font_data.insert(n.into(), std::sync::Arc::new(FontData::from_static(b)));
-    };
-    pon("cuprum", include_bytes!("../../recursos/Cuprum.ttf"));
-    pon("barlow", include_bytes!("../../recursos/BarlowSemiCondensed-SemiBold.ttf"));
-    f.families.get_mut(&FontFamily::Proportional).unwrap().insert(0, "cuprum".into());
-    // Nombres de archivo en japonés, coreano, etc.: letra del sistema como último recurso.
-    let windir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
-    let unicode: Vec<String> = if cfg!(windows) {
-        ["msyh.ttc", "malgun.ttf", "seguisym.ttf"].iter().map(|f| format!("{windir}\\Fonts\\{f}")).collect()
-    } else if cfg!(target_os = "macos") {
-        vec!["/System/Library/Fonts/Supplemental/Arial Unicode.ttf".into()]
-    } else {
-        ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
-            .map(String::from)
-            .to_vec()
-    };
-    if let Some(b) = unicode.iter().find_map(|r| std::fs::read(r).ok()) {
-        f.font_data.insert("unicode".into(), std::sync::Arc::new(FontData::from_owned(b)));
-        f.families.get_mut(&FontFamily::Proportional).unwrap().push("unicode".into());
-    }
-    f.families.insert(FontFamily::Name("barlow".into()), vec!["barlow".into(), "cuprum".into()]);
-    ctx.set_fonts(f);
-    ctx.set_theme(egui::Theme::Dark);
-    ctx.all_styles_mut(|s| {
-        let v = &mut s.visuals;
-        v.panel_fill = WORKSPACE;
-        v.window_fill = WINDOW_BODY;
-        v.window_stroke = Stroke::new(1.0, c(0x1a1a1a));
-        v.extreme_bg_color = WELL;
-        v.override_text_color = Some(TEXT);
-        v.selection.bg_fill = DEEP;
-        v.selection.stroke = Stroke::new(1.0, MAIN);
-        let r = CornerRadius::same(6);
-        for w in [
-            &mut v.widgets.inactive,
-            &mut v.widgets.hovered,
-            &mut v.widgets.active,
-            &mut v.widgets.open,
-            &mut v.widgets.noninteractive,
-        ] {
-            w.corner_radius = r;
-            w.bg_stroke = Stroke::NONE;
-        }
-        v.widgets.inactive.weak_bg_fill = BUTTON;
-        v.widgets.inactive.bg_fill = BUTTON;
-        v.widgets.hovered.weak_bg_fill = BUTTON_HI;
-        v.widgets.hovered.bg_fill = BUTTON_HI;
-        v.widgets.active.weak_bg_fill = DEEP;
-        v.widgets.open.weak_bg_fill = BUTTON_HI;
-        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, TOOLBAR_LINE);
-        // Relieve en los botones de egui: un borde oscuro los despega del fondo.
-        v.widgets.inactive.bg_stroke = Stroke::new(1.0, BORDE_REPOSO);
-        v.widgets.hovered.bg_stroke = Stroke::new(1.0, BORDE_ENCIMA);
-        v.widgets.active.bg_stroke = Stroke::new(1.0, BORDE_APRETADO);
-        v.widgets.open.bg_stroke = Stroke::new(1.0, BORDE_ABIERTO);
-        v.window_shadow = epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: Color32::from_black_alpha(150) };
-        v.popup_shadow = epaint::Shadow { offset: [0, 6], blur: 16, spread: 0, color: Color32::from_black_alpha(130) };
-        for (k, t) in s.text_styles.iter_mut() {
-            t.size = match k {
-                TextStyle::Heading => 19.0,
-                TextStyle::Small => 12.0,
-                _ => 15.0,
-            };
-        }
-        s.interaction.tooltip_delay = 0.4;
-        s.spacing.button_padding = vec2(8.0, 4.0);
-    });
-}
-
-// Bordes de los botones, listas y casillas de egui. Son únicos (nada más los usa) para encontrarlos en `metalizar`.
-const BORDE_REPOSO: Color32 = Color32::from_rgb(0x1b, 0x1b, 0x1c);
-const BORDE_ENCIMA: Color32 = Color32::from_rgb(0x6a, 0x6a, 0x6b);
-const BORDE_APRETADO: Color32 = Color32::from_rgb(0x11, 0x11, 0x12);
-const BORDE_ABIERTO: Color32 = Color32::from_rgb(0x1b, 0x1c, 0x1b);
-
-/// El metal en todo: al final de cada cuadro, los marcos de los botones, listas, casillas y campos de egui (los que
-/// tienen sus bordes) se cambian por piezas con relieve, sin tocar cada botón. Los campos de texto quedan hundidos.
-/// Solo revisa lo ya dibujado: cuesta unos microsegundos.
-pub fn metalizar(ctx: &Context) {
-    let capas: Vec<LayerId> = ctx.memory(|m| m.layer_ids().collect());
-    let suave = 1.0 / ctx.pixels_per_point();
-    ctx.graphics_mut(|g| {
-        for l in capas {
-            let Some(lista) = g.get_mut(l) else { continue };
-            let cuales: Vec<usize> = lista.all_entries().enumerate().filter(|(_, s)| de_egui(&s.shape)).map(|(i, _)| i).collect();
-            for i in cuales {
-                lista.mutate_shape(layers::ShapeIdx(i), |s| s.shape = metal(&s.shape, suave));
-            }
-        }
-    });
-}
-
-fn de_egui(s: &Shape) -> bool {
-    let borde = |x: &Stroke| (x.width - 1.0).abs() < 0.01 && [BORDE_REPOSO, BORDE_ENCIMA, BORDE_APRETADO, BORDE_ABIERTO].contains(&x.color);
-    match s {
-        Shape::Rect(r) => borde(&r.stroke) && r.fill.a() == 255,
-        _ => false,
-    }
-}
-
-fn metal(s: &Shape, suave: f32) -> Shape {
-    let Shape::Rect(r) = s else { return s.clone() };
-    let (q, cr, f) = (r.rect, r.corner_radius, r.fill);
-    let mut v = vec![];
-    let borde = Shape::Rect(epaint::RectShape::stroke(q, cr, r.stroke, StrokeKind::Inside));
-    let hundido = f == WELL || r.stroke.color == BORDE_APRETADO;
-    if hundido {
-        // Campo o botón apretado: metido en el tablero.
-        v.push(Shape::Rect(epaint::RectShape::filled(q, cr, if f == WELL { f } else { mezcla(f, Color32::BLACK, 0.25) })));
-        let arriba = Rect::from_min_max(q.min, pos2(q.right(), q.top() + 3.0));
-        v.push(Shape::Rect(epaint::RectShape::filled(arriba, CornerRadius { nw: cr.nw, ne: cr.ne, sw: 0, se: 0 }, Color32::from_black_alpha(70))));
-        v.push(borde);
-        let k = cr.nw as f32 * 0.7;
-        v.push(Shape::hline(q.left() + k..=q.right() - k, q.bottom() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(16))));
-        return Shape::Vec(v);
-    }
-    // Sombra, cuerpo oscuro, mitad de arriba más clara, filo de luz y borde.
-    v.push(Shape::Rect(epaint::RectShape::filled(q.translate(vec2(0.0, 1.5)), cr, Color32::from_black_alpha(80))));
-    // En piezas altas el degradado se queda en los primeros 30 puntos: si no, se verían casi negras abajo.
-    let alto = q.height().min(30.0);
-    let abajo = mezcla(f, Color32::BLACK, 0.24 * alto / 30.0 + 0.06);
-    v.push(Shape::Rect(epaint::RectShape::filled(q, cr, abajo)));
-    let arriba = Rect::from_min_max(q.min, pos2(q.right(), q.top() + alto));
-    let cr_arriba = if alto < q.height() { CornerRadius { nw: cr.nw, ne: cr.ne, sw: 0, se: 0 } } else { cr };
-    v.push(Shape::mesh(malla(arriba, cr_arriba, mezcla(f, Color32::WHITE, 0.14), abajo, suave)));
-    let k = (cr.nw as f32 * 0.7).max(2.0);
-    v.push(Shape::hline(q.left() + k..=q.right() - k, q.top() + 1.25, Stroke::new(1.0, Color32::from_white_alpha(45))));
-    v.push(Shape::hline(q.left() + k..=q.right() - k, q.bottom() - 1.25, Stroke::new(1.0, Color32::from_black_alpha(55))));
-    v.push(borde);
-    Shape::Vec(v)
-}
-
-pub fn mezcla(a: Color32, b: Color32, t: f32) -> Color32 {
-    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
-    Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
-}
-
+/// Letra de la interfaz (Cuprum).
 pub fn fuente(t: f32) -> FontId {
     FontId::proportional(t)
 }
+
+/// Letra de números y títulos (Barlow).
 pub fn barlow(t: f32) -> FontId {
     FontId::new(t, FontFamily::Name("barlow".into()))
 }
 
-/// Rectángulo redondeado con degradado vertical (arriba, abajo): una sola figura lisa, sin franjas.
-pub fn degradado(p: &Painter, r: Rect, rad: u8, a: Color32, b: Color32) {
-    degradado_en(p, r, CornerRadius::same(rad), a, b);
-}
-
-/// Lo mismo, con cada esquina a su medida.
-pub fn degradado_en(p: &Painter, r: Rect, cr: CornerRadius, a: Color32, b: Color32) {
-    p.add(Shape::mesh(malla(r, cr, a, b, 1.0 / p.pixels_per_point())));
-}
-
-/// Contorno de un rectángulo redondeado, en el sentido del reloj, con pocos puntos por esquina.
-fn contorno(r: Rect, cr: CornerRadius) -> Vec<Pos2> {
-    let tope = r.width().min(r.height()) / 2.0;
-    let mut v: Vec<Pos2> = vec![];
-    for (rad, x, y, a0) in [
-        (cr.nw, r.left(), r.top(), PI),
-        (cr.ne, r.right(), r.top(), 1.5 * PI),
-        (cr.se, r.right(), r.bottom(), 0.0),
-        (cr.sw, r.left(), r.bottom(), 0.5 * PI),
-    ] {
-        let rad = (rad as f32).min(tope);
-        if rad < 0.5 {
-            v.push(pos2(x, y));
-            continue;
+/// Letras, colores y medidas de toda la app.
+pub fn aplicar(ctx: &Context) {
+    ctx.set_theme(Theme::Dark);
+    let mut f = FontDefinitions::default();
+    let cuprum = FontData::from_static(include_bytes!("../../recursos/Cuprum.ttf")).tweak(FontTweak { y_offset_factor: 0.06, ..Default::default() });
+    let barlow = FontData::from_static(include_bytes!("../../recursos/BarlowSemiCondensed-SemiBold.ttf"));
+    f.font_data.insert("cuprum".into(), cuprum.into());
+    f.font_data.insert("barlow".into(), barlow.into());
+    f.families.entry(FontFamily::Proportional).or_default().insert(0, "cuprum".into());
+    // De respaldo, para las flechas y figuras que Cuprum no trae.
+    f.families.entry(FontFamily::Proportional).or_default().push("Hack".into());
+    let mut numeros = f.families[&FontFamily::Proportional].clone();
+    numeros.insert(0, "barlow".into());
+    f.families.insert(FontFamily::Name("barlow".into()), numeros);
+    ctx.set_fonts(f);
+    ctx.all_styles_mut(|s| {
+        use super::metal::{BORDE_ABIERTO, BORDE_APRETADO, BORDE_ENCIMA, BORDE_REPOSO};
+        let v = &mut s.visuals;
+        v.panel_fill = WINDOW_TITLE;
+        v.window_fill = WINDOW_BODY;
+        v.window_stroke = Stroke::new(1.0, Color32::BLACK);
+        v.window_corner_radius = 8.into();
+        v.menu_corner_radius = 6.into();
+        v.extreme_bg_color = WELL;
+        v.faint_bg_color = Color32::from_white_alpha(5);
+        v.override_text_color = Some(TEXT);
+        v.hyperlink_color = MAIN;
+        v.selection.bg_fill = MAIN.gamma_multiply(0.32);
+        v.selection.stroke = Stroke::new(1.0, MAIN);
+        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, TOOLBAR_LINE);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_DIM);
+        for (w, fondo, borde) in [
+            (&mut v.widgets.inactive, BUTTON, BORDE_REPOSO),
+            (&mut v.widgets.hovered, BUTTON_HI, BORDE_ENCIMA),
+            (&mut v.widgets.active, BUTTON_HI, BORDE_APRETADO),
+            (&mut v.widgets.open, BUTTON_HI, BORDE_ABIERTO),
+        ] {
+            w.bg_fill = fondo;
+            w.weak_bg_fill = fondo;
+            w.bg_stroke = Stroke::new(1.0, borde);
+            w.fg_stroke = Stroke::new(1.0, TEXT);
+            w.expansion = 0.0;
+            w.corner_radius = 5.into();
         }
-        // El centro de la esquina, hacia adentro.
-        let c = pos2(if x == r.left() { x + rad } else { x - rad }, if y == r.top() { y + rad } else { y - rad });
-        let n = ((rad * 0.6).ceil() as usize).clamp(2, 8);
-        for i in 0..=n {
-            v.push(c + rad * Vec2::angled(a0 + 0.5 * PI * i as f32 / n as f32));
+        s.spacing.item_spacing = vec2(6.0, 6.0);
+        s.spacing.button_padding = vec2(8.0, 3.0);
+        s.spacing.interact_size.y = 22.0;
+        for (k, n) in [(TextStyle::Body, 15.0), (TextStyle::Button, 15.0), (TextStyle::Heading, 19.0), (TextStyle::Small, 12.0)] {
+            s.text_styles.insert(k, fuente(n));
         }
-    }
-    v.dedup_by(|a, b| a.distance(*b) < 0.05);
-    if v.len() > 1 && v[0].distance(v[v.len() - 1]) < 0.05 {
-        v.pop();
-    }
-    v
+        s.text_styles.insert(TextStyle::Monospace, FontId::monospace(13.0));
+    });
 }
 
-fn entre(a: Color32, b: Color32, t: f32) -> Color32 {
-    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
-    Color32::from_rgba_premultiplied(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()), m(a.a(), b.a()))
-}
-
-/// Malla de un rectángulo redondeado con color de `a` (arriba) a `b` (abajo) y orilla suavizada de `suave` puntos.
-fn malla(r: Rect, cr: CornerRadius, a: Color32, b: Color32, suave: f32) -> Mesh {
-    let mut m = Mesh::default();
-    if r.width() <= 0.0 || r.height() <= 0.0 {
-        return m;
-    }
-    let pts = contorno(r, cr);
-    let n = pts.len();
-    let col = |y: f32| entre(a, b, ((y - r.top()) / r.height()).clamp(0.0, 1.0));
-    let uv = |_: Pos2| epaint::WHITE_UV;
-    let o = r.center();
-    m.vertices.push(epaint::Vertex { pos: o, uv: uv(o), color: col(o.y) });
-    for i in 0..n {
-        let (prev, q, sig) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
-        let d1 = (q - prev).normalized();
-        let d2 = (sig - q).normalized();
-        // Hacia afuera (el contorno va en el sentido del reloj, con y hacia abajo).
-        let nn = (vec2(d1.y, -d1.x) + vec2(d2.y, -d2.x)).normalized();
-        let (dentro, fuera) = (q - nn * suave * 0.5, q + nn * suave * 0.5);
-        m.vertices.push(epaint::Vertex { pos: dentro, uv: uv(dentro), color: col(q.y) });
-        m.vertices.push(epaint::Vertex { pos: fuera, uv: uv(fuera), color: Color32::TRANSPARENT });
-    }
-    for i in 0..n as u32 {
-        let j = (i + 1) % n as u32;
-        let (di, fi, dj, fj) = (1 + 2 * i, 2 + 2 * i, 1 + 2 * j, 2 + 2 * j);
-        m.indices.extend([0, di, dj, di, fi, dj, fi, fj, dj]);
-    }
-    m
-}
-
-
-/// Botón con relieve, como una tecla de un aparato: sombra abajo, de claro a oscuro, filo de luz arriba y borde.
-/// `hundido`: apretado, se ve metido y con la sombra por dentro.
-pub fn relieve(p: &Painter, r: Rect, rad: u8, base: Color32, hover: bool, hundido: bool) {
-    let base = if hover && !hundido { mezcla(base, Color32::WHITE, 0.07) } else { base };
-    let rr = CornerRadius::same(rad);
-    if hundido {
-        degradado(p, r, rad, mezcla(base, Color32::BLACK, 0.35), mezcla(base, Color32::BLACK, 0.12));
-        // Sombra por dentro, arriba.
-        let arriba = Rect::from_min_max(r.min, pos2(r.right(), r.top() + 3.0));
-        p.with_clip_rect(arriba.intersect(p.clip_rect())).rect_stroke(r.shrink(0.5), rr, Stroke::new(2.0, Color32::from_black_alpha(110)), StrokeKind::Inside);
-        p.rect_stroke(r, rr, Stroke::new(1.0, Color32::from_black_alpha(150)), StrokeKind::Outside);
-        return;
-    }
-    p.rect_filled(r.translate(vec2(0.0, 1.5)).expand(0.5), rr, Color32::from_black_alpha(90));
-    degradado(p, r, rad, mezcla(base, Color32::WHITE, 0.14), mezcla(base, Color32::BLACK, 0.24));
-    bisel(p, r, rad);
-    p.rect_stroke(r, rr, Stroke::new(1.0, Color32::from_black_alpha(150)), StrokeKind::Outside);
-}
-
-/// Bisel de 1 punto: luz en la orilla de arriba y sombra en la de abajo, por dentro. Hace ver la pieza maquinada.
-fn bisel(p: &Painter, r: Rect, rad: u8) {
-    let k = (rad as f32 * 0.7).max(1.5);
-    if r.width() > 2.0 * k {
-        p.hline(r.left() + k..=r.right() - k, r.top() + 0.75, Stroke::new(1.0, Color32::from_white_alpha(45)));
-        p.hline(r.left() + k..=r.right() - k, r.bottom() - 0.75, Stroke::new(1.0, Color32::from_black_alpha(60)));
-    }
-}
-
-/// Botón encendido: se ilumina con su color y suelta un poco de luz alrededor.
-pub fn encendido(p: &Painter, r: Rect, rad: u8, col: Color32) {
-    for (e, a) in [(5.0, 0.05), (3.0, 0.08), (1.5, 0.12)] {
-        p.rect_filled(r.expand(e), CornerRadius::same(rad + e as u8), col.gamma_multiply(a));
-    }
-    degradado(p, r, rad, mezcla(col, Color32::WHITE, 0.35), mezcla(col, Color32::BLACK, 0.12));
-    // Reflejo de cromo: una luz blanca que se apaga hacia la mitad.
-    let reflejo = Rect::from_min_max(r.min + vec2(1.0, 1.0), pos2(r.right() - 1.0, r.top() + r.height() * 0.55));
-    let rr = rad.saturating_sub(1);
-    degradado_en(p, reflejo, CornerRadius { nw: rr, ne: rr, sw: 0, se: 0 }, Color32::from_white_alpha(130), Color32::from_white_alpha(0));
-    let k = rad as f32 * 0.7;
-    p.hline(r.left() + k..=r.right() - k, r.top() + 0.75, Stroke::new(1.0, Color32::from_white_alpha(120)));
-    p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.55)), StrokeKind::Outside);
-}
-
-/// Tornillito pulido de reloj: cabeza redonda con luz, ranura y bisel. `giro`: hacia dónde quedó la ranura.
-pub fn tornillo(p: &Painter, o: Pos2, r: f32, giro: f32, azul: bool) {
-    let (claro, oscuro) = if azul { (Color32::from_rgb(0x6f, 0x93, 0xd8), Color32::from_rgb(0x1c, 0x2c, 0x5e)) } else { (Color32::from_rgb(0xd4, 0xd6, 0xda), Color32::from_rgb(0x5a, 0x5c, 0x61)) };
-    p.circle_filled(o, r + 1.0, Color32::from_black_alpha(150));
-    p.circle_filled(o + vec2(0.0, 0.6), r + 0.6, Color32::from_white_alpha(22));
-    p.circle_filled(o, r, oscuro);
-    p.circle_filled(o - vec2(0.0, r * 0.18), r * 0.82, mezcla(oscuro, claro, 0.55));
-    p.circle_filled(o - vec2(r * 0.15, r * 0.34), r * 0.45, claro);
-    let d = Vec2::angled(giro) * r * 0.8;
-    p.line_segment([o - d, o + d], Stroke::new((r * 0.36).max(0.8), Color32::from_black_alpha(190)));
-}
-
-/// Esfera chica de cronógrafo: aro pulido, minutería, y dos manecillas (segundos y minutos) con el tiempo `s`.
-pub fn esfera(p: &Painter, o: Pos2, r: f32, s: f64, col: Color32) {
-    p.circle_filled(o + vec2(0.0, 1.0), r + 2.0, Color32::from_black_alpha(150));
-    // Aro: oscuro, acero y un filo de luz arriba.
-    p.circle_filled(o, r + 1.2, Color32::from_rgb(0x2c, 0x2d, 0x31));
-    p.circle_filled(o - vec2(0.0, 0.5), r + 0.4, Color32::from_rgb(0x9b, 0x9e, 0xa5));
-    p.circle_filled(o + vec2(0.0, 0.4), r - 0.4, Color32::from_rgb(0x3a, 0x3c, 0x41));
-    p.circle_filled(o, r - 1.3, Color32::from_rgb(0x10, 0x11, 0x14));
-    for i in 0..12 {
-        let d = Vec2::angled(i as f32 / 12.0 * 2.0 * PI - PI / 2.0);
-        let largo = if i % 3 == 0 { 3.2 } else { 1.8 };
-        p.line_segment([o + d * (r - 2.0), o + d * (r - 2.0 - largo)], Stroke::new(if i % 3 == 0 { 1.1 } else { 0.8 }, Color32::from_white_alpha(if i % 3 == 0 { 210 } else { 110 })));
-    }
-    let mano = |a: f64, l: f32, w: f32, c: Color32| {
-        let d = Vec2::angled((a * 2.0 * std::f64::consts::PI - std::f64::consts::FRAC_PI_2) as f32);
-        p.line_segment([o - d * l * 0.28, o + d * l], Stroke::new(w, c));
-    };
-    mano(s / 3600.0, (r - 2.0) * 0.6, 1.8, Color32::from_rgb(0xcf, 0xd2, 0xd8));
-    mano(s / 60.0, (r - 2.0) * 0.92, 1.1, col);
-    p.circle_filled(o, 1.8, col);
-    p.circle_filled(o - vec2(0.4, 0.5), 0.7, Color32::from_white_alpha(200));
-    // Cristal abombado: media luna de luz.
-    let n = 14;
-    let mut v: Vec<Pos2> = (0..=n).map(|i| o + (r - 1.6) * Vec2::angled(PI + PI * i as f32 / n as f32)).collect();
-    v.extend((0..=n).rev().map(|i| { let a = PI + PI * i as f32 / n as f32; o + vec2(a.cos() * (r - 1.6), a.sin() * (r - 1.6) * 0.12) }));
-    p.add(Shape::convex_polygon(v[..=n].to_vec(), Color32::from_white_alpha(20), Stroke::NONE));
-}
-
-/// Rueda dentada fina (engrane), girada `a` radianes.
-pub fn engrane(p: &Painter, o: Pos2, r: f32, dientes: usize, a: f32, col: Color32) {
-    for i in 0..dientes {
-        let d = Vec2::angled(a + i as f32 / dientes as f32 * 2.0 * PI);
-        p.line_segment([o + d * (r - 1.0), o + d * (r + 1.8)], Stroke::new(1.3, col));
-    }
-    p.circle_stroke(o, r - 0.6, Stroke::new(1.4, col));
-}
-
-/// Índice aplicado de una carátula: barrita facetada, con un lado en luz y el otro en sombra.
-pub fn indice(p: &Painter, x: f32, y0: f32, y1: f32, w: f32, col: Color32) {
-    p.rect_filled(Rect::from_min_max(pos2(x - w / 2.0 + 0.6, y0 + 1.2), pos2(x + w / 2.0 + 0.8, y1 + 1.2)), 1, Color32::from_black_alpha(130));
-    p.rect_filled(Rect::from_min_max(pos2(x - w / 2.0, y0), pos2(x, y1)), 0, mezcla(col, Color32::WHITE, 0.45));
-    p.rect_filled(Rect::from_min_max(pos2(x, y0), pos2(x + w / 2.0, y1)), 0, mezcla(col, Color32::BLACK, 0.35));
-}
-
-/// Vidrio encima de algo ya dibujado, como el Aero de antes: la mitad de arriba con un brillo que termina en seco, luz que
-/// sube desde abajo con el tono `col`, filo blanco por dentro y borde oscuro por fuera. Sin desenfoques: casi no cuesta.
-pub fn vidrio(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool) {
-    vidrio_en(p, r, rad, col, hover, r.height() * 0.46);
-}
-
-/// [`vidrio`], con el brillo de arriba hasta `alto`.
-pub fn vidrio_en(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool, alto: f32) {
-    if r.width() < 3.0 || r.height() < 3.0 {
-        return;
-    }
-    let k = if hover { 1.35 } else { 1.0 };
-    let blanco = |a: f32| Color32::from_white_alpha((a * k).min(255.0) as u8);
-    let corte = r.top() + alto.min(r.height());
-    degradado_en(p, Rect::from_min_max(r.min, pos2(r.right(), corte)), CornerRadius { nw: rad, ne: rad, sw: 0, se: 0 }, blanco(58.0), blanco(16.0));
-    let luz = mezcla(col, Color32::WHITE, 0.45);
-    let t = |a: f32| Color32::from_rgba_unmultiplied(luz.r(), luz.g(), luz.b(), (a * k).min(255.0) as u8);
-    degradado_en(p, Rect::from_min_max(pos2(r.left(), r.bottom() - r.height() * 0.38), r.max), CornerRadius { nw: 0, ne: 0, sw: rad, se: rad }, t(0.0), t(46.0));
-    p.rect_stroke(r.shrink(0.5), CornerRadius::same(rad.saturating_sub(1)), Stroke::new(1.0, blanco(46.0)), StrokeKind::Inside);
-    let f = (rad as f32 * 0.7).max(1.5);
-    p.hline(r.left() + f..=r.right() - f, r.top() + 0.75, Stroke::new(1.0, blanco(120.0)));
-    p.rect_stroke(r, CornerRadius::same(rad), Stroke::new(1.0, mezcla(col, Color32::BLACK, 0.78)), StrokeKind::Outside);
-}
-
-/// Hueco metido en el tablero (pantallas, medidores, campos): oscuro, con sombra arriba y luz abajo.
-pub fn hueco(p: &Painter, r: Rect, rad: u8, fondo: Color32) {
-    let rr = CornerRadius::same(rad);
-    p.rect_filled(r, rr, fondo);
-    let arriba = Rect::from_min_max(r.min, pos2(r.right(), r.top() + 3.0));
-    p.with_clip_rect(arriba.intersect(p.clip_rect())).rect_stroke(r.shrink(0.5), rr, Stroke::new(2.0, Color32::from_black_alpha(120)), StrokeKind::Inside);
-    let k = rad as f32 * 0.7;
-    p.hline(r.left() + k..=r.right() - k, r.bottom() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(18)));
-}
-
+/// Un arco de `a` radianes en adelante (en el sentido del reloj).
 pub fn arco(p: &Painter, o: Pos2, r: f32, a: f32, barrido: f32, w: f32, col: Color32) {
-    let n = ((barrido.abs() * r / 2.0) as usize).clamp(4, 48);
-    let pts = (0..=n).map(|i| o + r * Vec2::angled(a + barrido * i as f32 / n as f32)).collect();
-    p.add(Shape::line(pts, Stroke::new(w, col)));
+    let n = ((barrido.abs() * r / 3.0).ceil() as usize).clamp(2, 96);
+    let v: Vec<Pos2> = (0..=n).map(|i| o + r * Vec2::angled(a + barrido * i as f32 / n as f32)).collect();
+    p.add(Shape::line(v, Stroke::new(w, col)));
 }
 
-/// Dibuja un ícono de Tabler (rejilla de 24) en el cuadro `r`.
-pub fn icono(p: &Painter, i: &TablerIcon, r: Rect, col: Color32) {
+/// Dibuja un ícono (rejilla de 24) en el cuadro `r`.
+pub fn icono(p: &Painter, i: &Icono, r: Rect, col: Color32) {
     let k = r.width().min(r.height()) / 24.0;
     let o = r.center() - vec2(12.0, 12.0) * k;
-    let q = |x: f32, y: f32| o + vec2(x, y) * k;
-    let mut t = i.d.split_ascii_whitespace();
-    let num = |t: &mut std::str::SplitAsciiWhitespace| -> f32 { t.next().and_then(|s| s.parse().ok()).unwrap_or(0.0) };
-    let mut pts: Vec<Pos2> = vec![];
-    let traza = |pts: &mut Vec<Pos2>, cerrado: bool| {
-        let v = std::mem::take(pts);
-        if v.len() < 2 {
-            return;
-        }
-        if i.filled {
-            p.add(Shape::convex_polygon(v, col, Stroke::NONE));
-        } else {
-            let s = Stroke::new((2.0 * k).max(1.1), col);
-            p.add(if cerrado { Shape::closed_line(v, s) } else { Shape::line(v, s) });
-        }
-    };
-    while let Some(op) = t.next() {
-        match op {
-            "M" => {
-                traza(&mut pts, false);
-                let (x, y) = (num(&mut t), num(&mut t));
-                pts.push(q(x, y));
-            }
-            "L" => {
-                let (x, y) = (num(&mut t), num(&mut t));
-                pts.push(q(x, y));
-            }
-            "Q" | "C" => {
-                let n = if op == "Q" { 2 } else { 3 };
-                let a = *pts.last().unwrap_or(&o);
-                let v: Vec<Pos2> = (0..n)
-                    .map(|_| {
-                        let (x, y) = (num(&mut t), num(&mut t));
-                        q(x, y)
-                    })
-                    .collect();
-                for s in 1..=6 {
-                    let u = s as f32 / 6.0;
-                    let w = 1.0 - u;
-                    let z = if n == 2 {
-                        a.to_vec2() * w * w + v[0].to_vec2() * 2.0 * w * u + v[1].to_vec2() * u * u
-                    } else {
-                        a.to_vec2() * w * w * w
-                            + v[0].to_vec2() * 3.0 * w * w * u
-                            + v[1].to_vec2() * 3.0 * w * u * u
-                            + v[2].to_vec2() * u * u * u
-                    };
-                    pts.push(z.to_pos2());
-                }
-            }
-            "Z" => traza(&mut pts, true),
-            _ => {}
-        }
-    }
-    traza(&mut pts, false);
+    i.pintar(p, |x, y| o + vec2(x, y) * k, 1.9 * k, col);
 }
 
-/// Botón cuadrado con ícono. `on`: encendido (amarillo).
-pub fn boton(ui: &mut Ui, i: &TablerIcon, on: bool, ayuda: &str) -> Response {
-    boton_color(ui, i, on, ayuda, GLYPH, 32.0)
+/// Botón cuadrado con ícono. `on`: encendido.
+pub fn boton(ui: &mut Ui, i: &Icono, on: bool, ayuda: &str) -> Response {
+    boton_color(ui, i, on, ayuda, GLYPH, 30.0)
 }
 
-pub fn boton_color(ui: &mut Ui, i: &TablerIcon, on: bool, ayuda: &str, col: Color32, lado: f32) -> Response {
-    let ayuda = crate::idioma::t(ayuda);
+/// Como `boton`, con el color del dibujo y el tamaño a elegir.
+pub fn boton_color(ui: &mut Ui, i: &Icono, on: bool, ayuda: &str, col: Color32, lado: f32) -> Response {
     let (r, resp) = ui.allocate_exact_size(Vec2::splat(lado), Sense::click());
-    resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), ayuda));
-    let p = ui.painter();
-    let rr = r.shrink(1.0);
-    let mut tinta = if ui.is_enabled() { col } else { TEXT_FAINT };
     if on {
-        encendido(p, rr, 6, MAIN);
-        tinta = COLORED_DARK;
+        encendido(ui.painter(), r, 6, MAIN);
     } else {
-        relieve(p, rr, 6, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
+        relieve(ui.painter(), r, 6, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
     }
-    icono(p, i, r.shrink(lado * 0.22), tinta);
-    resp.on_hover_text(ayuda)
+    let tinta = if on { COLORED_DARK } else if ui.is_enabled() { col } else { TEXT_FAINT };
+    icono(ui.painter(), i, r.shrink(lado * 0.2), tinta);
+    let nombre = crate::idioma::t(ayuda).to_string();
+    let activo = ui.is_enabled();
+    resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, activo, on, &nombre));
+    resp.on_hover_text(nombre.clone())
 }
 
-/// Interruptor redondeado (amarillo si está encendido).
-pub fn led(ui: &mut Ui, on: bool, ayuda: &str) -> Response {
-    let ayuda = crate::idioma::t(ayuda);
-    let (r, resp) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
-    resp.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, on, ayuda));
-    pinta_led(ui.painter(), r.center(), 6.0, on, resp.hovered());
-    resp.on_hover_text(ayuda)
-}
-
+/// El foquito: hundido en el tablero, encendido en amarillo.
 pub fn pinta_led(p: &Painter, o: Pos2, h: f32, on: bool, hover: bool) {
-    let r = Rect::from_center_size(o, Vec2::splat(2.0 * h));
-    hueco(p, r.expand(1.0), 4, if hover { c(0x3a3a3a) } else { c(0x151515) });
+    let r = Rect::from_center_size(o, Vec2::splat(h));
+    hueco(p, r, 3, WELL);
+    let dentro = r.shrink(2.0);
     if on {
-        encendido(p, r.shrink(1.0), 2, MAIN);
+        encendido(p, dentro, 2, MAIN);
     } else {
-        degradado(p, r.shrink(1.0), 2, mezcla(COLORED_DARK, TOOLBAR_LINE, 0.25), mezcla(COLORED_DARK, Color32::BLACK, 0.5));
+        p.rect_filled(dentro, 2, if hover { BUTTON_HI } else { BUTTON });
     }
 }
 
-/// Botoncito de letra (S, G…).
+/// Interruptor chico.
+pub fn led(ui: &mut Ui, on: bool, ayuda: &str) -> Response {
+    let (r, resp) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
+    pinta_led(ui.painter(), r.center(), 14.0, on, resp.hovered());
+    let nombre = crate::idioma::t(ayuda).to_string();
+    resp.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, on, &nombre));
+    resp.on_hover_text(nombre.clone())
+}
+
+/// Botoncito de una letra (S, G…), encendido con su color.
 pub fn letra(ui: &mut Ui, s: &str, on: bool, col: Color32, ayuda: &str) -> Response {
-    let ayuda = crate::idioma::t(ayuda);
-    let (r, resp) = ui.allocate_exact_size(vec2(20.0, 18.0), Sense::click());
-    resp.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, on, ayuda));
+    let (r, resp) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::click());
     if on {
-        encendido(ui.painter(), r, 4, col);
+        encendido(ui.painter(), r, 5, col);
     } else {
-        relieve(ui.painter(), r, 4, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
+        relieve(ui.painter(), r, 5, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
     }
-    let tinta = if on { c(0x1c1c1c) } else { TEXT_DIM };
-    if s == "●" {
-        ui.painter().circle_filled(r.center(), 4.5, tinta);
-    } else {
-        ui.painter().text(r.center(), Align2::CENTER_CENTER, s, barlow(12.0), tinta);
-    }
-    resp.on_hover_text(ayuda)
+    let tinta = if on { x(0x15150f) } else { TEXT_DIM };
+    ui.painter().text(r.center(), Align2::CENTER_CENTER, s, fuente(13.0), tinta);
+    let nombre = crate::idioma::t(ayuda).to_string();
+    resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, &nombre));
+    resp.on_hover_text(nombre.clone())
 }
 
-/// Perilla como de consola: marcas alrededor, aro iluminado con el valor y una tapa metálica con sombra, brillo y
-/// estrías en el borde.
+/// Perilla: aro con el valor y una tapa torneada. `v` de 0 a 1; con `bipolar` el aro nace del centro.
 pub fn pinta_perilla(p: &Painter, o: Pos2, r: f32, v: f32, bipolar: bool, hover: bool) {
+    let (desde, vuelta) = (PI * 0.75, PI * 1.5);
     let v = v.clamp(0.0, 1.0);
-    let (ini, bar) = (0.75 * PI, 1.5 * PI);
-    let a = ini + bar * v;
-    let w = (r * 0.16).clamp(1.6, 2.6);
-    let pista = r - w / 2.0;
-    // Canal hundido y el valor encendido, con su resplandor.
-    arco(p, o, pista, ini, bar, w + 1.0, c(0x121212));
-    let a0 = if bipolar { ini + bar / 2.0 } else { ini };
-    if (a - a0).abs() > 0.02 {
-        let col = if hover { HIGHLIGHT } else { MAIN };
-        arco(p, o, pista, a0, a - a0, w + 3.0, col.gamma_multiply(0.18));
-        arco(p, o, pista, a0, a - a0, w, col);
+    let angulo = desde + vuelta * v;
+    arco(p, o, r - 1.0, desde, vuelta, 2.4, Color32::from_black_alpha(170));
+    let nace = if bipolar { desde + vuelta * 0.5 } else { desde };
+    if (angulo - nace).abs() > 0.02 {
+        arco(p, o, r - 1.0, nace, angulo - nace, 2.4, if hover { HIGHLIGHT } else { MAIN });
     }
-    let disco = r - w - 1.5;
-    if disco < 3.0 {
-        return;
+    let t = r - 4.0;
+    p.circle_filled(o + vec2(0.0, 2.0), t + 0.5, Color32::from_black_alpha(130));
+    p.circle_filled(o, t, x(0x232428));
+    p.circle_filled(o - vec2(0.0, 0.8), t - 1.0, if hover { x(0x6a6c73) } else { x(0x575960) });
+    p.circle_filled(o, t - 2.2, x(0x3a3b41));
+    // Luz de arriba y marcas del torno.
+    arco(p, o, t - 1.2, PI * 1.15, PI * 0.7, 1.0, Color32::from_white_alpha(90));
+    for k in 0..16 {
+        let d = Vec2::angled(angulo + k as f32 * TAU / 16.0);
+        p.line_segment([o + d * (t - 2.0), o + d * (t - 0.6)], Stroke::new(0.8, Color32::from_black_alpha(90)));
     }
-    // Sombra que cae abajo.
-    p.circle_filled(o + vec2(0.0, disco * 0.12), disco + 0.8, Color32::from_black_alpha(120));
-    // Tapa: borde oscuro y cuerpo que se aclara hacia arriba (la luz viene de arriba).
-    p.circle_filled(o, disco, c(0x1e1e1e));
-    let (claro, oscuro) = if hover { (c(0x8a8a8a), c(0x3c3c3c)) } else { (c(0x7a7a7a), c(0x353535)) };
-    let n = 6;
-    for i in 0..n {
-        let f = i as f32 / (n - 1) as f32;
-        let rr = (disco - 1.0) * (1.0 - 0.45 * f);
-        p.circle_filled(o - vec2(0.0, (disco - 1.0 - rr) * 0.55), rr, mezcla(oscuro, claro, f));
-    }
-    // Estrías del borde.
-    if disco > 7.0 {
-        for i in 0..20 {
-            let d = Vec2::angled(i as f32 / 20.0 * 2.0 * PI);
-            p.line_segment([o + d * (disco - 2.2), o + d * (disco - 0.8)], Stroke::new(0.8, Color32::from_black_alpha(70)));
-        }
-    }
-    // Brillo arriba.
-    p.circle_filled(o + vec2(-disco * 0.22, -disco * 0.34), disco * 0.32, Color32::from_white_alpha(16));
-    // Raya que marca hacia dónde apunta.
-    let d = Vec2::angled(a);
-    let ancho = (disco * 0.2).clamp(1.4, 2.2);
-    let (x0, x1) = (o + d * disco * 0.2, o + d * (disco - 1.8).max(1.0));
-    p.line_segment([x0, x1], Stroke::new(ancho + 1.4, Color32::from_black_alpha(140)));
-    p.line_segment([x0, x1], Stroke::new(ancho, c(0xf2f2f2)));
+    let d = Vec2::angled(angulo);
+    p.line_segment([o + d * t * 0.25, o + d * (t - 2.0)], Stroke::new(2.0, Color32::from_gray(235)));
 }
 
-/// Perilla sin texto. Arrastrar arriba/abajo, doble clic vuelve a `def`. `v` va de `min` a `max`.
+/// Perilla sin texto. Arrastrar arriba o abajo la mueve (con Mayús, fino) y doble clic la regresa a `def`.
+#[allow(clippy::too_many_arguments)]
 pub fn perilla(ui: &mut Ui, v: &mut f32, min: f32, max: f32, def: f32, log: bool, r: f32, nombre: &str) -> Response {
-    let nombre = crate::idioma::t(nombre);
-    let (rect, mut resp) = ui.allocate_exact_size(Vec2::splat(2.0 * r), Sense::click_and_drag());
-    let a01 = |x: f32| if log { (x / min).ln() / (max / min).ln() } else { (x - min) / (max - min) };
-    let de01 = |t: f32| if log { min * (max / min).powf(t) } else { min + (max - min) * t };
-    if resp.dragged() {
-        let fino = if ui.input(|i| i.modifiers.shift) { 0.15 } else { 1.0 };
-        let d = resp.drag_delta();
-        let t = (a01(*v) + (d.x - d.y) * fino / 160.0).clamp(0.0, 1.0);
-        *v = de01(t).clamp(min, max);
-        resp.mark_changed();
-    }
+    let (q, mut resp) = ui.allocate_exact_size(Vec2::splat(r * 2.0 + 2.0), Sense::click_and_drag());
+    let log = log && min > 0.0;
+    let a_parte = |v: f32| if log { (v / min).ln() / (max / min).ln() } else { (v - min) / (max - min) };
+    let de_parte = |p: f32| if log { min * (max / min).powf(p) } else { min + p * (max - min) };
     if resp.double_clicked() {
         *v = def;
         resp.mark_changed();
+    } else if resp.dragged() {
+        let fino = if ui.input(|i| i.modifiers.shift) { 0.1 } else { 1.0 };
+        let d = resp.drag_delta();
+        if d != Vec2::ZERO {
+            *v = de_parte((a_parte(*v) + (d.x - d.y) / 160.0 * fino).clamp(0.0, 1.0)).clamp(min, max);
+            resp.mark_changed();
+        }
     }
-    resp.widget_info(|| WidgetInfo::slider(true, *v as f64, nombre));
-    pinta_perilla(ui.painter(), rect.center(), r, a01(*v), min < 0.0 && max > 0.0, resp.hovered() || resp.dragged());
+    pinta_perilla(ui.painter(), q.center(), r, a_parte(*v), !log && min < 0.0 && max > 0.0, resp.hovered() || resp.dragged());
+    let nombre = crate::idioma::t(nombre).to_string();
+    let valor = *v as f64;
+    resp.widget_info(|| WidgetInfo::slider(true, valor, &nombre));
     resp
 }
 
-/// Fundido de medidor: de amarillo oscuro a claro, rojo si se pasa de 0 dB.
+/// Medidor de dos canales (`pico`: de 0 a 1 o más): sube en barra y se pone rojo al pasar de 0 dB.
 pub fn medidor(p: &Painter, r: Rect, pico: [f32; 2]) {
-    hueco(p, r, 3, c(0x111111));
-    let w = (r.width() - 1.0) / 2.0;
-    for (k, x) in pico.into_iter().enumerate() {
-        let d = crate::modelo::a_db(x);
-        let f = ((d + 54.0) / 60.0).clamp(0.0, 1.0);
-        let x0 = r.left() + k as f32 * (w + 1.0);
-        let y = r.bottom() - r.height() * f;
-        let b = Rect::from_min_max(pos2(x0, y), pos2(x0 + w, r.bottom()));
-        let col = if d > 0.0 { METER_CLIP } else { mezcla(DEEP, HIGHLIGHT, f * f) };
-        p.rect_filled(b, 1, col);
-        // Rayitas que lo parten en lucecitas, como un medidor de verdad.
-        let mut yy = r.bottom() - 3.0;
-        while yy > y {
-            p.hline(b.x_range(), yy, Stroke::new(1.0, Color32::from_black_alpha(110)));
-            yy -= 3.0;
+    hueco(p, r, 3, WELL);
+    let dentro = r.shrink(2.0);
+    let w = (dentro.width() - 1.0) / 2.0;
+    for (k, x_) in pico.into_iter().enumerate() {
+        // De -60 a +6 dB.
+        let alto = ((crate::modelo::a_db(x_) + 60.0) / 66.0).clamp(0.0, 1.0);
+        if alto <= 0.0 {
+            continue;
         }
+        let izq = dentro.left() + k as f32 * (w + 1.0);
+        let barra = Rect::from_min_max(pos2(izq, dentro.bottom() - dentro.height() * alto), pos2(izq + w, dentro.bottom()));
+        let (arriba, abajo) = if x_ > 1.0 { (METER_CLIP, x(0x9a2a22)) } else { (mezcla(DEEP, HIGHLIGHT, alto), DEEP.gamma_multiply(0.8)) };
+        degradado(p, barra, 1, arriba, abajo);
     }
-    // Marca de 0 dB.
-    let y0 = r.bottom() - r.height() * 0.9;
-    p.hline(r.x_range(), y0, Stroke::new(1.0, c(0x4a4a4a)));
 }
 
+/// Minutos, segundos y centésimas.
 pub fn tiempo(s: f64) -> String {
-    let s = s.max(0.0);
-    format!("{}:{:02}:{:02}", s as u64 / 60, s as u64 % 60, (s.fract() * 100.0) as u64)
+    let c = (s.max(0.0) * 100.0) as u64;
+    format!("{}:{:02}:{:02}", c / 6000, c / 100 % 60, c % 100)
 }

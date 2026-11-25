@@ -26,7 +26,7 @@ if (-not (Test-Path "$Son\MuseScore_General.sf3")) { Invoke-WebRequest "$Url/Mus
 if ((Get-FileHash "$Son\MuseScore_General.sf3" -Algorithm SHA256).Hash -ne "5B85B6C2C61D10B2B91CDDD41EFCCE7B25CD31C8271D511C73AFAFBEF20B6FA3") { throw "el banco bajado no es el esperado" }
 if (-not (Test-Path "$Son\MuseScore_General_License.md")) { Invoke-WebRequest "$Url/MuseScore_General_License.md" -OutFile "$Son\MuseScore_General_License.md" }
 Copy-Item $Son "$T\sonidos" -Recurse
-Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE, LICENSE-MIT, LICENSE-APACHE, AVISOS.md, README.md $T
+Copy-Item modelos\UVR-MDX-NET-Voc_FT.onnx, LICENSE-MIT, LICENSE-APACHE, AVISOS.md, README.md $T
 Copy-Item daw-demo\AVISOS.md "$T\AVISOS-DAW.md"
 # Licencias de lo que viene adentro.
 New-Item -ItemType Directory -Force "$T\recursos" | Out-Null

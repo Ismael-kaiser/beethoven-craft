@@ -149,9 +149,9 @@ fn todos_los_extremos_son_estables() {
     }
 }
 
-/// Los que vienen de Beethoven DAW hacen lo que dicen.
+/// El paramétrico, el balance, el moldeador y el vocoder hacen lo que dicen.
 #[test]
-fn plugins_del_daw() {
+fn parametrico_y_estereo() {
     let nivel = |y: &[f32], lado: usize| (y[y.len() / 2..].iter().skip(lado).step_by(2).map(|v| v * v).sum::<f32>() / (y.len() / 4) as f32).sqrt();
     let x = seno(1000.0, 0.2, N);
     let mut p = TipoFx::Parametrico.defaults();
@@ -420,7 +420,7 @@ fn escucharme() {
 }
 
 #[test]
-fn lemon_restantes() {
+fn los_demas_efectos() {
     // Recorte suave: lo quedo pasa igual, lo fuerte se redondea.
     let r = TipoFx::RecorteSuave.defaults();
     let (q, f) = (cambio(TipoFx::RecorteSuave, &r, &seno(440.0, 0.05, N)), cambio(TipoFx::RecorteSuave, &r, &seno(440.0, 1.5, N)));

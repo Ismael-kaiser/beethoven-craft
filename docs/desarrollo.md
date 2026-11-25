@@ -6,7 +6,7 @@ Son dos proyectos de Cargo en el mismo repositorio:
 |---|---|
 | `src/` | Beethoven Movie y el menú principal (egui) |
 | `src/ui/` | Sus pestañas y ventanas |
-| `crates/audio-fx` | Efectos e instrumentos de audio |
+| `src/sonido.rs` | Efectos de sonido y sintetizador |
 | `crates/craft-gpu` | Compositor de tarjeta gráfica (wgpu) de EffectCraft, más los efectos `bc:` y los de FilmCraft como núcleos (`shaders/bc.wgsl`) |
 | `src/vgpu.rs` | Une la composición de Movie con la tarjeta; `composicion.rs` es la versión del procesador |
 | `crates/craft-trans` | Transiciones y efectos de FilmCraft |
@@ -39,4 +39,4 @@ VIDEO=/ruta/video.mp4 cargo test --release -- --ignored --test-threads 1   # con
 
 ## Contribuir
 
-Corre las pruebas antes de mandar un cambio, conserva los avisos de copyright de cada archivo y, si agregas código o material de otros, ponlo en `AVISOS.md`. Lo que agregues al código propio queda bajo MIT o Apache-2.0; lo que toque las partes de Lemon Studio (ver `AVISOS.md`), bajo la GPL-3.0 o posterior.
+Corre las pruebas antes de mandar un cambio, conserva los avisos de copyright de cada archivo y, si agregas código o material de otros, ponlo en `AVISOS.md`. Lo que agregues queda bajo MIT o Apache-2.0. No metas código con licencia GPL.

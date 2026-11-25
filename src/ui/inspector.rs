@@ -155,7 +155,7 @@ impl App {
                 };
                 ui.label(RichText::new(crate::idioma::t(&n)).size(17.0));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    borrar = boton_color(ui, &tabler::X, false, "Borrar clip (⌫)", TEXT_DIM, 24.0).clicked();
+                    borrar = boton_color(ui, &iconos::X, false, "Borrar clip (⌫)", TEXT_DIM, 24.0).clicked();
                 });
             });
         });
@@ -301,10 +301,10 @@ impl App {
                                 ui.label(RichText::new("●").size(13.0).color(Color32::from_rgb(r, g, b))).on_hover_text(crate::idioma::tf("De la clase «{}»", &[&k.nombre]));
                             }
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                if boton_color(ui, &tabler::X, false, "Quitar efecto", TEXT_DIM, 22.0).clicked() {
+                                if boton_color(ui, &iconos::X, false, "Quitar efecto", TEXT_DIM, 22.0).clicked() {
                                     quitar_fx = Some(i);
                                 }
-                                if boton_color(ui, &tabler::CARET_UP, false, "Subir", TEXT_DIM, 22.0).clicked() && i > 0 {
+                                if boton_color(ui, &iconos::CARET_UP, false, "Subir", TEXT_DIM, 22.0).clicked() && i > 0 {
                                     subir_fx = Some(i);
                                 }
                             });

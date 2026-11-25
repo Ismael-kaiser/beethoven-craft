@@ -9,3 +9,6 @@ Beethoven Craft.app/
 .empaque-nuevo.app/
 .app-vieja-*
 *.parcial
+
+# Los VST3 y CLAP armados
+daw-demo/plugins/salida/

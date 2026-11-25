@@ -433,10 +433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "audio-fx"
-version = "0.1.0"
-
-[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4092,9 +4088,8 @@ dependencies = [
 
 [[package]]
 name = "toma-uno"
-version = "0.12.0"
+version = "0.12.4"
 dependencies = [
- "audio-fx",
  "bytemuck",
  "cpal",
  "craft-gpu",
