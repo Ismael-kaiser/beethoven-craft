@@ -119,6 +119,10 @@ Grabaciones, voces separadas y autoguardado van en la carpeta de videos del usua
 
 ## Licencia y créditos
 
-GPL-3.0 o posterior (`LICENSE`). Beethoven DAW es una versión modificada de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio), y Movie usa piezas de EffectCraft, FilmCraft y AniCraft. Todos los créditos y licencias están en [AVISOS.md](AVISOS.md).
+- **El código propio de Beethoven Craft**: [MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras.
+- **Lo que viene de Lemon Studio** (`daw/`, `crates/audio-fx`, y los archivos de Movie que dice [AVISOS.md](AVISOS.md)): [GPL-3.0 o posterior](LICENSE), como lo puso su autor.
+- **La app completa**, porque incluye esas piezas, se reparte bajo GPL-3.0 o posterior.
+
+Beethoven DAW es una versión modificada de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio), y Movie usa piezas de EffectCraft, FilmCraft y AniCraft. Todos los créditos y licencias están en [AVISOS.md](AVISOS.md).
 
 Este proyecto no está afiliado a Lemon Studio, ArtCraft, FL Studio (Image-Line), DaVinci Resolve (Blackmagic Design) ni CapCut.

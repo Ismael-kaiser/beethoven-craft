@@ -53,4 +53,4 @@ BEETHOVEN_IDIOMA=es target/release/beethoven_daw --screenshot salida.png --view 
 
 ## Contribuir
 
-Corre las pruebas antes de mandar un cambio, conserva los avisos de copyright de cada archivo y, si agregas código o material de otros, ponlo en `AVISOS.md`. Todo lo que se agregue debe ser compatible con la GPL-3.0.
+Corre las pruebas antes de mandar un cambio, conserva los avisos de copyright de cada archivo y, si agregas código o material de otros, ponlo en `AVISOS.md`. Lo que agregues al código propio queda bajo MIT o Apache-2.0; lo que toque las partes de Lemon Studio (ver `AVISOS.md`), bajo la GPL-3.0 o posterior.

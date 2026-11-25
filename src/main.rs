@@ -1,4 +1,4 @@
-// Beethoven Craft. Copyright (C) 2026. SPDX-License-Identifier: GPL-3.0-or-later
+// Beethoven Craft. Copyright (C) 2026. SPDX-License-Identifier: MIT OR Apache-2.0
 // En Windows, sin ventana de consola detrás de la app.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 fn main() -> eframe::Result {

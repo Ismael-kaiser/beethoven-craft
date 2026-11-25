@@ -2716,7 +2716,8 @@ impl App {
                     });
                 });
                 ui.add_space(6.0);
-                ui.label(crate::idioma::t("Software libre, GPL-3.0 o posterior."));
+                ui.label(crate::idioma::t("Código propio: MIT o Apache-2.0, como prefieras."));
+                ui.label(crate::idioma::t("La app completa, por las piezas de Lemon Studio: GPL-3.0 o posterior."));
                 ui.label(crate::idioma::t("Efectos de audio y diseño: © 2026 ItsAlphaNeon y colaboradores (GPL-3.0)."));
                 ui.label(crate::idioma::t("Efectos de video: EffectCraft; transiciones: FilmCraft; curvas de animación: AniCraft; del equipo de ArtCraft (MIT o Apache-2.0)."));
                 ui.label(crate::idioma::t("Separación de voz: modelo MDX-Net Voc FT de Ultimate Vocal Remover (MIT). Letras Cuprum y Barlow (OFL). Íconos Tabler (MIT). Video y audio: ffmpeg."));

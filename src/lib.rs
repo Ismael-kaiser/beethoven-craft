@@ -1,4 +1,4 @@
-// Beethoven Craft. Creado por mixter-ha99. Copyright (C) 2026. SPDX-License-Identifier: GPL-3.0-or-later
+// Beethoven Craft. Creado por mixter-ha99. Copyright (C) 2026. SPDX-License-Identifier: MIT OR Apache-2.0
 pub mod actualizar;
 pub mod archivo;
 pub mod atajos;

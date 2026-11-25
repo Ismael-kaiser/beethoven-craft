@@ -13,7 +13,7 @@ rm -rf dist
 mkdir -p "$T"
 cp target/release/toma-uno "$T/beethoven-craft"
 cp daw/target/release/beethoven_daw "$T/beethoven-daw"
-cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE AVISOS.md README.md "$T/"
+cp modelos/UVR-MDX-NET-Voc_FT.onnx LICENSE LICENSE-MIT LICENSE-APACHE AVISOS.md README.md "$T/"
 mkdir -p "$T/recursos" && cp recursos/*.txt "$T/recursos/"
 cp daw/THIRD-PARTY-NOTICES.txt "$T/DAW-THIRD-PARTY-NOTICES.txt"
 cp daw/crates/os-app/assets/beethoven_daw.png "$T/beethoven-craft.png"
