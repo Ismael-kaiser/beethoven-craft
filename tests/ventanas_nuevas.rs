@@ -37,6 +37,13 @@ fn convertir_y_exportar() {
             break;
         }
     }
+    // Que la vista previa ya tenga su cuadro (a la mitad del video).
+    let mitad = h.state().p.fin() / 2.0;
+    h.state_mut().ir(mitad);
+    for _ in 0..120 {
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        h.run_steps(1);
+    }
     h.state_mut().hacer_atajo("exportar");
     h.run_steps(6);
     foto(&mut h, "exportar");

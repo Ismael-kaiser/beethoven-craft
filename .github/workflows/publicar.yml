@@ -83,7 +83,7 @@ jobs:
           path: salida/*.tar.gz
 
   mac:
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4

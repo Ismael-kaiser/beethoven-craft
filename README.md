@@ -11,6 +11,40 @@ Creado por **mixter-ha99**. Software libre, GPL-3.0 o posterior.
 
 ![Menú principal](docs/img/menu.jpg)
 
+## Novedades de la 0.11
+
+**Interfaz de metal y línea de tiempo nueva.** Botones, perillas y faders con relieve; clips de cristal con etiquetas (efectos, animación, transición, velocidad); regla profesional, cursor con cabeza de metal y minimapa para hacer zoom.
+
+![Línea de tiempo](docs/img/v11-linea.jpg)
+
+| Volumen dentro de cada clip de audio | Perillas y mezclador de metal |
+|---|---|
+| ![Volumen](docs/img/v11-volumen.jpg) | ![Perillas](docs/img/v11-perillas.jpg) |
+
+![Mezclador](docs/img/v11-mezclador.jpg)
+
+| Biblioteca con vista previa | Apartado Texto | Agregar una fuente |
+|---|---|---|
+| ![Biblioteca](docs/img/v11-biblioteca.jpg) | ![Texto](docs/img/v11-texto.jpg) | ![Fuente](docs/img/v11-fuente.jpg) |
+
+| Mover, escalar, estirar y girar en la vista previa | Ventana de exportación |
+|---|---|
+| ![Vista previa](docs/img/v11-vista.jpg) | ![Exportar](docs/img/v11-exportar.jpg) |
+
+| Videos que tu computadora no lee bien | Explorador de archivos |
+|---|---|
+| ![Convertir](docs/img/v11-convertir.jpg) | ![Archivos](docs/img/v11-archivos.jpg) |
+
+**Sin tirones:** en pausa se preparan las transiciones pesadas; la barra verde de la regla marca lo que ya se verá fluido.
+
+![Barra de preparación](docs/img/v11-preparado.jpg)
+
+| Recuperación si la app se cierra de golpe | Actualizaciones automáticas |
+|---|---|
+| ![Recuperar](docs/img/v11-recuperar.jpg) | ![Actualizar](docs/img/v11-actualizar.jpg) |
+
+Todo lo nuevo, en las [notas de la versión](https://github.com/Ismael-kaiser/beethoven-craft/releases/tag/v0.11.0).
+
 ## Beethoven Movie
 
 | Animación | Nodos y mezcla de color |
@@ -49,7 +83,13 @@ Guía completa: [docs/daw.md](docs/daw.md)
 
 ## Instalar
 
-**Windows**: baja el instalador (`.exe`) o el `.zip` de [Releases](https://github.com/Ismael-kaiser/beethoven-craft/releases); ya trae ffmpeg. No está firmado, así que Windows puede avisar: «Más información» → «Ejecutar de todas formas».
+Baja el paquete de tu sistema en [Releases](https://github.com/Ismael-kaiser/beethoven-craft/releases/latest). Desde la 0.11 la app avisa cuando hay una versión nueva y se actualiza sola (se puede apagar en Configuración).
+
+- **Mac** (Apple Silicon): descomprime y arrastra «Beethoven Craft.app» a Aplicaciones. No está firmada por Apple: la primera vez ábrela con clic derecho → Abrir. Necesita ffmpeg (`brew install ffmpeg`).
+- **Windows**: el instalador (`.exe`) o el `.zip` portátil; ya traen ffmpeg. No está firmado, así que Windows puede avisar: «Más información» → «Ejecutar de todas formas».
+- **Linux**: descomprime el `.tar.gz` y abre `beethoven-craft`. Necesita ffmpeg (`sudo apt install ffmpeg`).
+
+Si la app se cierra de golpe, al abrirla otra vez te ofrece recuperar tu trabajo. Si algo falla, queda anotado en `Beethoven Craft/Errores.log`.
 
 **Para compilarlo** hace falta [Rust](https://rustup.rs) y `ffmpeg`.
 

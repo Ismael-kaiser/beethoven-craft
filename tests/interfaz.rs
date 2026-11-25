@@ -21,11 +21,11 @@ fn pestana(h: &mut Harness<App>, n: &str) {
 }
 
 /// Al soltar un video con sonido se pregunta qué hacer con el audio: «Todo junto». Si no se pregunta (imagen, sonido
-/// solo, varios archivos), no hace nada.
+/// solo, varios archivos), no hace nada. Espera a que termine de leer lo que se soltó.
 fn todo_junto(h: &mut Harness<App>) {
-    for _ in 0..60 {
+    for _ in 0..1000 {
         h.run_steps(1);
-        if h.state().preguntar.is_some() || h.state().convertir.is_some() {
+        if h.state().preguntar.is_some() || h.state().convertir.is_some() || h.state().importando == 0 {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));

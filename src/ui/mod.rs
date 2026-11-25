@@ -245,6 +245,8 @@ pub struct App {
     tareas: HashMap<u64, Tarea>,
     sig_tarea: u64,
     pub preguntar: Option<(PathBuf, Info, Option<Lugar>)>,
+    /// Archivos que se están leyendo en segundo plano para importarlos.
+    pub importando: u32,
     /// Video que el chip no lee, esperando a que la persona decida si se convierte.
     pub convertir: Option<(PathBuf, Info, crate::convertir::Aviso, Option<Lugar>)>,
     /// Muestra de cada letra en el apartado Texto (`None`: no se pudo leer).
@@ -376,6 +378,7 @@ impl App {
             tareas: HashMap::new(),
             sig_tarea: 1,
             preguntar: None,
+            importando: 0,
             convertir: None,
             letras_tex: HashMap::new(),
             fuente_nueva: None,
@@ -636,6 +639,7 @@ impl App {
     /// Importa un archivo: en segundo plano se lee y se prueba si el chip de video lo sabe leer (si no, se ofrece
     /// convertirlo); un video con sonido pregunta qué hacer con el audio. `lugar`: dónde se soltó (sin él, al final).
     pub fn importar_en(&mut self, ruta: PathBuf, lugar: Option<Lugar>) {
+        self.importando += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let r = medios::sondear(&ruta);
@@ -891,7 +895,10 @@ impl App {
     fn eventos(&mut self, ctx: &Context) {
         while let Ok(e) = self.rx.try_recv() {
             match e {
-                Evento::Sondeado(_, Err(e), _) => self.avisar(e, true),
+                Evento::Sondeado(_, Err(e), _) => {
+                    self.importando = self.importando.saturating_sub(1);
+                    self.avisar(e, true);
+                }
                 Evento::Muestra(k, q) => {
                     let img = ColorImage::from_rgba_unmultiplied([muestras::AN, muestras::AL], &q);
                     self.muestras_hechas += 1;
@@ -913,7 +920,10 @@ impl App {
                     });
                     self.tiras.insert(ruta, lista);
                 }
-                Evento::Sondeado(ruta, Ok(info), lugar) => self.sondeado(ruta, info, lugar),
+                Evento::Sondeado(ruta, Ok(info), lugar) => {
+                    self.importando = self.importando.saturating_sub(1);
+                    self.sondeado(ruta, info, lugar);
+                }
                 Evento::Version(r, a_mano) => match r {
                     Ok(Some(n)) => {
                         self.nueva = Some(n);
@@ -931,7 +941,10 @@ impl App {
                         Err(e) => self.avisar(e, true),
                     }
                 }
-                Evento::SinChip(ruta, info, aviso, lugar) => self.convertir = Some((ruta, info, aviso, lugar)),
+                Evento::SinChip(ruta, info, aviso, lugar) => {
+                    self.importando = self.importando.saturating_sub(1);
+                    self.convertir = Some((ruta, info, aviso, lugar));
+                }
                 Evento::Convertido { tarea, res, lugar } => {
                     let cancelada = self.tareas.remove(&tarea).is_some_and(|t| t.cancelar.load(Relaxed));
                     match res {
