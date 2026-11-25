@@ -28,18 +28,26 @@ fn fader(ui: &mut Ui, v: &mut f32, alto: f32, sel: bool, nombre: &str) {
     }
     resp.widget_info(|| WidgetInfo::slider(true, *v as f64, nombre));
     let p = ui.painter();
-    p.rect_filled(via, 2, c(0x161616));
-    let y0 = via.bottom() - via.height() * de_db(0.0);
-    p.hline(r.left()..=r.right(), y0, Stroke::new(1.0, c(0x4a4a4a)));
+    // Marcas de dB a los lados de la ranura, como en una consola.
+    for db in [6.0, 0.0, -6.0, -12.0, -24.0, -48.0] {
+        let yy = via.bottom() - via.height() * de_db(db);
+        let largo = if db == 0.0 { 6.0 } else { 3.5 };
+        let col = if db == 0.0 { c(0x6a6a6a) } else { c(0x444444) };
+        p.hline(r.left()..=r.left() + largo, yy, Stroke::new(1.0, col));
+        p.hline(r.right() - largo..=r.right(), yy, Stroke::new(1.0, col));
+    }
+    hueco(p, via, 2, c(0x0f0f0f));
     let y = via.bottom() - via.height() * de_db(*v);
     if sel {
         p.rect_filled(Rect::from_min_max(pos2(via.left(), y), via.max), 2, MAIN);
     }
-    let h = Rect::from_center_size(pos2(r.center().x, y), vec2(16.0, 24.0));
-    p.rect_filled(h.expand(1.0), 5, c(0x161616));
-    let b = if resp.hovered() || resp.dragged() { c(0x6a6a6a) } else { c(0x5c5c5c) };
-    degradado(p, h, 4, mezcla(b, Color32::WHITE, 0.08), mezcla(b, Color32::BLACK, 0.25));
-    p.rect_filled(Rect::from_center_size(h.center(), vec2(12.0, 2.0)), 1, if sel { MAIN } else { c(0xdedede) });
+    // La perilla del fader: una pieza con relieve y estrías para agarrarla.
+    let h = Rect::from_center_size(pos2(r.center().x, y), vec2(18.0, 26.0));
+    relieve(p, h, 4, c(0x5e5e5e), resp.hovered() || resp.dragged(), false);
+    for k in [-7.0, -4.5, 4.5, 7.0] {
+        p.hline(h.left() + 3.0..=h.right() - 3.0, h.center().y + k, Stroke::new(1.0, Color32::from_black_alpha(90)));
+    }
+    p.rect_filled(Rect::from_center_size(h.center(), vec2(14.0, 2.0)), 1, if sel { MAIN } else { c(0xe6e6e6) });
     resp.on_hover_text(crate::idioma::tf("{} dB (doble clic: 0 dB)", &[&format!("{:.1}", v)]));
 }
 
@@ -62,10 +70,10 @@ impl App {
                 }
                 ui.add_space(8.0);
                 ui.vertical(|ui| {
-                    ui.add_space(alto / 2.0 - 20.0);
-                    // Pregunta qué tipo de pista agregar.
-                    let b = Button::new(RichText::new("+").size(20.0)).min_size(vec2(32.0, 32.0));
-                    egui::containers::menu::MenuButton::from_button(b).ui(ui, |ui| {
+                    // A media altura de las tiras. Pregunta qué tipo de pista agregar.
+                    ui.add_space(((alto - 36.0) / 2.0).max(0.0));
+                    let b = Button::new("").min_size(vec2(36.0, 36.0));
+                    let (resp, _) = egui::containers::menu::MenuButton::from_button(b).ui(ui, |ui| {
                         ui.set_min_width(220.0);
                         if ui.button(crate::idioma::t("Pista de audio")).clicked() {
                             let n = self.p.pistas.len() + 1;
@@ -78,9 +86,14 @@ impl App {
                         if ui.button(crate::idioma::t("Mezclador")).on_hover_text(crate::idioma::t("Junta los clips y pistas que le mandes, con sus propios efectos")).clicked() {
                             self.canal = Canal::Bus(self.bus_nuevo());
                         }
-                    })
-                    .0
-                    .on_hover_text(crate::idioma::t("Agregar una pista o un mezclador a la consola"));
+                    });
+                    // El + con dos rayas: con la letra quedaba bajo.
+                    let o = resp.rect.center();
+                    let col = if resp.hovered() { HIGHLIGHT } else { GLYPH };
+                    for d in [vec2(7.0, 0.0), vec2(0.0, 7.0)] {
+                        ui.painter().line_segment([o - d, o + d], Stroke::new(2.2, col));
+                    }
+                    resp.on_hover_text(crate::idioma::t("Agregar una pista o un mezclador a la consola"));
                 });
             });
         });
@@ -92,7 +105,8 @@ impl App {
         if resp.clicked() {
             self.canal = canal;
         }
-        ui.painter().rect_filled(r, 4, if sel { c(0x3a3a3a) } else { STRIP });
+        // Placa de metal: más clara arriba, filo de luz y borde.
+        relieve(ui.painter(), r, 4, if sel { c(0x3a3a3a) } else { STRIP }, false, false);
         let (nombre, col) = match canal {
             Canal::Pista(id) => {
                 let i = self.p.pistas.iter().position(|p| p.id == id).unwrap();
@@ -578,7 +592,7 @@ fn parametrico(ui: &mut Ui, f: &mut Fx) {
     let (r, fondo) = ui.allocate_exact_size(vec2(ui.available_width(), 170.0), Sense::click_and_drag());
     fondo.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, crate::idioma::t("Curva del ecualizador")));
     let pr = ui.painter_at(r);
-    pr.rect_filled(r, 6, WELL);
+    hueco(&pr, r, 6, WELL);
     let x_de = |hz: f32| r.left() + r.width() * (hz / 20.0).log10() / 3.0;
     let y_de = |db: f32| r.center().y - db / TOPE * (r.height() / 2.0 - 8.0);
     for (hz, n) in [(50.0f32, "50"), (100.0, "100"), (200.0, "200"), (500.0, "500"), (1000.0, "1k"), (2000.0, "2k"), (5000.0, "5k"), (10000.0, "10k")] {
@@ -671,7 +685,7 @@ fn color_banda(k: usize) -> Color32 {
 fn curva(ui: &mut Ui, p: &[f32]) {
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 84.0), Sense::hover());
     let pr = ui.painter_at(r);
-    pr.rect_filled(r, 4, WELL);
+    hueco(&pr, r, 4, WELL);
     for hz in [100.0f32, 1000.0, 10000.0] {
         let x = r.left() + r.width() * (hz / 20.0).log10() / 3.0;
         pr.vline(x, r.y_range(), Stroke::new(1.0, c(0x2c2c2c)));

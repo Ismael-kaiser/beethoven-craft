@@ -109,6 +109,8 @@ Además de los efectos de EffectCraft y FilmCraft, Movie trae 76 hechos para est
 
 La vista previa y la exportación usan la tarjeta gráfica (Metal, DirectX 12 o Vulkan) y el chip de video de la máquina. Lo que no tiene versión para la tarjeta se hace en el procesador, y todo se ve igual. Junto a la imagen está la calidad de la vista previa: **Automática** la hace tan nítida como se ve en tu pantalla; ahí mismo se apaga la tarjeta si da problemas. Los cuadros con efectos se calculan por adelantado y se guardan en la RAM (una parte chica) y en un archivo temporal de hasta 3 GB que se borra solo.
 
+De los videos más grandes que 1080p (o AV1) se hace en segundo plano una **copia ligera** para editar, en `Beethoven Craft/Copias ligeras` de tu carpeta de videos. Se hace una vez por archivo y la exportación siempre usa el original. Se apagan en el menú de calidad.
+
 ## Proyecto
 
 `.bcraft` es un binario propio, comprimido y con suma de control. «Guardar con todo incluido» mete también los videos y audios. Los proyectos viejos en JSON se siguen abriendo.

@@ -507,7 +507,7 @@ impl App {
                 let on = self.anim.auto;
                 let (r, resp) = ui.allocate_exact_size(vec2(122.0, 26.0), Sense::click());
                 resp.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, on, t("Grabar claves")));
-                ui.painter().rect_filled(r, 6, if on { RECORD.gamma_multiply(0.35) } else if resp.hovered() { BUTTON_HI } else { BUTTON });
+                relieve(ui.painter(), r, 6, if on { mezcla(RECORD, BUTTON, 0.55) } else { BUTTON }, resp.hovered(), on || resp.is_pointer_button_down_on());
                 ui.painter().circle_filled(pos2(r.left() + 14.0, r.center().y), 5.0, RECORD);
                 ui.painter().text(pos2(r.left() + 26.0, r.center().y), Align2::LEFT_CENTER, t("Grabar claves"), fuente(14.0), TEXT);
                 if resp.on_hover_text(t("Con esto prendido, cualquier cambio (mover en la vista, girar, un control de efecto) pone un cuadro clave en el cursor")).clicked() {
@@ -523,7 +523,7 @@ impl App {
                     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 26.0), if elegida.is_some() { Sense::click() } else { Sense::hover() });
                     resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, elegida.is_some(), format!("Curva {n}")));
                     let on = elegida == Some(cv);
-                    ui.painter().rect_filled(r, 5, if on { MAIN } else if resp.hovered() { BUTTON_HI } else { BUTTON });
+                    if on { encendido(ui.painter(), r, 5, MAIN) } else { relieve(ui.painter(), r, 5, BUTTON, resp.hovered(), resp.is_pointer_button_down_on()) }
                     pinta_curva(&ui.painter_at(r), r.shrink2(vec2(6.0, 7.0)), cv, false, if on { COLORED_DARK } else if elegida.is_some() { TEXT } else { TEXT_FAINT });
                     if resp.on_hover_text(tf("{}: hasta el siguiente cuadro clave", &[&t(n)])).clicked() {
                         self.curva_a_elegidas(cv);

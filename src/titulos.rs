@@ -4,7 +4,7 @@ use crate::modelo::{AnimTexto, BucleTexto, MovTexto, PorTexto, Titulo};
 use effectcraft_raster::Image;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 /// Carpetas con las letras del sistema, según el sistema.
 fn carpetas_de_letras() -> Vec<std::path::PathBuf> {
@@ -31,38 +31,152 @@ fn ttf_en(dir: &std::path::Path, hondo: u32, v: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// Letras disponibles: las dos de la app y las del sistema.
-pub fn letras() -> &'static [(String, Option<std::path::PathBuf>)] {
-    static L: OnceLock<Vec<(String, Option<std::path::PathBuf>)>> = OnceLock::new();
-    L.get_or_init(|| {
-        let mut v = vec![("Cuprum".to_string(), None), ("Barlow".to_string(), None)];
-        let mut archivos = vec![];
-        for d in carpetas_de_letras() {
-            ttf_en(&d, 3, &mut archivos);
+/// Formatos de letra que se pueden agregar (los que lee fontdue). De una colección .ttc se usa la primera.
+pub const FORMATOS: [&str; 3] = ["ttf", "otf", "ttc"];
+
+/// Carpeta donde se guardan las letras que agrega la persona.
+pub fn carpeta_fuentes() -> std::path::PathBuf {
+    crate::ui::carpeta().join("Fuentes")
+}
+
+/// ¿Es una de las que agregó la persona?
+pub fn es_tuya(r: &std::path::Path) -> bool {
+    r.parent() == Some(carpeta_fuentes().as_path())
+}
+
+static LETRAS: RwLock<Option<Vec<(String, Option<std::path::PathBuf>)>>> = RwLock::new(None);
+
+/// Letras disponibles: las dos de la app, las que agregó la persona y las del sistema.
+pub fn letras() -> Vec<(String, Option<std::path::PathBuf>)> {
+    if let Some(v) = LETRAS.read().unwrap().as_ref() {
+        return v.clone();
+    }
+    let v = armar_letras();
+    *LETRAS.write().unwrap() = Some(v.clone());
+    v
+}
+
+/// Vuelve a buscar las letras (después de agregar una).
+pub fn recargar_letras() {
+    *LETRAS.write().unwrap() = None;
+}
+
+fn armar_letras() -> Vec<(String, Option<std::path::PathBuf>)> {
+    let mut v = vec![("Cuprum".to_string(), None), ("Barlow".to_string(), None)];
+    // Las tuyas, todas (sin filtrar por nombre).
+    let mut tuyas: Vec<_> = std::fs::read_dir(carpeta_fuentes())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()).is_some_and(|e| FORMATOS.contains(&e.to_lowercase().as_str())))
+        .filter_map(|p| Some((p.file_stem()?.to_str()?.to_string(), Some(p))))
+        .collect();
+    tuyas.sort();
+    v.extend(tuyas);
+    let mut archivos = vec![];
+    for d in carpetas_de_letras() {
+        ttf_en(&d, 3, &mut archivos);
+    }
+    let mut sis: Vec<_> = archivos
+        .into_iter()
+        .filter_map(|p| Some((p.file_stem()?.to_str()?.to_string(), Some(p))))
+        .filter(|(n, _)| {
+            [
+                // Mac
+                "Arial", "Georgia", "Impact", "Comic", "Courier", "Chalkduster", "Brush", "Bradley", "DIN", "Futura", "Times", "Trebuchet",
+                "Verdana", "Tahoma", "Rockwell", "Luminari", "Herculanum", "Trattatello", "Apple Chancery",
+                // Windows
+                "Segoe", "Calibri", "Cambria", "Candara", "Consola", "Constantia", "Corbel", "Gabriola",
+                // Linux
+                "DejaVu", "Liberation", "NotoSans-", "NotoSerif-", "Ubuntu", "FreeSans", "FreeSerif",
+            ]
+            .iter()
+            .any(|x| n.starts_with(x))
+        })
+        .collect();
+    sis.sort();
+    v.extend(sis);
+    // El mismo nombre dos veces cuenta una: gana la primera (la de la app, luego la tuya).
+    let mut vistos = std::collections::HashSet::new();
+    v.retain(|x| vistos.insert(x.0.clone()));
+    v
+}
+
+/// Revisa un archivo de letra antes de agregarlo: su nombre, o por qué no sirve.
+pub fn revisar_fuente(ruta: &std::path::Path) -> Result<String, String> {
+    let ext = ruta.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if !FORMATOS.contains(&ext.as_str()) {
+        return Err(match ext.as_str() {
+            "woff" | "woff2" => crate::idioma::t("Las fuentes .woff y .woff2 son para páginas web. Busca la versión .ttf u .otf de esa fuente.").into(),
+            "fon" | "fnt" | "pcf" | "bdf" => crate::idioma::t("Es una fuente de mapa de bits: no se puede agrandar sin verse cuadriculada. Usa una .ttf u .otf.").into(),
+            _ => crate::idioma::t("Ese archivo no es una fuente. Elige uno .ttf, .otf o .ttc.").into(),
+        });
+    }
+    let b = std::fs::read(ruta).map_err(|e| e.to_string())?;
+    fontdue::Font::from_bytes(b, Default::default()).map_err(|_| crate::idioma::t("No pude leer esa fuente: el archivo está dañado o no es una fuente.").to_string())?;
+    Ok(ruta.file_stem().and_then(|s| s.to_str()).unwrap_or("Fuente").to_string())
+}
+
+/// Copia la letra a la carpeta Fuentes y la deja lista. Da su nombre en la app.
+pub fn instalar_fuente(ruta: &std::path::Path) -> Result<String, String> {
+    let nombre = revisar_fuente(ruta)?;
+    let dir = carpeta_fuentes();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ext = ruta.extension().and_then(|e| e.to_str()).unwrap_or("ttf").to_lowercase();
+    let largo = std::fs::metadata(ruta).map(|m| m.len()).unwrap_or(0);
+    // Las de la app no se tapan; una del sistema con el mismo nombre sí (la tuya va primero).
+    let ocupado = |n: &str| ["Cuprum", "Barlow"].contains(&n);
+    // Si ya está la misma (mismo nombre y tamaño), no se copia otra vez; si el nombre lo usa otra tuya, se numera.
+    let mut final_ = nombre.clone();
+    for k in 1.. {
+        let destino = dir.join(format!("{final_}.{ext}"));
+        if destino.exists() && std::fs::metadata(&destino).map(|m| m.len()).unwrap_or(0) == largo {
+            break;
         }
-        let mut sis: Vec<_> = archivos
-            .into_iter()
-            .filter_map(|p| Some((p.file_stem()?.to_str()?.to_string(), Some(p))))
-            .filter(|(n, _)| {
-                [
-                    // Mac
-                    "Arial", "Georgia", "Impact", "Comic", "Courier", "Chalkduster", "Brush", "Bradley", "DIN", "Futura", "Times", "Trebuchet",
-                    "Verdana", "Tahoma", "Rockwell", "Luminari", "Herculanum", "Trattatello", "Apple Chancery",
-                    // Windows
-                    "Segoe", "Calibri", "Cambria", "Candara", "Consola", "Constantia", "Corbel", "Gabriola",
-                    // Linux
-                    "DejaVu", "Liberation", "NotoSans-", "NotoSerif-", "Ubuntu", "FreeSans", "FreeSerif",
-                ]
-                .iter()
-                .any(|x| n.starts_with(x))
-            })
-            .collect();
-        sis.sort();
-        // El mismo nombre en dos carpetas cuenta una vez.
-        sis.dedup_by(|a, b| a.0 == b.0);
-        v.extend(sis);
-        v
-    })
+        if !destino.exists() && !ocupado(&final_) {
+            std::fs::copy(ruta, &destino).map_err(|e| e.to_string())?;
+            break;
+        }
+        final_ = format!("{nombre} ({})", k + 1);
+    }
+    recargar_letras();
+    Ok(final_)
+}
+
+/// Texto escrito con una letra, en blanco sobre transparente: (ancho, alto, RGBA). Para las muestras.
+pub fn muestra(letra: &str, texto: &str, px: f32) -> Option<(usize, usize, Vec<u8>)> {
+    Some(pintar_texto(fuente(letra)?, texto, px))
+}
+
+/// Lo mismo, con una letra que todavía no está agregada.
+pub fn muestra_de_archivo(ruta: &std::path::Path, texto: &str, px: f32) -> Option<(usize, usize, Vec<u8>)> {
+    let f = fontdue::Font::from_bytes(std::fs::read(ruta).ok()?, Default::default()).ok()?;
+    Some(pintar_texto(&f, texto, px))
+}
+
+fn pintar_texto(f: &fontdue::Font, texto: &str, px: f32) -> (usize, usize, Vec<u8>) {
+    let (sube, baja) = f.horizontal_line_metrics(px).map_or((px * 0.8, -px * 0.25), |m| (m.ascent, m.descent));
+    let h = (sube - baja).ceil() as usize + 4;
+    let linea = sube.ceil() as i32 + 2;
+    let glifos: Vec<_> = texto.chars().map(|ch| f.rasterize(ch, px)).collect();
+    let w = (glifos.iter().map(|g| g.0.advance_width).sum::<f32>().ceil() as usize + 6).clamp(1, 4000);
+    let mut a = vec![0u8; w * h];
+    let mut x = 2.0f32;
+    for (m, bmp) in &glifos {
+        let (gx, gy) = (x.round() as i32 + m.xmin, linea - m.height as i32 - m.ymin);
+        for j in 0..m.height {
+            for i in 0..m.width {
+                let (px_, py) = (gx + i as i32, gy + j as i32);
+                if px_ >= 0 && py >= 0 && (px_ as usize) < w && (py as usize) < h {
+                    let d = &mut a[py as usize * w + px_ as usize];
+                    *d = (*d).max(bmp[j * m.width + i]);
+                }
+            }
+        }
+        x += m.advance_width;
+    }
+    (w, h, a.into_iter().flat_map(|v| [255, 255, 255, v]).collect())
 }
 
 fn fuente(n: &str) -> Option<&'static fontdue::Font> {
@@ -72,7 +186,7 @@ fn fuente(n: &str) -> Option<&'static fontdue::Font> {
         let b = match n {
             "Barlow" => include_bytes!("../recursos/BarlowSemiCondensed-SemiBold.ttf").to_vec(),
             "Cuprum" => include_bytes!("../recursos/Cuprum.ttf").to_vec(),
-            _ => std::fs::read(letras().iter().find(|l| l.0 == n)?.1.as_ref()?).ok()?,
+            _ => std::fs::read(letras().into_iter().find(|l| l.0 == n)?.1?).ok()?,
         };
         let f = fontdue::Font::from_bytes(b, Default::default()).ok()?;
         // Se queda cargada: son pocas y se reutilizan en cada cuadro.
@@ -222,6 +336,37 @@ fn pose_de(a: &AnimTexto, i: usize, n: usize, t: f64, dur: f64) -> Pose {
         BucleTexto::Vaiven => q.giro += 0.16 * f * (tf * 4.0 - fi * 0.5).sin(),
     }
     q
+}
+
+/// Dónde queda el texto dentro del cuadro de `w` × `h` antes de moverlo: (x0, y0, x1, y1) en píxeles. Mide igual que
+/// `dibujar_en`, con un poco de aire para el borde y la sombra.
+pub fn caja(t: &Titulo, w: usize, h: usize) -> [f32; 4] {
+    let Some(f) = fuente(&t.letra).or_else(|| fuente("Cuprum")) else { return [0.0, 0.0, w as f32, h as f32] };
+    let px = (t.tam / 100.0 * h as f32).max(2.0);
+    let alto_linea = px * 1.2;
+    let lineas: Vec<&str> = if t.texto.is_empty() { vec![""] } else { t.texto.lines().collect() };
+    let medir = |s: &str| -> f32 {
+        let (mut x, mut ant) = (0.0, None);
+        for c in s.chars() {
+            if let Some(a) = ant {
+                x += f.horizontal_kern(a, c, px).unwrap_or(0.0);
+            }
+            x += f.metrics(c, px).advance_width;
+            ant = Some(c);
+        }
+        x
+    };
+    let mayor = lineas.iter().map(|l| medir(l)).fold(px * 0.5, f32::max);
+    let margen = w as f32 * 0.06;
+    let izq = match t.alinear {
+        -1 => margen,
+        1 => w as f32 - margen - mayor,
+        _ => (w as f32 - mayor) / 2.0,
+    };
+    let total = alto_linea * lineas.len() as f32;
+    let arriba = (h as f32 - total) / 2.0;
+    let aire = px * 0.15 + t.borde / 100.0 * h as f32;
+    [izq - aire, arriba - aire, izq + mayor + aire, arriba + total + aire]
 }
 
 pub fn dibujar(t: &Titulo, w: usize, h: usize) -> Image {

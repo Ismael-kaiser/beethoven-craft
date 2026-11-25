@@ -138,3 +138,15 @@ fn proyecto_viejo_se_abre() {
     let p: Proyecto = serde_json::from_str(s).unwrap();
     assert_eq!((p.capas.len(), p.bpm, p.pistas[0].clips[0].velocidad), (1, 120.0, 1.0));
 }
+
+#[test]
+fn nombres_de_pista_siguen_su_lugar() {
+    let mut p = toma_uno::modelo::Proyecto::nuevo();
+    p.capas.push(p.capas[0].clone());
+    p.capas.push(p.capas[0].clone());
+    p.capas[1].nombre = "V3".into();
+    p.capas[2].nombre = "Fondo".into();
+    p.renombrar_capas();
+    let n: Vec<_> = p.capas.iter().map(|c| c.nombre.as_str()).collect();
+    assert_eq!(n, ["V1", "V2", "Fondo"]);
+}

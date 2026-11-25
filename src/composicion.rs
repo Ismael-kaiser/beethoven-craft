@@ -527,15 +527,27 @@ fn atajo(p: &Proyecto, i: usize, c: &ClipVideo, t: f64, w: usize, h: usize) -> b
 }
 
 /// Fuente con los cuadros ya decodificados (`pedidos`), uno por clip: para componer en otro hilo.
-pub struct Prestado(pub HashMap<u64, Arc<Cuadro>>);
+pub struct Prestado {
+    pub cuadros: HashMap<u64, Arc<Cuadro>>,
+    /// Los últimos cuadros que vio la fuente de cada clip con efectos de tiempo, en orden.
+    pub recientes: HashMap<u64, Vec<Arc<Cuadro>>>,
+}
 
 impl Fuente for Prestado {
     fn cuadro(&mut self, c: &ClipVideo, _: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
-        self.0.get(&c.id).filter(|q| (q.ancho, q.alto) == (ancho, alto)).cloned()
+        self.cuadros.get(&c.id).filter(|q| (q.ancho, q.alto) == (ancho, alto)).cloned()
     }
     fn cuadro_libre(&mut self, c: &ClipVideo, _: f64, _: usize, _: usize) -> Option<Arc<Cuadro>> {
-        self.0.get(&c.id).cloned()
+        self.cuadros.get(&c.id).cloned()
     }
+    fn recientes(&self, c: &ClipVideo) -> Vec<Arc<Cuadro>> {
+        self.recientes.get(&c.id).cloned().unwrap_or_default()
+    }
+}
+
+/// Si el clip tiene algún efecto que mira otros momentos (ver `DE_TIEMPO`).
+pub fn de_tiempo(c: &ClipVideo) -> bool {
+    c.fx.iter().any(|x| x.activo && DE_TIEMPO.contains(&x.tipo.as_str()))
 }
 
 pub fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mut dyn Fuente) -> Option<ec::Buf> {
@@ -556,7 +568,7 @@ pub fn imagen_de(c: &ClipVideo, t: f64, p: &Proyecto, w: usize, h: usize, f: &mu
 
 /// Los cuadros anteriores, si algún efecto del clip los mira.
 pub fn pasado_de(c: &ClipVideo, f: &dyn Fuente, escala: f64) -> Option<Pasado> {
-    c.fx.iter().any(|x| x.activo && DE_TIEMPO.contains(&x.tipo.as_str())).then(|| Pasado {
+    de_tiempo(c).then(|| Pasado {
         v: f.recientes(c)
             .iter()
             .map(|q| {

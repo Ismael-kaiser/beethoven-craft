@@ -8,8 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Stdio;
 use crossbeam_channel::bounded;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 
 /// El codificador de la máquina no sirvió: se usa el de ffmpeg.
@@ -85,6 +84,27 @@ pub fn exportar(
     exportar_con(p, almacen, salida, modo, &Opciones::default(), avance, cancelar)
 }
 
+/// La exportación corre con prioridad baja: la interfaz y el resto del sistema tienen el procesador primero.
+/// Los hilos que se crean después lo heredan. Igual en los tres sistemas: en macOS con la clase de calidad
+/// `utility`; en Windows y Linux con la prioridad mínima del hilo (`SetThreadPriority` / `nice`).
+fn baja_prioridad() {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn pthread_set_qos_class_self_np(qos: u32, relativa: i32) -> i32;
+        }
+        const QOS_CLASS_UTILITY: u32 = 0x11;
+        // SAFETY: llamada de sistema sin punteros; solo cambia la clase del hilo actual.
+        unsafe {
+            pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min);
+    }
+}
+
 pub fn exportar_con(
     p: &Proyecto,
     almacen: &Almacen,
@@ -94,6 +114,7 @@ pub fn exportar_con(
     avance: &AtomicU32,
     cancelar: &AtomicBool,
 ) -> Result<(), String> {
+    baja_prioridad();
     let otro = op.fps.filter(|f| (f - p.fps).abs() > 1e-6).map(|fps| Proyecto { fps, ..p.clone() });
     let p = otro.as_ref().unwrap_or(p);
     for c in p.pistas.iter().flat_map(|t| &t.clips) {
@@ -190,7 +211,7 @@ fn componer_con(
     let (an, al) = (an as usize / 2 * 2, al as usize / 2 * 2);
     // Casi todo se codifica a 4:2:0: los cuadros van así desde el archivo hasta el codificador, sin convertir.
     let yuv = op.codec != Codec::ProRes;
-    let modo = Decodificar { chip: true, yuv, fino: true };
+    let modo = Decodificar { chip: true, yuv, fino: true, ligera: false };
     let (fr, fps) = (medios::fps_fraccion(p.fps), medios::fps_exacto(p.fps));
     let mut hijo = medios::ffmpeg()
         .stdin(Stdio::piped())
@@ -216,20 +237,7 @@ fn componer_con(
     let total = (dur * fps).ceil() as u64;
     // Casi al principio del cuadro no hay duda de cuál toca.
     let t_de = |n: u64| ini + (n as f64 + 0.02) / fps;
-    if composicion::usa_pasado(p) {
-        // Los efectos de tiempo miran los cuadros anteriores del lector: van uno tras otro.
-        let mut l = Lectores::nuevos(240.0, true).con(modo);
-        for n in 0..total {
-            l.limpiar();
-            let cuadro = if yuv { composicion::componer_yuv(p, t_de(n), an, al, &mut l) } else { composicion::componer(p, t_de(n), an, al, &mut l) };
-            if cancelar.load(Relaxed) || ent.write_all(&cuadro).is_err() {
-                break;
-            }
-            avance.store((n * 1000 / total) as u32, Relaxed);
-        }
-    } else {
-        en_paralelo(p, total, &t_de, (an, al), modo, &mut ent, avance, cancelar);
-    }
+    en_paralelo(p, total, &t_de, (an, al), modo, &mut ent, avance, cancelar);
     drop(ent);
     if cancelar.load(Relaxed) {
         let _ = hijo.kill();
@@ -263,7 +271,7 @@ fn en_paralelo(
     let escritos = AtomicU64::new(0);
     let parar = AtomicBool::new(false);
     std::thread::scope(|s| {
-        let (tx, trabajos) = bounded::<(u64, HashMap<u64, Arc<composicion::Cuadro>>)>(hilos);
+        let (tx, trabajos) = bounded::<(u64, composicion::Prestado)>(hilos);
         let (listo, hechos) = bounded::<(u64, Vec<u8>)>(hilos);
         let (escritos, parar) = (&escritos, &parar);
         s.spawn(move || {
@@ -276,11 +284,12 @@ fn en_paralelo(
                     break;
                 }
                 l.limpiar();
-                let m = composicion::pedidos(p, t_de(n), an, al)
-                    .into_iter()
-                    .filter_map(|(c, ts, aw, ah)| Some((c.id, l.cuadro(c, ts, aw, ah)?)))
-                    .collect();
-                if tx.send((n, m)).is_err() {
+                // Los mismos cuadros que pediría la composición, y para los efectos de tiempo, lo que el lector tiene
+                // en su cola en este momento: así componer en otro hilo da lo mismo que leer en orden.
+                let pedidos = composicion::pedidos(p, t_de(n), an, al);
+                let cuadros = pedidos.iter().filter_map(|&(c, ts, aw, ah)| Some((c.id, l.cuadro(c, ts, aw, ah)?))).collect();
+                let recientes = pedidos.iter().filter(|x| composicion::de_tiempo(x.0)).map(|x| (x.0.id, l.recientes(x.0))).collect();
+                if tx.send((n, composicion::Prestado { cuadros, recientes })).is_err() {
                     break;
                 }
             }
@@ -288,8 +297,7 @@ fn en_paralelo(
         for _ in 0..hilos {
             let (trabajos, listo) = (trabajos.clone(), listo.clone());
             s.spawn(move || {
-                for (n, m) in trabajos {
-                    let mut m = composicion::Prestado(m);
+                for (n, mut m) in trabajos {
                     let cuadro = if modo.yuv { composicion::componer_yuv(p, t_de(n), an, al, &mut m) } else { composicion::componer(p, t_de(n), an, al, &mut m) };
                     if listo.send((n, cuadro)).is_err() {
                         break;

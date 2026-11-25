@@ -16,6 +16,8 @@ pub enum Soltar {
     Medios(Vec<PathBuf>),
     Estilo(usize),
     Filtro(usize),
+    /// Una letra del apartado Texto: crea un título con ella.
+    Letra(String),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -26,6 +28,8 @@ pub enum Seccion {
     FxVideo,
     Transiciones,
     Titulos,
+    /// Las letras, y agregar una nueva.
+    Texto,
     FxAudio,
     Grabar,
 }
@@ -35,11 +39,13 @@ pub struct Estado {
     buscar: String,
     /// Los efectos del catálogo van a un clip vacío para todo el video.
     pub a_todo: bool,
+    /// Categoría elegida en la fila de categorías (`None`: todas). Se olvida al cambiar de sección.
+    grupo: Option<String>,
 }
 
 impl Default for Estado {
     fn default() -> Self {
-        Estado { seccion: Seccion::Medios, buscar: String::new(), a_todo: false }
+        Estado { seccion: Seccion::Medios, buscar: String::new(), a_todo: false, grupo: None }
     }
 }
 
@@ -87,111 +93,48 @@ impl App {
     /// `solo_fx`: en la ventana de Efectos no salen medios ni grabación.
     pub fn biblioteca(&mut self, ui: &mut Ui, solo_fx: bool) {
         use Seccion::*;
-        let todas = [
-            (Medios, "Medios"),
-            (Estilos, "Estilos"),
-            (Filtros, "Filtros"),
-            (FxVideo, "Efectos de video"),
-            (Transiciones, "Transiciones"),
-            (Titulos, "Títulos"),
-            (FxAudio, "Efectos de audio"),
-            (Grabar, "Grabar"),
+        let todas: [(Seccion, &str, &tabler::TablerIcon); 9] = [
+            (Medios, "Medios", &tabler::FOLDERS),
+            (Estilos, "Estilos", &tabler::STAR),
+            (Filtros, "Filtros", &tabler::ADJUSTMENTS),
+            (FxVideo, "Efectos de video", &tabler::FLASK_2),
+            (Transiciones, "Transiciones", &tabler::BLEND_MODE),
+            (Titulos, "Títulos", &tabler::FILE_TYPOGRAPHY),
+            (Texto, "Texto", &tabler::FILE_TEXT),
+            (FxAudio, "Efectos de audio", &tabler::PLUG),
+            (Grabar, "Grabar", &tabler::MICROPHONE),
         ];
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
-            for (s, n) in todas.into_iter().filter(|(s, _)| !solo_fx || !matches!(s, Medios | Grabar)) {
-                if pastilla(ui, n, self.lib.seccion == s).clicked() {
-                    self.lib.seccion = s;
-                }
-            }
-        });
-        ui.add_space(4.0);
+        let visibles: Vec<_> = todas.into_iter().filter(|(s, ..)| !solo_fx || !matches!(s, Medios | Grabar)).collect();
         if solo_fx && matches!(self.lib.seccion, Medios | Grabar) {
             self.lib.seccion = FxVideo;
         }
+        // Una sola fila de íconos (con su nombre al pasar el ratón) y el nombre de la sección debajo.
+        let gap = 3.0;
+        let lado = ((ui.available_width() - gap * (visibles.len() - 1) as f32) / visibles.len() as f32).clamp(24.0, 36.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for (s, n, ic) in &visibles {
+                if boton_color(ui, ic, self.lib.seccion == *s, n, GLYPH, lado).clicked() && self.lib.seccion != *s {
+                    self.lib.seccion = *s;
+                    self.lib.grupo = None;
+                }
+            }
+        });
+        let nombre = visibles.iter().find(|x| x.0 == self.lib.seccion).map_or("", |x| x.1);
+        ui.add_space(4.0);
+        ui.label(RichText::new(crate::idioma::t(nombre)).size(16.0).strong().color(TEXT));
+        ui.add_space(2.0);
         let s = self.lib.seccion;
-        if matches!(s, FxVideo | Transiciones | FxAudio) {
-            ui.add(TextEdit::singleline(&mut self.lib.buscar).hint_text(crate::idioma::t("Buscar…")).desired_width(f32::INFINITY));
+        if !matches!(s, Medios | Grabar) {
+            return self.catalogo_lista(ui);
         }
-        let q = self.lib.buscar.clone();
         let mut poner: Option<Soltar> = None;
         ScrollArea::vertical().id_salt(("biblioteca", s as u8)).auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
-            match s {
-                Medios => self.medios_ui(ui, &mut poner),
-                Grabar => self.opciones_grabar(ui),
-                Filtros => {
-                    let mut g = "";
-                    for (i, e) in crate::filtros::FILTROS.iter().enumerate().filter(|e| contiene(e.1.nombre, &q) || contiene(e.1.grupo, &q)) {
-                        if g != e.grupo {
-                            g = e.grupo;
-                            ui.label(RichText::new(crate::idioma::t(g)).color(MAIN).size(13.0));
-                        }
-                        if renglon(ui, &tabler::STAR, crate::idioma::t(e.nombre), Soltar::Filtro(i)) {
-                            poner = Some(Soltar::Filtro(i));
-                        }
-                    }
-                }
-                Estilos => {
-                    for (i, e) in crate::estilos::ESTILOS.iter().enumerate() {
-                        if renglon(ui, &tabler::STAR, e.nombre, Soltar::Estilo(i)) {
-                            poner = Some(Soltar::Estilo(i));
-                        }
-                    }
-                }
-                Titulos => {
-                    for i in 0..titulos::PLANTILLAS {
-                        if renglon(ui, &tabler::FILE_TYPOGRAPHY, titulos::plantilla(i).0, Soltar::Titulo(i)) {
-                            poner = Some(Soltar::Titulo(i));
-                        }
-                    }
-                    ui.add_space(8.0);
-                    if ui.button(crate::idioma::t("Fondo de color")).clicked() {
-                        let (t, capa) = (self.ahora(), self.capa_libre(self.ahora(), 5.0));
-                        let mut c = self.p.nuevo_video("Color".into(), Contenido::Color([0.45, 0.12, 0.16, 1.0]), t, 5.0);
-                        c.capa = capa;
-                        self.clip = Some(c.id);
-                        self.p.video.push(c);
-                    }
-                }
-                FxAudio => {
-                    for g in TipoFx::GRUPOS {
-                        let v: Vec<TipoFx> = TipoFx::TODOS.into_iter().filter(|t| t.grupo() == g && (contiene(t.nombre(), &q) || contiene(t.ayuda(), &q))).collect();
-                        if !v.is_empty() {
-                            ui.label(RichText::new(crate::idioma::t(&g)).color(MAIN).size(13.0));
-                        }
-                        for t in v {
-                            if renglon(ui, &tabler::PLUG, t.nombre(), Soltar::FxAudio(t)) {
-                                poner = Some(Soltar::FxAudio(t));
-                            }
-                        }
-                    }
-                }
-                FxVideo | Transiciones => {
-                    let lista = if s == FxVideo { nombres::EFECTOS } else { nombres::TRANSICIONES };
-                    let ic = if s == FxVideo { &tabler::FLASK_2 } else { &tabler::BLEND_MODE };
-                    let hacer = |id| if s == FxVideo { Soltar::FxVideo(id) } else { Soltar::Transicion(id) };
-                    let mut i = 0;
-                    while i < lista.len() {
-                        let cat = lista[i].0;
-                        let j = i + lista[i..].iter().take_while(|e| e.0 == cat).count();
-                        let vis: Vec<_> = lista[i..j].iter().filter(|e| q.is_empty() || contiene(e.1, &q) || contiene(cat, &q)).collect();
-                        i = j;
-                        if vis.is_empty() {
-                            continue;
-                        }
-                        CollapsingHeader::new(crate::idioma::tf("{} ({})", &[&cat, &(vis.len())]))
-                            .id_salt((s as u8, cat))
-                            .open((!q.is_empty()).then_some(true))
-                            .show(ui, |ui| {
-                                for e in vis {
-                                    if renglon(ui, ic, e.1, hacer(e.2)) {
-                                        poner = Some(hacer(e.2));
-                                    }
-                                }
-                            });
-                    }
-                }
+            if s == Medios {
+                self.medios_ui(ui, &mut poner);
+            } else {
+                self.opciones_grabar(ui);
             }
         });
         if let Some(s) = poner {
@@ -431,7 +374,7 @@ impl App {
         use Seccion::*;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            for (s, n) in [(Estilos, "Estilos listos"), (Filtros, "Filtros"), (FxVideo, "Video"), (Transiciones, "Transiciones"), (FxAudio, "Audio"), (Titulos, "Títulos")] {
+            for (s, n) in [(Estilos, "Estilos listos"), (Filtros, "Filtros"), (FxVideo, "Video"), (Transiciones, "Transiciones"), (FxAudio, "Audio"), (Titulos, "Títulos"), (Texto, "Texto")] {
                 if pestana_chica(ui, n, self.lib.seccion == s).clicked() {
                     self.lib.seccion = s;
                 }
@@ -441,6 +384,15 @@ impl App {
             self.lib.seccion = Estilos;
         }
         ui.add_space(4.0);
+        self.catalogo_lista(ui);
+    }
+
+    /// Buscador, categorías en una fila y la lista con miniaturas de la sección elegida.
+    pub fn catalogo_lista(&mut self, ui: &mut Ui) {
+        use Seccion::*;
+        if !self.muestras_pedidas {
+            self.pedir_muestras();
+        }
         ui.horizontal(|ui| {
             ui.add(TextEdit::singleline(&mut self.lib.buscar).hint_text(crate::idioma::t("Buscar efecto…")).margin(Margin::symmetric(8, 4)).desired_width(ui.available_width() - 26.0 - ui.spacing().item_spacing.x - 2.0));
             if boton_color(ui, &super::tabler::ROTATE_CLOCKWISE_2, false, "Muestras con este cuadro: rehace las miniaturas con lo que se está viendo", GLYPH, 26.0).clicked() {
@@ -453,34 +405,100 @@ impl App {
         ui.add_space(2.0);
         let q = self.lib.buscar.clone();
         let s = self.lib.seccion;
+        if s == Texto {
+            self.catalogo_texto(ui, &q);
+            return;
+        }
         // (grupo, nombre, ayuda, clave de la muestra, qué pone)
         let todo: Vec<(&str, &str, &str, String, Soltar)> = match s {
             Estilos => crate::estilos::ESTILOS.iter().enumerate().map(|(i, e)| ("Estilos listos", e.nombre, e.ayuda, format!("estilo:{i}"), Soltar::Estilo(i))).collect(),
             Filtros => crate::filtros::FILTROS.iter().enumerate().map(|(i, e)| (e.grupo, e.nombre, "", format!("filtro:{i}"), Soltar::Filtro(i))).collect(),
             Transiciones => nombres::TRANSICIONES.iter().map(|e| (e.0, e.1, "", format!("tr:{}", e.2), Soltar::Transicion(e.2))).collect(),
             FxAudio => TipoFx::GRUPOS.iter().flat_map(|g| TipoFx::TODOS.into_iter().filter(move |t| t.grupo() == *g).map(move |t| (*g, t.nombre(), t.ayuda(), String::new(), Soltar::FxAudio(t)))).collect(),
-            Titulos => (0..titulos::PLANTILLAS).map(|i| ("Títulos", titulos::plantilla(i).0, "", String::new(), Soltar::Titulo(i))).collect(),
+            Titulos => (0..titulos::PLANTILLAS).map(|i| ("Títulos", titulos::plantilla(i).0, "", format!("titulo:{i}"), Soltar::Titulo(i))).collect(),
             _ => nombres::EFECTOS.iter().map(|e| (e.0, e.1, "", e.2.to_string(), Soltar::FxVideo(e.2))).collect(),
         };
         let todo: Vec<_> = todo.into_iter().filter(|e| q.is_empty() || contiene(e.1, &q) || contiene(e.0, &q) || contiene(e.2, &q)).collect();
+        // Categorías como pestañitas: «Todo» y cada grupo, con cuántos tiene.
+        let mut grupos: Vec<(&str, usize)> = vec![];
+        for e in &todo {
+            match grupos.last_mut() {
+                Some(g) if g.0 == e.0 => g.1 += 1,
+                _ => grupos.push((e.0, 1)),
+            }
+        }
+        if self.lib.grupo.as_deref().is_some_and(|g| !grupos.iter().any(|x| x.0 == g)) {
+            self.lib.grupo = None;
+        }
+        if grupos.len() > 1 {
+            {
+                // Si no caben, bajan al siguiente renglón: todas a la vista.
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
+                    if chip(ui, &crate::idioma::tf("Todo ({})", &[&todo.len()]), self.lib.grupo.is_none()).clicked() {
+                        self.lib.grupo = None;
+                    }
+                    for (g, n) in &grupos {
+                        let on = self.lib.grupo.as_deref() == Some(*g);
+                        if chip(ui, &format!("{} {n}", crate::idioma::t(g)), on).clicked() {
+                            self.lib.grupo = if on { None } else { Some(g.to_string()) };
+                        }
+                    }
+                });
+            }
+            ui.add_space(2.0);
+        }
+        let todo: Vec<_> = todo.into_iter().filter(|e| self.lib.grupo.as_deref().is_none_or(|g| g == e.0)).collect();
         let mut poner = None;
         ScrollArea::vertical().id_salt(("catalogo", s as u8)).auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 1.0;
             let ancho = ui.available_width();
-            let mut grupo = "";
-            for e in &todo {
-                if e.0 != grupo {
-                    grupo = e.0;
+            // Con miniaturas: tarjetas en cuadrícula. Sin ellas (audio): lista.
+            let con_vista = s != FxAudio;
+            let cols = ((ancho + 6.0) / 128.0).floor().max(1.0) as usize;
+            let w = (ancho - 6.0 * (cols - 1) as f32) / cols as f32;
+            let mut i = 0;
+            while i < todo.len() {
+                let grupo = todo[i].0;
+                let j = i + todo[i..].iter().take_while(|e| e.0 == grupo).count();
+                if self.lib.grupo.is_none() {
                     ui.add_space(8.0);
                     ui.label(RichText::new(crate::idioma::t(grupo).to_uppercase()).size(11.5).color(TEXT_FAINT));
-                    ui.add_space(2.0);
+                    ui.add_space(3.0);
                 }
-                if fila(ui, ancho, e.1, e.2, self.muestras.get(&e.3), e.4.clone()) {
-                    poner = Some(e.4.clone());
+                if con_vista {
+                    for fila_t in todo[i..j].chunks(cols) {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            for e in fila_t {
+                                if tarjeta(ui, w, e.1, e.2, self.muestras.get(&e.3), e.4.clone()) {
+                                    poner = Some(e.4.clone());
+                                }
+                            }
+                        });
+                        ui.add_space(6.0);
+                    }
+                } else {
+                    for e in &todo[i..j] {
+                        if fila(ui, ancho, e.1, e.2, self.muestras.get(&e.3), e.4.clone()) {
+                            poner = Some(e.4.clone());
+                        }
+                    }
                 }
+                i = j;
             }
             if todo.is_empty() {
                 ui.label(RichText::new(crate::idioma::t("Nada con ese nombre")).color(TEXT_FAINT));
+            }
+            if s == Titulos {
+                ui.add_space(8.0);
+                if ui.add_sized([ancho, 28.0], Button::new(crate::idioma::t("Fondo de color"))).clicked() {
+                    let (t, capa) = (self.ahora(), self.capa_libre(self.ahora(), 5.0));
+                    let mut c = self.p.nuevo_video("Color".into(), Contenido::Color([0.45, 0.12, 0.16, 1.0]), t, 5.0);
+                    c.capa = capa;
+                    self.clip = Some(c.id);
+                    self.p.video.push(c);
+                }
             }
         });
         if let Some(s) = poner {
@@ -532,6 +550,7 @@ impl App {
                 self.panel_izq = PanelIzq::Controles;
             }
             (Soltar::Titulo(i), _) => self.poner_titulo(i, t, None),
+            (Soltar::Letra(n), _) => self.usar_letra(&n),
             (Soltar::Medio(r), _) => self.importar(r),
             (Soltar::Medios(v), _) => self.poner_archivos(&v, t, None, None),
             (Soltar::Filtro(i), _) => {
@@ -544,6 +563,69 @@ impl App {
             }
         }
     }
+}
+
+/// Tarjeta del catálogo: la muestra grande (cómo se ve) y el nombre abajo. Verdadero con doble clic; se arrastra a
+/// un clip, a la línea de tiempo o a la vista previa.
+fn tarjeta(ui: &mut Ui, w: f32, n: &str, ayuda: &str, tex: Option<&TextureHandle>, s: Soltar) -> bool {
+    let (n, ayuda) = (crate::idioma::t(n), crate::idioma::t(ayuda));
+    let alto_img = (w * 9.0 / 16.0).round();
+    let (r, resp) = ui.allocate_exact_size(vec2(w, alto_img + 22.0), Sense::click_and_drag());
+    resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, n));
+    if ui.is_rect_visible(r) {
+        let p = ui.painter_at(r.expand(3.0));
+        let img = Rect::from_min_size(r.min, vec2(w, alto_img));
+        let encima = resp.hovered() || resp.dragged();
+        p.rect_filled(img.translate(vec2(0.0, 1.5)), 6, Color32::from_black_alpha(90));
+        match tex {
+            Some(t) => {
+                p.add(epaint::RectShape::filled(img, 6, Color32::WHITE).with_texture(t.id(), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))));
+            }
+            None => {
+                // Todavía se está haciendo.
+                hueco(&p, img, 6, c(0x1c1c1c));
+                p.text(img.center(), Align2::CENTER_CENTER, "…", fuente(16.0), TEXT_FAINT);
+            }
+        }
+        // Brillo de cristal arriba y borde; al pasar, borde encendido.
+        let arriba = Rect::from_min_max(img.min, pos2(img.right(), img.top() + alto_img * 0.4));
+        p.with_clip_rect(arriba.intersect(p.clip_rect())).rect_filled(img, 6, Color32::from_white_alpha(10));
+        if encima {
+            p.rect_filled(img.expand(2.0), 8, MAIN.gamma_multiply(0.12));
+            p.rect_stroke(img, 6, Stroke::new(2.0, MAIN), StrokeKind::Outside);
+        } else {
+            p.rect_stroke(img, 6, Stroke::new(1.0, Color32::from_white_alpha(25)), StrokeKind::Inside);
+        }
+        let mut job = epaint::text::LayoutJob::simple_singleline(n.to_string(), fuente(12.5), if encima { MAIN } else { TEXT });
+        job.wrap = epaint::text::TextWrapping { max_width: w - 4.0, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+        let g = ui.painter().layout_job(job);
+        p.galley(pos2(r.left() + 2.0, img.bottom() + 4.0), g, TEXT);
+    }
+    resp.dnd_set_drag_payload(s);
+    if resp.dragged() {
+        if let Some(m) = ui.ctx().pointer_interact_pos() {
+            let capa = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::new("arrastrando")));
+            let g = capa.layout_no_wrap(n.into(), fuente(14.0), COLORED_DARK);
+            let caja = Rect::from_min_size(m + vec2(12.0, 6.0), g.size() + vec2(14.0, 8.0));
+            encendido(&capa, caja, 6, MAIN);
+            capa.galley(caja.min + vec2(7.0, 4.0), g, COLORED_DARK);
+        }
+    }
+    let dbl = resp.double_clicked();
+    if !resp.dragged() {
+        resp.on_hover_ui(|ui| {
+            ui.set_max_width(256.0);
+            if let Some(t) = tex {
+                ui.add(Image::new(t).fit_to_exact_size(vec2(256.0, 144.0)).corner_radius(4));
+            }
+            ui.label(RichText::new(n).size(15.0).color(TEXT));
+            if !ayuda.is_empty() {
+                ui.label(RichText::new(ayuda).size(13.0).color(TEXT_DIM));
+            }
+            ui.label(RichText::new(crate::idioma::t("Doble clic para ponerlo, o arrástralo a un clip")).size(12.0).color(TEXT_FAINT));
+        });
+    }
+    dbl
 }
 
 /// Fila del catálogo: miniatura chica, nombre y ayuda. Al pasar el mouse se ve la muestra en grande. Verdadero con doble clic.
@@ -598,6 +680,22 @@ fn fila(ui: &mut Ui, ancho: f32, n: &str, ayuda: &str, tex: Option<&TextureHandl
     dbl
 }
 
+/// Categoría en la fila de categorías: chiquita, para que quepan varias por renglón.
+fn chip(ui: &mut Ui, n: &str, on: bool) -> Response {
+    let g = ui.painter().layout_no_wrap(n.into(), fuente(12.0), TEXT);
+    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 12.0, 19.0), Sense::click());
+    resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, n));
+    if on {
+        encendido(ui.painter(), r, 9, MAIN);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(r, 9, BUTTON_HI);
+    } else {
+        ui.painter().rect_filled(r, 9, c(0x2e2e2e));
+    }
+    ui.painter().text(r.center(), Align2::CENTER_CENTER, n, fuente(12.0), if on { COLORED_DARK } else { TEXT_DIM });
+    resp
+}
+
 /// Pestaña chica y sin color, para elegir qué se lista.
 fn pestana_chica(ui: &mut Ui, n: &str, on: bool) -> Response {
     let n = crate::idioma::t(n);
@@ -605,7 +703,7 @@ fn pestana_chica(ui: &mut Ui, n: &str, on: bool) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 14.0, 22.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, n));
     if on || resp.hovered() {
-        ui.painter().rect_filled(r, 5, if on { BUTTON_HI } else { BUTTON });
+        relieve(ui.painter(), r, 5, if on { BUTTON_HI } else { BUTTON }, resp.hovered(), on);
     }
     ui.painter().text(r.center(), Align2::CENTER_CENTER, n, fuente(13.0), if on { TEXT } else { TEXT_DIM });
     resp
@@ -617,9 +715,9 @@ pub fn pastilla(ui: &mut Ui, n: &str, on: bool) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 18.0, 24.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, on, n));
     if on {
-        degradado(ui.painter(), r, 6, mezcla(HIGHLIGHT, MAIN, 0.45), MAIN);
+        encendido(ui.painter(), r, 6, MAIN);
     } else {
-        ui.painter().rect_filled(r, 6, if resp.hovered() { BUTTON_HI } else { BUTTON });
+        relieve(ui.painter(), r, 6, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
     }
     ui.painter().text(r.center(), Align2::CENTER_CENTER, n, fuente(14.0), if on { COLORED_DARK } else { TEXT });
     resp

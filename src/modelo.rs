@@ -700,6 +700,18 @@ impl Proyecto {
         Fx { id: self.id(), tipo, activo: true, p }
     }
 
+    /// Las pistas de video con su nombre de siempre («V1», «V2»…) lo siguen según su lugar, para que la placa y el
+    /// nombre digan lo mismo al insertar o quitar pistas. Los nombres que puso la persona no se tocan.
+    pub fn renombrar_capas(&mut self) {
+        for (i, c) in self.capas.iter_mut().enumerate() {
+            let de_siempre = c.nombre.strip_prefix('V').is_some_and(|n| !n.is_empty() && n.chars().all(|x| x.is_ascii_digit()));
+            let toca = format!("V{}", i + 1);
+            if de_siempre && c.nombre != toca {
+                c.nombre = toca;
+            }
+        }
+    }
+
     pub fn nueva_pista(&mut self, nombre: &str) -> u64 {
         let id = self.id();
         self.pistas.push(Pista {

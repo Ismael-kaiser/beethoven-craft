@@ -8,6 +8,7 @@ pub mod consola;
 pub mod editor;
 pub mod inicio;
 pub mod estilo;
+pub mod exportacion;
 pub mod inspector;
 pub mod libre;
 pub mod linea;
@@ -17,6 +18,7 @@ pub mod musica;
 pub mod origen;
 pub mod pestanas;
 pub mod proyecto;
+pub mod texto;
 #[rustfmt::skip]
 #[allow(dead_code)]
 mod tabler;
@@ -100,6 +102,9 @@ pub enum AudioVideo {
 
 enum Evento {
     Sondeado(PathBuf, Result<Info, String>),
+    /// El chip de video no lee este archivo: se pregunta si convertirlo.
+    SinChip(PathBuf, Info, crate::convertir::Aviso),
+    Convertido { tarea: u64, res: Result<PathBuf, String> },
     Audio { tarea: u64, ruta: PathBuf, res: Result<Audio, String>, destino: Destino2 },
     Separado { tarea: u64, ruta: PathBuf, res: Result<(PathBuf, PathBuf), String>, inicio: f64, molde: Option<Clip>, con: Vec<u64> },
     Estirado { clave: PathBuf, res: Result<Audio, String> },
@@ -128,6 +133,16 @@ struct Tarea {
     nombre: String,
     avance: Arc<AtomicU32>,
     cancelar: Arc<AtomicBool>,
+}
+
+/// La ventana de una exportación de video: avance, tiempo restante y, al terminar, dónde quedó.
+struct VentanaExport {
+    tarea: u64,
+    ruta: PathBuf,
+    inicio: Instant,
+    resumen: String,
+    /// `None` mientras exporta.
+    resultado: Option<Result<(), String>>,
 }
 
 struct GrabacionActiva {
@@ -205,7 +220,8 @@ pub struct App {
     pub origen: Option<origen::Origen>,
     pub seleccion: HashSet<u64>,
     pidiendo: HashSet<PathBuf>,
-    exportar_op: Option<exportar::Opciones>,
+    exportar_op: Option<exportacion::Panel>,
+    export_ventana: Option<VentanaExport>,
     teclado: Option<crate::midi::Teclado>,
     midi_rec: bool,
     midi_abiertas: Vec<(u8, usize)>,
@@ -219,6 +235,14 @@ pub struct App {
     tareas: HashMap<u64, Tarea>,
     sig_tarea: u64,
     pub preguntar: Option<(PathBuf, Info)>,
+    /// Video que el chip no lee, esperando a que la persona decida si se convierte.
+    pub convertir: Option<(PathBuf, Info, crate::convertir::Aviso)>,
+    /// Muestra de cada letra en el apartado Texto (`None`: no se pudo leer).
+    letras_tex: HashMap<String, Option<TextureHandle>>,
+    /// La ventana de agregar una letra.
+    pub fuente_nueva: Option<texto::FuenteNueva>,
+    /// Título que se está escribiendo en la vista previa (y si es la primera vez: el texto va todo elegido).
+    pub escribiendo: Option<(u64, bool)>,
     mensaje: Option<(String, bool, Instant)>,
     grab: Option<GrabacionActiva>,
     monitor: Option<Monitor>,
@@ -230,6 +254,8 @@ pub struct App {
     confirmar: Option<Confirmar>,
     acerca: bool,
     cerrar_ya: bool,
+    /// Ya se intentó abrir la salida de audio (se hace al dejar el menú).
+    salida_abierta: bool,
 }
 
 /// Ícono de la app, 512 × 512 RGBA.
@@ -254,9 +280,11 @@ impl App {
         // Se abre desde ya, sin detener la ventana.
         std::thread::spawn(crate::vgpu::gpu);
         estilo::aplicar(ctx);
+        crate::tiempos::marca("letras y estilo");
         if !sin_dispositivo {
             inicio::cargar_ajustes();
         }
+        crate::tiempos::marca("ajustes");
         let (tx, rx) = unbounded();
         let p = Proyecto::nuevo();
         let canal = p.pistas.first().map_or(Canal::Maestro, |x| Canal::Pista(x.id));
@@ -313,6 +341,7 @@ impl App {
             seleccion: HashSet::new(),
             pidiendo: HashSet::new(),
             exportar_op: None,
+            export_ventana: None,
             teclado: None,
             midi_rec: false,
             midi_abiertas: vec![],
@@ -326,6 +355,10 @@ impl App {
             tareas: HashMap::new(),
             sig_tarea: 1,
             preguntar: None,
+            convertir: None,
+            letras_tex: HashMap::new(),
+            fuente_nueva: None,
+            escribiendo: None,
             mensaje: None,
             grab: None,
             monitor: None,
@@ -337,11 +370,14 @@ impl App {
             confirmar: None,
             acerca: false,
             cerrar_ya: false,
+            salida_abierta: false,
         };
+        crate::tiempos::marca("estado de la app");
         if !sin_dispositivo {
             a.archivos.cargar();
         }
-        a.abrir_salida();
+        crate::tiempos::marca("panel de archivos");
+        // La salida de audio se abre al entrar al editor (`ui`): el menú no la necesita y así aparece antes.
         a
     }
 
@@ -572,7 +608,39 @@ impl App {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let r = medios::sondear(&ruta);
-            let _ = tx.send(Evento::Sondeado(ruta, r));
+            // Cada máquina es distinta: se prueba si su chip de video lee este archivo.
+            let aviso = match &r {
+                Ok(i) if !es_imagen(&ruta) => i.video.and_then(|v| crate::convertir::revisar(&ruta, v, i.dur)),
+                _ => None,
+            };
+            let _ = tx.send(match (r, aviso) {
+                (Ok(i), Some(a)) => Evento::SinChip(ruta, i, a),
+                (r, _) => Evento::Sondeado(ruta, r),
+            });
+        });
+    }
+
+    /// Ya se sabe qué es el archivo: se mete al proyecto (con video y audio, primero se pregunta cómo).
+    fn sondeado(&mut self, ruta: PathBuf, info: Info) {
+        if es_imagen(&ruta) {
+            self.importar_imagen(ruta, info);
+        } else if info.video.is_some() && info.audio {
+            self.preguntar = Some((ruta, info));
+        } else if info.video.is_some() {
+            self.importar_video(ruta, info, AudioVideo::Junto);
+        } else {
+            let nombre = nombre_de(&ruta);
+            self.leer_audio(ruta, Destino2::PistaNueva { nombre, inicio: 0.0, molde: None, con: vec![] }, "Leyendo el audio");
+        }
+    }
+
+    /// Hace la copia en H.264 y, al terminar, la importa como cualquier otro video.
+    fn convertir_e_importar(&mut self, ruta: PathBuf, info: Info) {
+        let (tarea, av, ca) = self.tarea("Convirtiendo video");
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let res = crate::convertir::convertir(&ruta, &carpeta().join("Convertidos"), info.dur, &av, &ca);
+            let _ = tx.send(Evento::Convertido { tarea, res });
         });
     }
 
@@ -641,6 +709,9 @@ impl App {
 
     pub fn exportar_a(&mut self, ruta: PathBuf, modo: Modo) {
         let (tarea, av, ca) = self.tarea(if modo == Modo::Video { "Exportando video" } else { "Exportando audio" });
+        if modo == Modo::Video {
+            self.abrir_ventana_export(tarea, &ruta, resumen_export(&self.p, &exportar::Opciones::default()));
+        }
         let (tx, p, al) = (self.tx.clone(), self.p.clone(), self.almacen.clone());
         std::thread::spawn(move || {
             let res = exportar::exportar(&p, &al, &ruta, modo, &av, &ca);
@@ -770,6 +841,9 @@ impl App {
     /// Pide las miniaturas que falten.
     fn pedir_tiras(&mut self) {
         for c in self.p.video.iter().filter(|c| c.contenido == Contenido::Archivo) {
+            if !self.sin_dispositivo {
+                crate::ligeras::pedir(&c.ruta, &carpeta().join("Copias ligeras"));
+            }
             if !self.tiras.contains_key(&c.ruta) {
                 self.tiras.insert(c.ruta.clone(), None);
                 let (tx, r, dur, razon) = (self.tx.clone(), c.ruta.clone(), c.total, c.ancho as f64 / c.alto.max(1) as f64);
@@ -806,20 +880,14 @@ impl App {
                     });
                     self.tiras.insert(ruta, lista);
                 }
-                Evento::Sondeado(ruta, Ok(info)) => {
-                    if es_imagen(&ruta) {
-                        self.importar_imagen(ruta, info);
-                    } else if info.video.is_some() && info.audio {
-                        self.preguntar = Some((ruta, info));
-                    } else if info.video.is_some() {
-                        self.importar_video(ruta, info, AudioVideo::Junto);
-                    } else {
-                        let nombre = nombre_de(&ruta);
-                        self.leer_audio(
-                            ruta,
-                            Destino2::PistaNueva { nombre, inicio: 0.0, molde: None, con: vec![] },
-                            "Leyendo el audio",
-                        );
+                Evento::Sondeado(ruta, Ok(info)) => self.sondeado(ruta, info),
+                Evento::SinChip(ruta, info, aviso) => self.convertir = Some((ruta, info, aviso)),
+                Evento::Convertido { tarea, res } => {
+                    let cancelada = self.tareas.remove(&tarea).is_some_and(|t| t.cancelar.load(Relaxed));
+                    match res {
+                        Ok(r) => self.importar(r),
+                        Err(_) if cancelada => {}
+                        Err(e) => self.avisar(e, true),
                     }
                 }
                 Evento::Audio { tarea, ruta, res, destino } => {
@@ -881,6 +949,9 @@ impl App {
                 }
                 Evento::Exportado { tarea, ruta, res } => {
                     self.tareas.remove(&tarea);
+                    if let Some(v) = self.export_ventana.as_mut().filter(|v| v.tarea == tarea) {
+                        v.resultado = Some(res.clone());
+                    }
                     match res {
                         Ok(()) => self.avisar(crate::idioma::tf("Listo: {}", &[&(ruta.display())]), false),
                         Err(e) => self.avisar(e, true),
@@ -1255,7 +1326,7 @@ impl App {
             "guardar_como" => self.menu_guardar(true),
             "abrir" => self.pedir(Confirmar::Abrir),
             "importar" => self.menu_importar(),
-            "exportar" => self.exportar_op = Some(Default::default()),
+            "exportar" => self.exportar_op = Some(exportacion::Panel::nuevo(self.ruta.as_deref())),
             "menu" => {
                 self.pausar();
                 self.inicio.mostrar();
@@ -1374,6 +1445,7 @@ impl App {
     // ---- dibujo
 
     pub fn ui(&mut self, ui: &mut Ui) {
+        let _cuadro = crate::tiempos::Cuadro::nuevo();
         let ctx = ui.ctx().clone();
         self.cuadrar_seleccion();
         self.eventos(&ctx);
@@ -1383,6 +1455,11 @@ impl App {
             self.atender_teclado();
         }
         self.atender_grabacion();
+        if !self.inicio.visible && !self.salida_abierta {
+            self.salida_abierta = true;
+            self.abrir_salida();
+            crate::tiempos::marca("salida de audio");
+        }
         if self.salida.as_ref().is_some_and(|s| s.rota.load(Relaxed)) {
             self.abrir_salida();
         }
@@ -1432,7 +1509,12 @@ impl App {
         self.cuadrar_seleccion();
         self.ventana_atajos(&ctx);
         self.dialogos(&ctx);
+        let antes = self.vista_v;
         self.sincronizar();
+        if self.vista_v != antes {
+            // Lo que se acaba de cambiar se ve en el cuadro que sigue, sin esperar a que se mueva el ratón.
+            ctx.request_repaint();
+        }
         self.historial(&ctx);
         if self.tocando() || self.grab.is_some() || self.ocupada() || self.monitor.is_some() {
             ctx.request_repaint_after(Duration::from_millis(16));
@@ -1446,7 +1528,8 @@ impl App {
                 ctx.send_viewport_cmd(ViewportCommand::CancelClose);
                 self.confirmar = Some(Confirmar::Salir);
             }
-        }
+        }        // Al final de todo: los botones de egui se vuelven de metal.
+        estilo::metalizar(&ctx);
     }
 
     fn transporte(&mut self, ui: &mut Ui) {
@@ -1497,7 +1580,7 @@ impl App {
                 }
                 ui.separator();
                 if ui.add(Button::new(crate::idioma::t("Exportar video con mi audio…")).shortcut_text(crate::atajos::menu("exportar"))).clicked() {
-                    self.exportar_op = Some(Default::default());
+                    self.exportar_op = Some(exportacion::Panel::nuevo(self.ruta.as_deref()));
                 }
                 if ui.button(crate::idioma::t("Exportar solo el audio…")).clicked() {
                     self.menu_exportar(Modo::Audio);
@@ -1560,9 +1643,10 @@ impl App {
             let grabando = self.grab.is_some();
             // Reloj
             let (r, _) = ui.allocate_exact_size(vec2(150.0, 34.0), Sense::hover());
-            ui.painter().rect_filled(r, 6, c(0x1b1b1b));
-            ui.painter().rect_filled(r.shrink(1.0), 5, TIME_PANEL);
+            // Pantallita metida en el tablero, con los números encendidos.
+            hueco(ui.painter(), r, 6, c(0x141414));
             let col = if grabando { RECORD } else { MAIN };
+            ui.painter().text(r.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, tiempo(self.ahora()), fuente(27.0), col.gamma_multiply(0.25));
             ui.painter().text(r.center(), Align2::CENTER_CENTER, tiempo(self.ahora()), fuente(27.0), col);
             ui.separator();
             if boton(ui, &tabler::ARROW_BACK_UP, false, "Deshacer (⌘Z)").clicked() {
@@ -1686,16 +1770,23 @@ impl App {
         let r = Rect::from_min_max(todo.min, pos2(todo.right(), barra.top()));
         let resp = ui.allocate_rect(todo, Sense::hover());
         // Archivos soltados en la imagen: en el cursor.
-        let trae = resp.dnd_hover_payload::<biblioteca::Soltar>().is_some_and(|s| matches!(*s, biblioteca::Soltar::Medios(_)));
-        if let Some(s) = resp.dnd_release_payload::<biblioteca::Soltar>() {
-            if let biblioteca::Soltar::Medios(v) = &*s {
-                let t = self.ahora();
-                self.poner_archivos(v, t, None, None);
-            }
-        }
+        let trae = resp.dnd_hover_payload::<biblioteca::Soltar>().is_some_and(|s| matches!(*s, biblioteca::Soltar::Medios(_) | biblioteca::Soltar::Letra(_)));
         let razon = self.p.ancho as f32 / self.p.alto.max(1) as f32;
         let k = (r.width() / razon).min(r.height());
         let d = Rect::from_center_size(r.center(), vec2(k * razon, k));
+        if let Some(s) = resp.dnd_release_payload::<biblioteca::Soltar>() {
+            let t = self.ahora();
+            match &*s {
+                biblioteca::Soltar::Medios(v) => self.poner_archivos(v, t, None, None),
+                // Una letra soltada en la imagen: un texto justo ahí, listo para escribir.
+                biblioteca::Soltar::Letra(n) => {
+                    let m = ui.input(|i| i.pointer.interact_pos()).unwrap_or(d.center());
+                    let donde = (((m.x - d.center().x) / d.width() * 100.0) as f64, ((m.y - d.center().y) / d.height() * 100.0) as f64);
+                    self.titulo_con_letra(&n.clone(), t, None, Some(donde));
+                }
+                _ => {}
+            }
+        }
         self.alto_panel = (d.height() * ui.ctx().pixels_per_point()).round().max(2.0) as usize;
         match &self.textura {
             Some(x) if !self.p.video.is_empty() => {
@@ -1711,6 +1802,7 @@ impl App {
         // En la pestaña de animación lo hace ella, con todo lo que cambie.
         let antes = (self.anim.auto && self.espacio != Espacio::Animacion).then(|| self.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id).cloned())).flatten();
         self.mover_en_vista(ui, d);
+        self.escribir_en_vista(ui, d);
         self.camino(ui, d);
         self.barra_libre(ui, r);
         if let Some(a) = antes {
@@ -1718,7 +1810,10 @@ impl App {
         }
         ui.painter().rect_filled(barra, 0, WINDOW_TITLE);
         let mut u = ui.new_child(UiBuilder::new().max_rect(barra.shrink2(vec2(8.0, 3.0))).layout(Layout::left_to_right(Align::Center)));
-        u.label(RichText::new(tiempo(self.ahora())).color(MAIN).size(15.0));
+        // Tiempo y cuadro: el número de cuadro (contado desde 1) para ubicarse fotograma por fotograma.
+        let cuadro = (self.ahora() * self.p.fps).round().max(0.0) as u64 + 1;
+        let total = (self.p.fin() * self.p.fps).round().max(0.0) as u64;
+        u.label(RichText::new(format!("{}  ·  {} {cuadro} / {total}", tiempo(self.ahora()), crate::idioma::t("cuadro"))).color(MAIN).size(15.0));
         let paso = 1.0 / self.p.fps.max(1.0);
         let t = self.ahora();
         u.add_space((barra.width() / 2.0 - 190.0).max(4.0));
@@ -1746,6 +1841,10 @@ impl App {
                 ui.selectable_value(&mut self.calidad, 720, crate::idioma::t("Nítida"));
                 ui.selectable_value(&mut self.calidad, 1080, crate::idioma::t("Completa"));
                 ui.separator();
+                let mut ligeras = !crate::ligeras::APAGADAS.load(Relaxed);
+                if ui.checkbox(&mut ligeras, crate::idioma::t("Copias ligeras de videos pesados")).on_hover_text(crate::idioma::t("Solo para editar; se exporta siempre del original")).changed() {
+                    crate::ligeras::APAGADAS.store(!ligeras, Relaxed);
+                }
                 let mut usa = crate::vgpu::encendida();
                 if ui.checkbox(&mut usa, crate::idioma::t("Usar la tarjeta gráfica")).changed() {
                     crate::vgpu::apagar(!usa);
@@ -1755,6 +1854,9 @@ impl App {
                 ui.label(RichText::new(crate::vgpu::gpu().map_or("", |g| g.nombre())).size(12.0).color(TEXT_FAINT));
             }).response.on_hover_text(crate::idioma::t("Calidad de la vista previa. No cambia lo que se exporta."));
             ui.label(RichText::new(tiempo(self.p.fin())).color(TEXT_DIM));
+            if let Some(a) = crate::ligeras::avance() {
+                ui.label(RichText::new(crate::idioma::tf("Copia ligera {} %", &[&(a / 10)])).size(12.5).color(MAIN)).on_hover_text(crate::idioma::t("Preparando el video para que se edite fluido. Puedes seguir trabajando."));
+            }
             if ui.available_width() > 130.0 && ui.add(Button::new(RichText::new(format!("{}×{} · {}", self.p.ancho, self.p.alto, proyecto::nombre_fps((self.p.fps * 100.0).round() / 100.0))).size(13.0).color(TEXT_DIM)).frame(false)).on_hover_text(crate::idioma::t("Resolución y fotogramas por segundo del proyecto")).clicked() {
                 self.abrir_ajustes_proyecto();
             }
@@ -1762,37 +1864,88 @@ impl App {
     }
 
     /// Mover y escalar el clip elegido directamente sobre la imagen.
-    fn mover_en_vista(&mut self, ui: &mut Ui, d: Rect) {
-        let ahora = self.ahora();
-        let Some(id) = self.clip else { return };
+    /// Dónde se ve un clip en la vista previa `d`: su recuadro ya movido, girado y estirado. `None`: no se ve en `t`.
+    fn caja_en_vista(&self, c: &ClipVideo, ahora: f64, d: Rect) -> Option<CajaVista> {
+        if ahora < c.inicio || ahora > c.fin() {
+            return None;
+        }
         let (pw, ph) = (self.p.ancho as usize, self.p.alto as usize);
-        let Some(c) = self.p.clip_video(id).filter(|c| ahora >= c.inicio && ahora <= c.fin()) else { return };
         let t = ahora - c.inicio;
-        let (aw, ah) = match c.contenido {
-            Contenido::Archivo | Contenido::Imagen => crate::composicion::ajuste(c, pw, ph),
-            _ => (pw, ph),
+        // Dónde está el dibujo dentro del cuadro, antes de moverlo (en píxeles del cuadro).
+        let (fw, fh) = (pw as f32, ph as f32);
+        let r = match &c.contenido {
+            Contenido::Archivo | Contenido::Imagen => {
+                let (aw, ah) = crate::composicion::ajuste(c, pw, ph);
+                Rect::from_center_size(pos2(fw / 2.0, fh / 2.0), vec2(aw as f32, ah as f32))
+            }
+            Contenido::Forma(f) => Rect::from_center_size(pos2(fw / 2.0, fh / 2.0), vec2(f.tam[0] / 100.0 * fh, f.tam[1] / 100.0 * fh)),
+            Contenido::Titulo(x) => {
+                let [x0, y0, x1, y1] = crate::titulos::caja(x, pw, ph);
+                Rect::from_min_max(pos2(x0, y0), pos2(x1, y1))
+            }
+            _ => Rect::from_min_size(Pos2::ZERO, vec2(fw, fh)),
         };
+        let k = d.width() / fw.max(1.0);
         let e = c.mov.escala.en(t).num() as f32 / 100.0;
         let est = vec2(c.mov.ancho.en(t).num() as f32 / 100.0, c.mov.alto.en(t).num() as f32 / 100.0);
-        let (aw, ah) = match &c.contenido {
-            Contenido::Forma(f) => ((f.tam[0] / 100.0 * ph as f32) as usize, (f.tam[1] / 100.0 * ph as f32) as usize),
-            _ => (aw, ah),
-        };
-        let k = d.width() / pw.max(1) as f32;
         let centro = d.center() + vec2(c.mov.x.en(t).num() as f32 / 100.0 * d.width(), c.mov.y.en(t).num() as f32 / 100.0 * d.height());
-        let medio = vec2(aw as f32, ah as f32) * k * e / 2.0;
         let giro = emath::Rot2::from_angle((c.mov.giro.en(t).num() as f32).to_radians());
-        let esq = [vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0)].map(|v| centro + giro * (v * medio * est));
-        let p = ui.painter_at(d.expand(1.0));
-        p.add(Shape::closed_line(esq.to_vec(), Stroke::new(1.0, MAIN.gamma_multiply(0.7))));
-        let asa = Rect::from_center_size(d.clamp(esq[2]), Vec2::splat(14.0));
-        p.rect_filled(asa.shrink(3.0), 2, MAIN);
-        // Asa de giro, arriba del clip.
-        let arriba = d.clamp(centro + giro * vec2(0.0, -medio.y * est.y - 22.0));
-        let asa_giro = Rect::from_center_size(arriba, Vec2::splat(16.0));
-        p.circle(arriba, 5.0, WINDOW_TITLE, Stroke::new(1.5, MAIN));
+        let fc = pos2(fw / 2.0, fh / 2.0);
+        let paso = vec2(k * e * est.x, k * e * est.y);
+        let a_vista = |q: Pos2| centro + giro * ((q - fc) * paso);
+        let esq = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(a_vista);
+        Some(CajaVista { centro, giro, esq, medio: a_vista(r.center()), t })
+    }
+
+    /// Tramos que cuestan componer y si ya están listos (lo que dibuja la barra de la regla).
+    pub fn preparado(&self) -> Vec<(f64, f64, bool)> {
+        self.vista.preparado()
+    }
+
+    /// Dónde están las asas de lo elegido en la vista previa `d`: 4 esquinas, 4 lados (arriba, derecha, abajo,
+    /// izquierda) y la de girar.
+    pub fn asas_en_vista(&self, d: Rect) -> Vec<Pos2> {
+        let ahora = self.ahora();
+        self.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id)).and_then(|c| self.caja_en_vista(c, ahora, d)).map_or(vec![], |q| asas(&q).to_vec())
+    }
+
+    /// El clip de más arriba que se ve en el punto `m` de la vista previa.
+    fn clip_en_punto(&self, m: Pos2, d: Rect) -> Option<u64> {
+        let ahora = self.ahora();
+        (0..self.p.capas.len()).rev().filter(|i| self.p.capas[*i].visible).find_map(|i| {
+            let c = self.p.video_en(i, ahora)?;
+            if c.contenido == Contenido::Ajuste {
+                return None;
+            }
+            let q = self.caja_en_vista(c, ahora, d)?;
+            dentro(&q.esq, m).then_some(c.id)
+        })
+    }
+
+    /// Mover, escalar (esquinas), estirar (lados) y girar lo elegido en la vista previa. Clic elige lo que está debajo
+    /// y doble clic en un texto lo deja escribir ahí mismo.
+    fn mover_en_vista(&mut self, ui: &mut Ui, d: Rect) {
+        let ahora = self.ahora();
         let cuerpo = ui.interact(d, Id::new("vista-mover").with(ui.id()), Sense::click_and_drag());
         cuerpo.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, crate::idioma::t("Imagen")));
+        // Clic (o empezar a arrastrar) sobre algo: queda elegido.
+        if cuerpo.clicked() || cuerpo.drag_started() || cuerpo.double_clicked() {
+            if let Some(m) = ui.input(|i| i.pointer.press_origin()).or(cuerpo.interact_pointer_pos()) {
+                let encima_del_elegido = self.clip.and_then(|id| self.p.video.iter().find(|c| c.id == id)).and_then(|c| self.caja_en_vista(c, ahora, d)).is_some_and(|q| dentro(&q.esq, m));
+                if !encima_del_elegido {
+                    if let Some(id) = self.clip_en_punto(m, d) {
+                        self.clip = Some(id);
+                        self.seleccion.clear();
+                        self.seleccion.insert(id);
+                    }
+                }
+            }
+        }
+        let Some(id) = self.clip else { return };
+        let Some(q) = self.p.video.iter().find(|c| c.id == id).and_then(|c| self.caja_en_vista(c, ahora, d)) else { return };
+        if cuerpo.double_clicked() && self.p.video.iter().any(|c| c.id == id && matches!(c.contenido, Contenido::Titulo(_))) {
+            self.escribiendo = Some((id, false));
+        }
         cuerpo.context_menu(|ui| {
             ui.set_min_width(210.0);
             self.menu_llaves(ui, id, ahora);
@@ -1800,30 +1953,129 @@ impl App {
         if self.anim.libre.modo != libre::Modo::Mover {
             return self.vista_libre(ui, d, &cuerpo);
         }
-        let Some(c) = self.p.clip_video(id) else { return };
-        let resp = ui.interact(asa, Id::new("vista-escala").with(ui.id()), Sense::drag());
-        let rgiro = ui.interact(asa_giro, Id::new("vista-giro").with(ui.id()), Sense::drag()).on_hover_text(crate::idioma::t("Girar (Shift: de 15 en 15 grados)"));
-        if resp.hovered() || resp.dragged() {
-            ui.ctx().set_cursor_icon(CursorIcon::ResizeNwSe);
+        let p = ui.painter_at(d.expand(12.0));
+        let e = q.esq;
+        // Recuadro con sombra para que se vea sobre cualquier imagen.
+        p.add(Shape::closed_line(e.to_vec(), Stroke::new(3.0, Color32::from_black_alpha(110))));
+        p.add(Shape::closed_line(e.to_vec(), Stroke::new(1.2, MAIN)));
+        let puntos = asas(&q);
+        let lados = [puntos[4], puntos[5], puntos[6], puntos[7]];
+        // Asa de giro sobre el lado de arriba.
+        let arriba = puntos[8];
+        p.line_segment([lados[0], arriba], Stroke::new(1.2, MAIN));
+        p.circle(arriba, 5.5, Color32::WHITE, Stroke::new(1.5, c(0x1a1a1a)));
+        let asa = |p: &Painter, o: Pos2, lado: bool| {
+            let r = Rect::from_center_size(o, if lado { vec2(8.0, 8.0) } else { vec2(10.0, 10.0) });
+            p.rect_filled(r.translate(vec2(0.0, 1.0)), 2, Color32::from_black_alpha(120));
+            p.rect_filled(r, 2, Color32::WHITE);
+            p.rect_stroke(r, 2, Stroke::new(1.2, c(0x1a1a1a)), StrokeKind::Inside);
+        };
+        for o in lados {
+            asa(&p, o, true);
         }
-        if let (true, Some(m)) = (rgiro.dragged(), rgiro.interact_pointer_pos()) {
-            let v = m - centro;
-            let mut g = (v.x.atan2(-v.y)).to_degrees() as f64;
-            if ui.input(|i| i.modifiers.shift) {
-                g = (g / 15.0).round() * 15.0;
+        for o in e {
+            asa(&p, o, false);
+        }
+        // Qué asa se agarra: 0-3 esquinas, 4-7 lados, 8 giro.
+        let mut agarre = None;
+        for (i, o) in puntos.iter().enumerate() {
+            let r = ui.interact(Rect::from_center_size(*o, Vec2::splat(16.0)), Id::new(("vista-asa", i)).with(ui.id()), Sense::drag());
+            if r.hovered() || r.dragged() {
+                ui.ctx().set_cursor_icon(match i {
+                    8 => CursorIcon::Alias,
+                    0 | 2 => CursorIcon::ResizeNwSe,
+                    1 | 3 => CursorIcon::ResizeNeSw,
+                    4 | 6 => CursorIcon::ResizeVertical,
+                    _ => CursorIcon::ResizeHorizontal,
+                });
             }
-            // La vuelta más cercana a la que ya llevaba.
-            let antes = c.mov.giro.en(t).num();
-            g += ((antes - g) / 360.0).round() * 360.0;
-            c.mov.giro.poner(t, Valor::Num(g));
-        } else if let (true, Some(m)) = (resp.dragged(), resp.interact_pointer_pos()) {
-            let base = (vec2(aw as f32, ah as f32) * k / 2.0).length().max(1.0);
-            c.mov.escala.poner(t, Valor::Num(((m - centro).length() / base * 100.0).clamp(1.0, 500.0) as f64));
-        } else if cuerpo.dragged() {
-            let q = cuerpo.drag_delta();
-            let (x, y) = (c.mov.x.en(t).num(), c.mov.y.en(t).num());
-            c.mov.x.poner(t, Valor::Num(x + (q.x / d.width()) as f64 * 100.0));
-            c.mov.y.poner(t, Valor::Num(y + (q.y / d.height()) as f64 * 100.0));
+            if i == 8 {
+                r.clone().on_hover_text(crate::idioma::t("Girar (Shift: de 15 en 15 grados)"));
+            }
+            if r.dragged() {
+                agarre = Some((i, *o, r.interact_pointer_pos()));
+            }
+        }
+        let t = q.t;
+        let shift = ui.input(|i| i.modifiers.shift);
+        let Some(c) = self.p.clip_video(id) else { return };
+        match agarre {
+            Some((8, _, Some(m))) => {
+                let v = m - q.medio;
+                let mut g = (v.x.atan2(-v.y)).to_degrees() as f64;
+                if shift {
+                    g = (g / 15.0).round() * 15.0;
+                }
+                // La vuelta más cercana a la que ya llevaba.
+                let antes = c.mov.giro.en(t).num();
+                g += ((antes - g) / 360.0).round() * 360.0;
+                c.mov.giro.poner(t, Valor::Num(g));
+            }
+            // Esquina: crece parejo, desde el centro.
+            Some((0..=3, o, Some(m))) => {
+                let base = (o - q.centro).length().max(1.0);
+                let e = c.mov.escala.en(t).num();
+                c.mov.escala.poner(t, Valor::Num((e * ((m - q.centro).length() / base) as f64).clamp(1.0, 800.0)));
+            }
+            // Lado: estira solo a lo ancho o a lo alto.
+            Some((i @ 4..=7, o, Some(m))) => {
+                let inv = q.giro.inverse();
+                let (a, b) = (inv * (o - q.centro), inv * (m - q.centro));
+                let (prop, ahora_v, nuevo) = if i == 5 || i == 7 { (&mut c.mov.ancho, a.x, b.x) } else { (&mut c.mov.alto, a.y, b.y) };
+                if ahora_v.abs() > 1.0 && nuevo * ahora_v > 0.0 {
+                    let v = prop.en(t).num();
+                    prop.poner(t, Valor::Num((v * (nuevo / ahora_v) as f64).clamp(1.0, 800.0)));
+                }
+            }
+            _ if cuerpo.dragged() => {
+                let m = cuerpo.drag_delta();
+                let (x, y) = (c.mov.x.en(t).num(), c.mov.y.en(t).num());
+                c.mov.x.poner(t, Valor::Num(x + (m.x / d.width()) as f64 * 100.0));
+                c.mov.y.poner(t, Valor::Num(y + (m.y / d.height()) as f64 * 100.0));
+            }
+            _ => {}
+        }
+    }
+
+    /// Escribir un título encima de la vista previa, en su lugar. Enter hace renglón; Esc o clic fuera termina.
+    fn escribir_en_vista(&mut self, ui: &mut Ui, d: Rect) {
+        let Some((id, primera)) = self.escribiendo else { return };
+        let ahora = self.ahora();
+        let Some(q) = self.p.video.iter().find(|c| c.id == id).and_then(|c| self.caja_en_vista(c, ahora, d)) else {
+            self.escribiendo = None;
+            return;
+        };
+        let ancho = q.esq.iter().map(|p| p.x).fold(f32::MIN, f32::max) - q.esq.iter().map(|p| p.x).fold(f32::MAX, f32::min);
+        let Some(Contenido::Titulo(x)) = self.p.clip_video(id).map(|c| &mut c.contenido) else {
+            self.escribiendo = None;
+            return;
+        };
+        let te_id = Id::new(("escribir-titulo", id));
+        let mut terminar = false;
+        let area = Area::new(Id::new("escribir-en-vista")).order(Order::Foreground).fixed_pos(q.medio).pivot(Align2::CENTER_CENTER).show(ui.ctx(), |ui| {
+            Frame::new().fill(Color32::from_black_alpha(190)).stroke(Stroke::new(1.5, MAIN)).corner_radius(6).inner_margin(6.0).show(ui, |ui| {
+                let r = ui.add(TextEdit::multiline(&mut x.texto).id(te_id).font(fuente(18.0)).desired_width(ancho.clamp(160.0, d.width() * 0.9)).desired_rows(1).frame(Frame::NONE));
+                if primera {
+                    r.request_focus();
+                    if let Some(mut st) = TextEdit::load_state(ui.ctx(), te_id) {
+                        let n = x.texto.chars().count();
+                        st.cursor.set_char_range(Some(text::CCursorRange::two(text::CCursor::new(0), text::CCursor::new(n))));
+                        st.store(ui.ctx(), te_id);
+                    }
+                } else if !r.has_focus() && !r.lost_focus() {
+                    r.request_focus();
+                }
+                ui.label(RichText::new(crate::idioma::t("Esc o clic fuera para terminar")).size(11.0).color(TEXT_FAINT));
+                if r.lost_focus() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                    terminar = true;
+                }
+            });
+        });
+        let fuera = ui.input(|i| i.pointer.any_pressed()) && ui.input(|i| i.pointer.interact_pos()).is_some_and(|m| !area.response.rect.contains(m));
+        if terminar || fuera {
+            self.escribiendo = None;
+        } else if primera {
+            self.escribiendo = Some((id, false));
         }
     }
 
@@ -1989,95 +2241,72 @@ impl App {
         CentralPanel::default().frame(Frame::new().fill(Color32::BLACK)).show(ui, |ui| self.preview(ui));
     }
 
-    /// Opciones de exportación de video.
-    fn dialogo_exportar(&mut self, ctx: &Context) {
-        let Some(mut op) = self.exportar_op.clone() else { return };
-        let (mut cerrar, mut ir) = (false, false);
-        Modal::new(Id::new("exportar")).show(ctx, |ui| {
-            ui.set_width(420.0);
-            ui.heading(crate::idioma::t("Exportar video con mi audio"));
+    /// El chip de video no lee el archivo: qué pasa si se convierte y qué pasa si no.
+    fn dialogo_convertir(&mut self, ctx: &Context) {
+        let Some((ruta, info, aviso)) = self.convertir.clone() else { return };
+        #[derive(PartialEq)]
+        enum Que {
+            Convertir,
+            Original,
+            Nada,
+        }
+        let mut que = None;
+        Modal::new(Id::new("convertir")).show(ctx, |ui| {
+            ui.set_width(540.0);
+            ui.heading(crate::idioma::t("Este video puede ir lento en tu computadora"));
+            ui.label(RichText::new(nombre_de(&ruta)).color(TEXT_DIM));
             ui.add_space(6.0);
-            let fila = |ui: &mut Ui, n: &str, f: &mut dyn FnMut(&mut Ui)| {
-                ui.horizontal(|ui| {
-                    ui.add_sized([110.0, 22.0], Label::new(RichText::new(crate::idioma::t(&n)).color(TEXT_DIM)));
-                    f(ui);
+            ui.label(crate::idioma::tf(
+                "Está en {}. El chip de video de esta computadora no sabe leer ese formato, así que todo el trabajo cae en el procesador.",
+                &[&aviso.formato],
+            ));
+            ui.add_space(8.0);
+            let caja = |ui: &mut Ui, titulo: &str, col: Color32, puntos: &[String]| {
+                Frame::new().fill(SUNKEN).corner_radius(8).inner_margin(10.0).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.label(RichText::new(crate::idioma::t(titulo)).color(col).strong().size(15.0));
+                    ui.add_space(2.0);
+                    for p in puntos {
+                        ui.label(RichText::new(format!("•  {p}")).size(13.5));
+                    }
                 });
+                ui.add_space(6.0);
             };
-            use exportar::Codec;
-            fila(ui, "Formato", &mut |ui| {
-                for (c, n) in [(Codec::H264, "H.264 (MP4)"), (Codec::H265, "H.265 (MP4)"), (Codec::ProRes, "ProRes (MOV)")] {
-                    if biblioteca::pastilla(ui, n, op.codec == c).clicked() {
-                        op.codec = c;
-                    }
-                }
-            });
-            fila(ui, "Calidad", &mut |ui| {
-                for (i, n) in ["Ligera", "Normal", "Alta"].into_iter().enumerate() {
-                    if biblioteca::pastilla(ui, n, op.calidad == i).clicked() {
-                        op.calidad = i;
-                    }
-                }
-            });
-            let (w, h) = (self.p.ancho, self.p.alto);
-            let alto = |a: u32| Some(((w as f64 * a as f64 / h.max(1) as f64 / 2.0).round() as u32 * 2, a));
-            let tams = [("Original", None), ("720p", alto(720)), ("1080p", alto(1080)), ("480p", alto(480)), ("1440p", alto(1440)), ("4K", alto(2160)), ("Vertical 1080×1920", Some((1080, 1920))), ("Cuadrado 1080", Some((1080, 1080)))];
-            fila(ui, "Tamaño", &mut |ui| {
-                let n = tams.iter().find(|t| t.1 == op.tam).map_or("Original", |t| t.0);
-                ComboBox::from_id_salt("tam").selected_text(n).show_ui(ui, |ui| {
-                    for (n, t) in tams {
-                        ui.selectable_value(&mut op.tam, t, n);
-                    }
-                });
-            });
-            fila(ui, "Fotogramas", &mut |ui| {
-                let propios = crate::idioma::tf("Los del proyecto ({})", &[&proyecto::nombre_fps(self.p.fps)]);
-                ComboBox::from_id_salt("fps-exp").selected_text(op.fps.map_or(propios.clone(), proyecto::nombre_fps)).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut op.fps, None, propios);
-                    for f in proyecto::FPS {
-                        ui.selectable_value(&mut op.fps, Some(f), proyecto::nombre_fps(f));
-                    }
-                });
-            });
-            let marcado = match self.p.tramo {
-                (Some(a), Some(b)) if b > a => Some((a, b)),
-                _ => None,
-            };
-            fila(ui, "Tramo", &mut |ui| {
-                if biblioteca::pastilla(ui, "Todo", op.tramo.is_none()).clicked() {
-                    op.tramo = None;
-                }
-                match marcado {
-                    Some(t) => {
-                        if biblioteca::pastilla(ui, &format!("{} – {}", tiempo(t.0), tiempo(t.1)), op.tramo.is_some()).clicked() {
-                            op.tramo = Some(t);
-                        }
-                    }
-                    None => {
-                        ui.label(RichText::new(crate::idioma::t("marca entrada (I) y salida (O) para exportar un pedazo")).color(TEXT_FAINT).size(12.5));
-                    }
-                }
-            });
-            ui.add_space(10.0);
+            caja(ui, "Si lo conviertes a H.264", MAIN, &[
+                crate::idioma::tf("Se hace una copia de unos {}; tu archivo original no se toca.", &[&peso(aviso.peso)]),
+                crate::idioma::tf("Tarda más o menos {}, una sola vez.", &[&cuanto(aviso.tarda)]),
+                crate::idioma::t("La vista previa va más fluida, exportar es más rápido y la computadora se calienta menos.").into(),
+                crate::idioma::t("Pierde un poquito de calidad al volver a comprimirse; casi no se nota.").into(),
+            ]);
+            caja(ui, "Si lo usas así", TEXT_DIM, &[
+                crate::idioma::t("Funciona igual, pero la vista previa puede dar tirones.").into(),
+                crate::idioma::t("Exportar tarda más y la computadora se calienta, sobre todo una laptop sin ventilador.").into(),
+            ]);
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
-                if ui.add_sized([150.0, 32.0], Button::new(RichText::new(crate::idioma::t("Exportar…")).color(MAIN).size(16.0))).clicked() {
-                    ir = true;
+                if ui.add_sized([250.0, 34.0], Button::new(RichText::new(crate::idioma::t("Convertir y usar (recomendado)")).color(MAIN).size(15.0))).clicked() {
+                    que = Some(Que::Convertir);
                 }
-                if ui.add_sized([100.0, 32.0], Button::new(crate::idioma::t("Cancelar"))).clicked() {
-                    cerrar = true;
+                if ui.add_sized([150.0, 34.0], Button::new(crate::idioma::t("Usar el original"))).clicked() {
+                    que = Some(Que::Original);
+                }
+                if ui.add_sized([100.0, 34.0], Button::new(crate::idioma::t("Cancelar"))).clicked() {
+                    que = Some(Que::Nada);
                 }
             });
         });
-        self.exportar_op = (!cerrar && !ir).then(|| op.clone());
-        if ir {
-            let ext = if op.codec == exportar::Codec::ProRes { "mov" } else { "mp4" };
-            if let Some(r) = self.dialogo().set_file_name(crate::idioma::tf("Mi video.{}", &[&ext])).add_filter(crate::idioma::t("Video"), &[ext]).save_file() {
-                self.exportar_video_a(r.with_extension(ext), op);
-            }
+        let Some(que) = que else { return };
+        self.convertir = None;
+        match que {
+            Que::Convertir => self.convertir_e_importar(ruta, info),
+            Que::Original => self.sondeado(ruta, info),
+            Que::Nada => {}
         }
     }
 
     pub fn exportar_video_a(&mut self, ruta: PathBuf, op: exportar::Opciones) {
         let (tarea, av, ca) = self.tarea("Exportando video");
+        self.abrir_ventana_export(tarea, &ruta, resumen_export(&self.p, &op));
         let (tx, p, al) = (self.tx.clone(), self.p.clone(), self.almacen.clone());
         std::thread::spawn(move || {
             let res = exportar::exportar_con(&p, &al, &ruta, Modo::Video, &op, &av, &ca);
@@ -2085,9 +2314,90 @@ impl App {
         });
     }
 
+    fn abrir_ventana_export(&mut self, tarea: u64, ruta: &Path, resumen: String) {
+        self.export_ventana = Some(VentanaExport { tarea, ruta: ruta.to_path_buf(), inicio: Instant::now(), resumen, resultado: None });
+    }
+
+    /// La ventana de la exportación en curso: avance, tiempo restante, cancelar; al terminar, dónde quedó.
+    fn ventana_export(&mut self, ctx: &Context) {
+        let Some(v) = &self.export_ventana else { return };
+        let tarea = v.tarea;
+        let (avance, cancelar) = match self.tareas.get(&tarea) {
+            Some(t) => (t.avance.load(Relaxed) as f32 / 1000.0, Some(t.cancelar.clone())),
+            None => (1.0, None),
+        };
+        let transcurrido = v.inicio.elapsed().as_secs_f64();
+        let (nombre, ruta, resumen, resultado) = (nombre_de(&v.ruta), v.ruta.clone(), v.resumen.clone(), v.resultado.clone());
+        let (mut cerrar, mut parar, mut revelar) = (false, false, false);
+        Modal::new(Id::new("ventana-export")).show(ctx, |ui| {
+            ui.set_width(440.0);
+            let titulo = match &resultado {
+                None => "Exportando video",
+                Some(Ok(())) => "Video exportado",
+                Some(Err(_)) => "No se pudo exportar",
+            };
+            ui.heading(crate::idioma::t(titulo));
+            ui.label(RichText::new(&nombre).color(TEXT_DIM));
+            ui.label(RichText::new(&resumen).color(TEXT_FAINT).size(12.5));
+            ui.add_space(8.0);
+            match &resultado {
+                None => {
+                    ui.add(ProgressBar::new(avance).desired_width(400.0).text(format!("{:.0} %", avance * 100.0)).fill(DEEP));
+                    let mut linea = format!("{} {}", crate::idioma::t("Transcurrido:"), tiempo(transcurrido));
+                    if avance > 0.02 {
+                        let falta = transcurrido * (1.0 - avance as f64) / avance as f64;
+                        linea += &format!("  ·  {} {}", crate::idioma::t("Falta:"), tiempo(falta));
+                    }
+                    ui.label(linea);
+                    ui.add_space(8.0);
+                    if ui.add_sized([120.0, 30.0], Button::new(crate::idioma::t("Cancelar"))).clicked() {
+                        parar = true;
+                    }
+                }
+                Some(Ok(())) => {
+                    ui.label(crate::idioma::t("Se guardó en:"));
+                    ui.label(RichText::new(ruta.display().to_string()).size(12.5));
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.add_sized([170.0, 30.0], Button::new(crate::idioma::t("Mostrar en carpeta"))).clicked() {
+                            revelar = true;
+                        }
+                        if ui.add_sized([100.0, 30.0], Button::new(crate::idioma::t("Cerrar"))).clicked() {
+                            cerrar = true;
+                        }
+                    });
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(c(0xff8a80), e.as_str());
+                    ui.add_space(8.0);
+                    if ui.add_sized([100.0, 30.0], Button::new(crate::idioma::t("Cerrar"))).clicked() {
+                        cerrar = true;
+                    }
+                }
+            }
+        });
+        if resultado.is_none() {
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
+        if parar {
+            if let Some(c) = cancelar {
+                c.store(true, Relaxed);
+            }
+        }
+        if revelar {
+            archivos::mostrar(&ruta);
+        }
+        if cerrar {
+            self.export_ventana = None;
+        }
+    }
+
     fn dialogos(&mut self, ctx: &Context) {
         self.dialogo_exportar(ctx);
+        self.ventana_export(ctx);
         self.dialogo_proyecto(ctx);
+        self.dialogo_convertir(ctx);
+        self.dialogo_fuente(ctx);
         if let Some((ruta, info)) = self.preguntar.clone() {
             let mut elegido = None;
             let mut cerrar = false;
@@ -2225,6 +2535,50 @@ fn misma_mezcla(a: &Proyecto, b: &Proyecto) -> bool {
     a.pistas == b.pistas && a.buses == b.buses && a.maestro_db == b.maestro_db && a.fx_maestro == b.fx_maestro && a.bpm == b.bpm && a.patrones == b.patrones && a.ajuste_ms == b.ajuste_ms && a.fin() == b.fin()
 }
 
+/// Segundos como se le dicen a la gente: «45 s», «3 min 20 s».
+pub fn cuanto(s: f64) -> String {
+    let s = s.max(1.0).round() as u64;
+    if s < 60 { format!("{s} s") } else if s % 60 == 0 { format!("{} min", s / 60) } else { format!("{} min {} s", s / 60, s % 60) }
+}
+
+/// Recuadro de un clip en la vista previa.
+struct CajaVista {
+    /// Punto alrededor del que gira y crece (el centro del cuadro, movido).
+    centro: Pos2,
+    giro: emath::Rot2,
+    /// Esquinas: arriba izquierda, arriba derecha, abajo derecha, abajo izquierda.
+    esq: [Pos2; 4],
+    /// Centro del dibujo.
+    medio: Pos2,
+    /// Segundo dentro del clip.
+    t: f64,
+}
+
+/// Las asas de un recuadro: 4 esquinas, 4 lados y la de girar (arriba).
+fn asas(q: &CajaVista) -> [Pos2; 9] {
+    let e = q.esq;
+    let medio = |a: Pos2, b: Pos2| a + (b - a) * 0.5;
+    let lados = [medio(e[0], e[1]), medio(e[1], e[2]), medio(e[2], e[3]), medio(e[3], e[0])];
+    [e[0], e[1], e[2], e[3], lados[0], lados[1], lados[2], lados[3], lados[0] + q.giro * vec2(0.0, -24.0)]
+}
+
+/// ¿`m` está dentro del cuadrilátero (convexo) de esquinas `e`?
+fn dentro(e: &[Pos2; 4], m: Pos2) -> bool {
+    let lado = |a: Pos2, b: Pos2| (b - a).x * (m - a).y - (b - a).y * (m - a).x;
+    let s: Vec<f32> = (0..4).map(|i| lado(e[i], e[(i + 1) % 4])).collect();
+    s.iter().all(|x| *x >= 0.0) || s.iter().all(|x| *x <= 0.0)
+}
+
+/// Bytes como se le dicen a la gente: «230 MB», «1,2 GB».
+pub fn peso(b: u64) -> String {
+    let mb = b as f64 / 1e6;
+    if mb < 1000.0 {
+        return format!("{:.0} MB", mb.max(1.0));
+    }
+    let gb = format!("{:.1} GB", mb / 1000.0);
+    if crate::idioma::actual() == crate::idioma::Idioma::Es { gb.replace('.', ",") } else { gb }
+}
+
 pub fn es_imagen(r: &Path) -> bool {
     let e = r.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].contains(&e.as_str())
@@ -2242,7 +2596,7 @@ fn boton_rec(ui: &mut Ui, on: bool) -> Response {
     let (r, resp) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::click());
     resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "Grabar"));
     let p = ui.painter();
-    p.rect_filled(r.shrink(1.0), 6, if on { RECORD } else if resp.hovered() { BUTTON_HI } else { BUTTON });
+    if on { encendido(p, r.shrink(1.0), 6, RECORD) } else { relieve(p, r.shrink(1.0), 6, BUTTON, resp.hovered(), resp.is_pointer_button_down_on()) }
     p.circle_filled(r.center(), 7.0, if on { Color32::WHITE } else { RECORD });
     resp.on_hover_text(crate::idioma::t("Grabar en la pista armada (R)"))
 }
@@ -2251,4 +2605,20 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _: &mut eframe::Frame) {
         App::ui(self, ui);
     }
+}
+
+/// Lo que va a salir del video: tamaño, fotogramas, duración y formato. Se ve antes de exportar y durante la exportación.
+fn resumen_export(p: &Proyecto, op: &exportar::Opciones) -> String {
+    let (w, h) = op.tam.unwrap_or((p.ancho, p.alto));
+    let fps = op.fps.unwrap_or(p.fps);
+    let dur = match op.tramo {
+        Some((a, b)) => b - a,
+        None => p.fin(),
+    };
+    let formato = match op.codec {
+        exportar::Codec::H264 => "H.264 (MP4)",
+        exportar::Codec::H265 => "H.265 (MP4)",
+        exportar::Codec::ProRes => "ProRes (MOV)",
+    };
+    format!("{w}×{h} · {} · {} · {formato}", proyecto::nombre_fps(fps), tiempo(dur))
 }

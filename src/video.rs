@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 pub struct Lector {
     hijo: Child,
     rx: Receiver<Cuadro>,
+    /// El archivo que se abrió (el original o su copia ligera).
     ruta: PathBuf,
     tam: (usize, usize),
     ultimo: Option<Arc<Cuadro>>,
@@ -43,20 +44,29 @@ impl Lector {
         // Se alinea a la rejilla de cuadros para que el mismo instante dé siempre el mismo cuadro.
         let desde = ((desde * fps + 0.01).floor() / fps).max(0.0);
         let mut com = medios::ffmpeg();
-        let chip = m.chip && !imagen && !SIN_CHIP.load(std::sync::atomic::Ordering::Relaxed);
+        let ruta = m.archivo(c);
+        let chip = m.chip && !imagen && chip_sirve(&ruta, true) == Some(true);
+        // Con el chip, el cuadro se achica en la tarjeta gráfica y baja ya chico: el procesador no carga con el 4K.
+        let en_tarjeta = if chip { escala_en_tarjeta(&ruta, false).flatten() } else { None };
         if chip {
-            // Si el chip no sabe ese formato, ffmpeg sigue con el procesador.
-            com.args(["-hwaccel", if cfg!(target_os = "macos") { "videotoolbox" } else { "auto" }]);
+            com.args(["-hwaccel", CHIP]);
+            if en_tarjeta.is_some() {
+                com.args(["-hwaccel_output_format", "videotoolbox_vld"]);
+            }
         }
         com.args(["-threads", "4"]);
         if !imagen {
             com.args(["-ss", &format!("{desde:.6}")]);
         }
-        com.arg("-i").arg(&c.ruta).args(["-an", "-sn", "-map", "0:v:0", "-vf"]);
+        com.arg("-i").arg(&ruta).args(["-an", "-sn", "-map", "0:v:0", "-vf"]);
         let yuv = m.yuv && !imagen && w % 2 == 0 && h % 2 == 0 && !medios::con_alfa(&c.ruta);
         let color = if yuv { ":out_color_matrix=bt709:out_range=tv" } else { "" };
         let escala = format!("scale={w}:{h}:flags={}{color},setsar=1", if m.fino { "bicubic" } else { "bilinear" });
-        com.arg(if imagen { escala } else { format!("fps={}:start_time=0,{escala}", medios::fps_fraccion(fps)) });
+        com.arg(match en_tarjeta {
+            Some(fmt) => format!("scale_vt=w={w}:h={h},hwdownload,format={fmt},setsar=1,fps={}:start_time=0", medios::fps_fraccion(fps)),
+            None if imagen => escala,
+            None => format!("fps={}:start_time=0,{escala}", medios::fps_fraccion(fps)),
+        });
         if imagen {
             com.args(["-frames:v", "1"]);
         }
@@ -79,7 +89,7 @@ impl Lector {
                 }
             }
         });
-        Ok(Lector { hijo, rx, ruta: c.ruta.clone(), tam, ultimo: None, cola: Default::default(), sig: None, fin: false, paso: 1.0 / fps, chip, desde })
+        Ok(Lector { hijo, rx, ruta, tam, ultimo: None, cola: Default::default(), sig: None, fin: false, paso: 1.0 / fps, chip, desde })
     }
 
     /// Avanza hasta el cuadro que toca en `t`. Sin `esperar`, entrega lo más nuevo que haya.
@@ -118,8 +128,8 @@ impl Lector {
         }
     }
 
-    fn sirve(&self, c: &ClipVideo, t: f64, tam: (usize, usize), tocando: bool) -> bool {
-        if self.ruta != c.ruta || self.tam != tam {
+    fn sirve(&self, c: &ClipVideo, t: f64, tam: (usize, usize), tocando: bool, m: &Modo) -> bool {
+        if self.ruta != m.archivo(c) || self.tam != tam {
             return false;
         }
         if c.contenido == Contenido::Imagen {
@@ -141,7 +151,86 @@ pub struct Modo {
     pub yuv: bool,
     /// Al cambiar de tamaño, mejor calidad.
     pub fino: bool,
+    /// De la copia ligera, si hay.
+    pub ligera: bool,
 }
+
+impl Modo {
+    fn archivo(&self, c: &ClipVideo) -> PathBuf {
+        if self.ligera && c.contenido == Contenido::Archivo { crate::ligeras::para_ver(&c.ruta) } else { c.ruta.clone() }
+    }
+}
+
+/// ¿El chip de video de esta máquina sabe leer ese archivo? Se prueba una vez con un cuadro: hay formatos en que ffmpeg falla
+/// en vez de seguir con el procesador (AV1 en las Mac M1). Sin `esperar`, `None` mientras se averigua.
+fn chip_sirve(ruta: &std::path::Path, esperar: bool) -> Option<bool> {
+    use std::sync::Mutex;
+    static C: Mutex<Option<HashMap<PathBuf, Option<bool>>>> = Mutex::new(None);
+    if SIN_CHIP.load(std::sync::atomic::Ordering::Relaxed) {
+        return Some(false);
+    }
+    match C.lock().unwrap().get_or_insert_with(HashMap::new).get(ruta) {
+        Some(Some(si)) => return Some(*si),
+        Some(None) if !esperar => return None,
+        _ => {}
+    }
+    let probar = |r: &std::path::Path| {
+        let s = medios::ffmpeg().args(["-hwaccel", CHIP, "-i"]).arg(r).args(["-an", "-frames:v", "1", "-vf", "scale=16:16", "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"]).stderr(Stdio::null()).output();
+        let si = s.is_ok_and(|s| s.status.success() && s.stdout.len() == 16 * 16 * 4);
+        C.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.to_path_buf(), Some(si));
+        si
+    };
+    if esperar {
+        return Some(probar(ruta));
+    }
+    C.lock().unwrap().get_or_insert_with(HashMap::new).insert(ruta.to_path_buf(), None);
+    let r = ruta.to_path_buf();
+    std::thread::spawn(move || probar(&r));
+    None
+}
+
+const CHIP: &str = if cfg!(target_os = "macos") { "videotoolbox" } else { "auto" };
+
+/// Si los cuadros de ese archivo se pueden achicar en la tarjeta gráfica (Mac): el formato en que bajan (8 o 10 bits), o
+/// `Some(None)` si no se puede. Se prueba una vez por archivo; sin `esperar`, la prueba va en segundo plano y mientras
+/// tanto da `None` (y se achica con el procesador, como siempre).
+fn escala_en_tarjeta(ruta: &std::path::Path, esperar: bool) -> Option<Option<&'static str>> {
+    use std::sync::Mutex;
+    // Por archivo: `None` mientras se prueba.
+    static C: Mutex<Option<HashMap<PathBuf, Option<Option<&'static str>>>>> = Mutex::new(None);
+    if !cfg!(target_os = "macos") || SIN_TARJETA.load(std::sync::atomic::Ordering::Relaxed) {
+        return Some(None);
+    }
+    match C.lock().unwrap().get_or_insert_with(HashMap::new).get(ruta) {
+        Some(Some(r)) => return Some(*r),
+        Some(None) if !esperar => return None,
+        _ => {}
+    }
+    let probar = |r: &std::path::Path| {
+        let sirve = |fmt: &str| {
+            let s = medios::ffmpeg()
+                .args(["-hwaccel", CHIP, "-hwaccel_output_format", "videotoolbox_vld", "-i"])
+                .arg(r)
+                .args(["-an", "-frames:v", "1", "-vf", &format!("scale_vt=w=16:h=16,hwdownload,format={fmt}"), "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1"])
+                .stderr(Stdio::null())
+                .output();
+            s.is_ok_and(|s| s.status.success() && s.stdout.len() == 16 * 16 * 4)
+        };
+        let fmt = ["nv12", "p010le"].into_iter().find(|f| sirve(f));
+        C.lock().unwrap().get_or_insert_with(HashMap::new).insert(r.to_path_buf(), Some(fmt));
+        fmt
+    };
+    if esperar {
+        return Some(probar(ruta));
+    }
+    C.lock().unwrap().get_or_insert_with(HashMap::new).insert(ruta.to_path_buf(), None);
+    let r = ruta.to_path_buf();
+    std::thread::spawn(move || probar(&r));
+    None
+}
+
+/// Para comparar: achicar siempre con el procesador.
+pub static SIN_TARJETA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// El chip no se usa (o el usuario lo apagó).
 pub static SIN_CHIP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -160,7 +249,7 @@ pub struct Lectores {
     relevos: HashMap<u64, Lector>,
 }
 
-/// Con cuánta anticipación se prepara el relevo del chip.
+/// Con cuánta anticipación se prepara el relevo del chip (abrirlo con un 4K tarda unos 0,4 s; con menos margen no llega).
 const RELEVO: f64 = 1.0;
 
 impl Lectores {
@@ -193,6 +282,11 @@ impl Lectores {
         }
         match self.relevos.get(&c.id) {
             None => {
+                let ruta = self.modo.archivo(c);
+                // Se abre cuando ya se sabe si el chip lee ese archivo y si puede achicar en la tarjeta (en segundo plano).
+                if chip_sirve(&ruta, false) != Some(true) || escala_en_tarjeta(&ruta, false).is_none() {
+                    return;
+                }
                 if let Ok(l) = Lector::abrir(c, t + RELEVO, tam, self.fps_max, Modo { chip: true, ..self.modo }) {
                     self.relevos.insert(c.id, l);
                 }
@@ -219,15 +313,37 @@ impl Fuente for Lectores {
     }
     fn cuadro(&mut self, c: &ClipVideo, t: f64, ancho: usize, alto: usize) -> Option<Arc<Cuadro>> {
         let tam = (ancho, alto);
-        if !self.v.get(&c.id).is_some_and(|(l, _)| l.sirve(c, t, tam, self.tocando)) {
+        if !self.v.get(&c.id).is_some_and(|(l, _)| l.sirve(c, t, tam, self.tocando, &self.modo)) {
             self.v.remove(&c.id);
+            // Un clip cortado sigue donde iba el de al lado: se toma su lector en vez de abrir otro.
+            let libre = self.v.iter().find(|(id, (l, u))| **id != c.id && *u < self.ronda && l.ultimo.is_some() && l.sirve(c, t, tam, self.tocando, &self.modo)).map(|x| *x.0);
+            if let Some(l) = libre.and_then(|id| self.v.remove(&id)) {
+                self.v.insert(c.id, l);
+                let (l, u) = self.v.get_mut(&c.id)?;
+                *u = self.ronda;
+                return l.hasta(t, self.exacto);
+            }
             self.relevos.remove(&c.id);
-            self.v.insert(c.id, (Lector::abrir(c, t, tam, self.fps_max, self.modo).ok()?, 0));
+            // Reproduciendo, se abre de una vez con el chip (y achicando en la tarjeta) si ya se sabe que sirve: con el
+            // procesador, un 4K se atrasa en cuanto la máquina tiene otra carga, se reabre y nunca llega al chip.
+            let ruta = self.modo.archivo(c);
+            // Las pruebas se lanzan (en segundo plano) desde que se ve el clip, para tenerlas al darle play.
+            let video = c.contenido == Contenido::Archivo;
+            let listo = video && chip_sirve(&ruta, false) == Some(true) && escala_en_tarjeta(&ruta, false).is_some();
+            let al_chip = self.seguido && !self.modo.chip && listo;
+            let modo = if al_chip { Modo { chip: true, ..self.modo } } else { self.modo };
+            self.v.insert(c.id, (Lector::abrir(c, t, tam, self.fps_max, modo).ok()?, 0));
         }
         self.relevar(c, t, tam);
         let (l, u) = self.v.get_mut(&c.id)?;
         *u = self.ronda;
-        l.hasta(t, self.exacto)
+        let q = l.hasta(t, self.exacto);
+        if q.is_none() && l.chip && l.fin {
+            // El chip no entregó nada: con el procesador.
+            *l = Lector::abrir(c, t, tam, self.fps_max, Modo { chip: false, ..self.modo }).ok()?;
+            return l.hasta(t, self.exacto);
+        }
+        q
     }
 }
 
@@ -249,7 +365,7 @@ const ESCALAS: [f64; 5] = [1.0, 0.8, 0.65, 0.5, 0.4];
 const OBREROS: usize = 3;
 /// Cuánto se calcula por adelantado al reproducir y en pausa, en segundos.
 const ADELANTO: f64 = 1.5;
-const ADELANTO_PAUSA: f64 = 20.0;
+const ADELANTO_PAUSA: f64 = 8.0;
 /// Archivo temporal para los cuadros que ya no caben en la RAM; se borra solo.
 const DISCO: u64 = 3 << 30;
 
@@ -453,6 +569,11 @@ fn trabajoso(p: &Proyecto, t: f64) -> bool {
     p.video.iter().any(|c| c.inicio <= t && c.fin() > t && (!c.simple() || c.contenido != Contenido::Archivo))
 }
 
+/// ¿Hay una transición en ese segundo? Son lo más caro de componer: se preparan primero.
+fn en_transicion(p: &Proyecto, t: f64) -> bool {
+    p.video.iter().any(|c| c.inicio <= t && c.fin() > t && (c.entrada.as_ref().is_some_and(|x| t < c.inicio + x.dur) || c.salida.as_ref().is_some_and(|x| t > c.fin() - x.dur)))
+}
+
 /// El hilo que decide: decodifica en orden, reparte la composición entre varios hilos, guarda lo hecho y entrega el cuadro
 /// que toca.
 struct Director {
@@ -483,8 +604,13 @@ struct Director {
     cambio: Instant,
     /// La última vez que salió un cuadro.
     visto: Instant,
+    /// La última vez que se terminó un cuadro: en pausa se descansa entre uno y otro, para no atrasar la ventana.
+    hecho: Instant,
     /// Segundos que cuesta un cuadro completo, según los últimos.
     costo: f64,
+    /// Para la barra de la regla: tramos que cuestan (desde, hasta, listo) y cuándo se publicó.
+    estado: Arc<std::sync::Mutex<Vec<(f64, f64, bool)>>>,
+    publicado: Instant,
 }
 
 impl Director {
@@ -532,6 +658,7 @@ impl Director {
 
     fn recibir(&mut self, h: Hecho) {
         self.vuelo.retain(|v| *v != (h.i, h.firma));
+        self.hecho = Instant::now();
         self.tarda += (h.seg - self.tarda) * if self.tarda == 0.0 { 1.0 } else { 0.25 };
         let completo = h.seg / ESCALAS[h.nivel].powi(2);
         self.costo += (completo - self.costo) * if self.costo == 0.0 { 1.0 } else { 0.3 };
@@ -688,23 +815,36 @@ impl Director {
             let f = self.firma_de(i);
             let hay = self.listo(i);
             if hay != Some(0) {
-                if self.vuelo.contains(&(i, f)) || self.vuelo.len() >= 2 {
+                if self.vuelo.contains(&(i, f)) || !self.vuelo.is_empty() {
                     return None;
                 }
                 // Primero uno rápido si el completo tarda; el bueno, cuando ya no se mueve.
-                let rapido = (0..ESCALAS.len()).find(|n| self.costo * ESCALAS[*n].powi(2) < 0.07).unwrap_or(ESCALAS.len() - 1);
+                let rapido = (0..ESCALAS.len()).find(|n| self.costo * ESCALAS[*n].powi(2) < 0.03).unwrap_or(ESCALAS.len() - 1);
                 return match hay {
                     None => Some((i, rapido)),
                     Some(_) if self.cambio.elapsed() > Duration::from_millis(220) => Some((i, 0)),
                     Some(_) => None,
                 };
             }
-            // Y con calma, lo que sigue, para que al reproducir ya esté.
-            if self.cambio.elapsed() < Duration::from_millis(700) || !self.vuelo.is_empty() || self.tarda < 0.012 {
+            // Y con calma, todo el proyecto: primero las transiciones (lo más caro), luego lo demás que cueste; cada vez
+            // desde el cursor hacia adelante y después desde el principio. Dos hilos, uno queda libre para la ventana.
+            if self.cambio.elapsed() < Duration::from_millis(600) || self.vuelo.len() >= OBREROS - 1 {
                 return None;
             }
-            let hasta = i + ((ADELANTO_PAUSA * fps) as i64).min(self.caben() + self.caben_disco());
-            return (i + 1..=hasta).take_while(|j| (*j as f64) / fps < fin).find(|j| trabajoso(&p, *j as f64 / fps) && self.listo(*j).is_none()).map(|j| (j, 0));
+            // Si lo último salió barato, lo demás quizá también; las transiciones no: esas siempre se preparan.
+            let barato = self.tarda < 0.012;
+            let tope = (self.caben() + self.caben_disco()) as usize;
+            let ultimo = (fin * fps).ceil() as i64;
+            let orden: Vec<i64> = (i + 1..ultimo).chain(0..i).take(tope).collect();
+            let vuelo: Vec<i64> = self.vuelo.iter().map(|v| v.0).collect();
+            let falta = |d: &mut Self, j: i64| !vuelo.contains(&j) && d.listo(j).is_none();
+            if let Some(j) = orden.iter().copied().find(|j| en_transicion(&p, *j as f64 / fps) && falta(self, *j)) {
+                return Some((j, 0));
+            }
+            if barato {
+                return None;
+            }
+            return orden.into_iter().find(|j| trabajoso(&p, *j as f64 / fps) && falta(self, *j)).map(|j| (j, 0));
         }
         if self.vuelo.len() >= OBREROS {
             return None;
@@ -713,7 +853,11 @@ impl Director {
         if self.sig < i {
             self.sig = i + if self.tarda > 1.0 / fps { (self.tarda * fps).ceil() as i64 } else { 0 };
         }
-        let hasta = i + ((ADELANTO * fps) as i64).min(self.caben());
+        // Si viene una transición que no está hecha, se mira más lejos (también con lugar en el disco) para que los
+        // hilos la vayan haciendo mientras pasa lo fácil.
+        let pronto = i + (ADELANTO_PAUSA * fps) as i64;
+        let viene = (i..pronto).any(|j| en_transicion(&p, j as f64 / fps) && self.listo(j).is_none());
+        let hasta = if viene { pronto.min(i + self.caben() + self.caben_disco()) } else { i + ((ADELANTO * fps) as i64).min(self.caben()) };
         while self.sig <= hasta {
             let j = self.sig;
             if j as f64 / fps >= fin && j > i {
@@ -732,6 +876,27 @@ impl Director {
             return Some((j, self.nivel));
         }
         None
+    }
+
+    /// Publica qué tramos que cuestan ya están hechos en calidad completa (para la barra de la regla).
+    fn publicar(&mut self) {
+        self.publicado = Instant::now();
+        let Some((fps, fin, p)) = self.pedido.as_ref().map(|q| (Self::fps(&q.p), q.p.fin(), q.p.clone())) else { return };
+        let mut v: Vec<(f64, f64, bool)> = vec![];
+        // Lo que de verdad cuesta: las transiciones siempre; lo demás, si en esta máquina salió caro.
+        let barato = self.tarda < 0.012;
+        for j in 0..(fin * fps).ceil() as i64 {
+            let t = j as f64 / fps;
+            if !(en_transicion(&p, t) || !barato && trabajoso(&p, t)) {
+                continue;
+            }
+            let listo = self.listo(j) == Some(0);
+            match v.last_mut() {
+                Some(u) if u.2 == listo && (u.1 - t).abs() < 0.5 / fps => u.1 = t + 1.0 / fps,
+                _ => v.push((t, t + 1.0 / fps, listo)),
+            }
+        }
+        *self.estado.lock().unwrap() = v;
     }
 
     /// Decodifica lo que necesita el cuadro `j` y lo manda a componer.
@@ -776,17 +941,20 @@ pub struct VistaPrevia {
     /// Pedidos sin respuesta.
     pub pendientes: u32,
     ultimo: Option<(i64, u64, (usize, usize), bool)>,
+    estado: Arc<std::sync::Mutex<Vec<(f64, f64, bool)>>>,
 }
 
 impl Default for VistaPrevia {
     fn default() -> Self {
         let (tx, entra) = unbounded::<Pedido>();
         let (sale, rx) = unbounded();
+        let estado = Arc::new(std::sync::Mutex::new(vec![]));
+        let estado2 = estado.clone();
         std::thread::spawn(move || {
             let (a_obreros, trabajos) = unbounded();
             let (hecho, hechos) = unbounded();
             let mut d = Director {
-                lectores: Lectores::nuevos(60.0, true).con(Modo { yuv: true, ..Default::default() }),
+                lectores: Lectores::nuevos(60.0, true).con(Modo { yuv: true, ligera: true, ..Default::default() }),
                 a_obreros,
                 sale,
                 pedido: None,
@@ -805,7 +973,10 @@ impl Default for VistaPrevia {
                 entregado: None,
                 cambio: Instant::now(),
                 visto: Instant::now(),
+                hecho: Instant::now(),
                 costo: 0.0,
+                estado: estado2,
+                publicado: Instant::now(),
             };
             // Los obreros se prenden con el primer pedido: hay vistas que nunca se usan.
             let mut prendidos = false;
@@ -826,6 +997,9 @@ impl Default for VistaPrevia {
                     d.recibir(h);
                 }
                 d.entregar();
+                if d.publicado.elapsed() > Duration::from_millis(400) {
+                    d.publicar();
+                }
                 // De uno en uno: entre cada cuadro se vuelve a ver si pidieron otra cosa.
                 while let Some((j, nivel)) = d.siguiente() {
                     if !std::mem::replace(&mut prendidos, true) {
@@ -841,11 +1015,16 @@ impl Default for VistaPrevia {
                 }
             }
         });
-        VistaPrevia { tx, rx, pendientes: 0, ultimo: None }
+        VistaPrevia { tx, rx, pendientes: 0, ultimo: None, estado }
     }
 }
 
 impl VistaPrevia {
+    /// Tramos que cuestan componer: (desde, hasta, ya hecho en calidad completa). Para la barra de la regla.
+    pub fn preparado(&self) -> Vec<(f64, f64, bool)> {
+        self.estado.lock().unwrap().clone()
+    }
+
     /// Pide el cuadro de `t` si hace falta y devuelve el más nuevo que esté listo. `version` cambia con cada edición.
     pub fn actualizar(&mut self, p: &Arc<Proyecto>, version: u64, t: f64, tocando: bool, tam: (usize, usize)) -> Option<Arc<Cuadro>> {
         let mut r = None;

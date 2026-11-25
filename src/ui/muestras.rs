@@ -104,6 +104,19 @@ pub fn calcular(cuadro: Vec<u8>, entregar: impl Fn(String, Vec<u8>) -> bool) {
             return;
         }
     }
+    for i in 0..crate::titulos::PLANTILLAS {
+        // El título encima del cuadro, como queda al ponerlo.
+        let mut p = base();
+        p.capas.push(p.capas[0].clone());
+        let (_, x, y) = crate::titulos::plantilla(i);
+        let mut c = p.nuevo_video("t".into(), Contenido::Titulo(x), 0.0, 2.0);
+        c.capa = 1;
+        c.mov.y = crate::modelo::Prop::num(y);
+        p.video.push(c);
+        if !entregar(format!("titulo:{i}"), composicion::componer(&p, 1.0, AN, AL, &mut f)) {
+            return;
+        }
+    }
     for e in nombres::TRANSICIONES {
         // De un color plano al cuadro, a la mitad.
         let mut p = base();

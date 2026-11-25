@@ -158,7 +158,7 @@ impl App {
                     ui.horizontal(|ui| {
                         ComboBox::from_id_salt("letra").selected_text(&x.letra).width(150.0).show_ui(ui, |ui| {
                             for (n, _) in titulos::letras() {
-                                ui.selectable_value(&mut x.letra, n.clone(), n);
+                                ui.selectable_value(&mut x.letra, n.clone(), &n);
                             }
                         });
                         for (i, n) in [(-1, "Izq"), (0, "Centro"), (1, "Der")] {

@@ -90,3 +90,63 @@ fn igual_que_el_procesador() {
     println!("{} distintos: {mal:?}", mal.len());
     assert!(mal.is_empty());
 }
+
+/// Las transiciones que se hacen en la tarjeta (disolvencias y pasar por un color) dan lo mismo que en el procesador,
+/// de un video a un color y de un clip al vacío.
+#[test]
+fn transiciones_igual_que_el_procesador() {
+    if vgpu::gpu().is_none() {
+        println!("sin tarjeta");
+        return;
+    }
+    let (w, h) = (640, 360);
+    let mut f = Fija;
+    let mut mal = vec![];
+    for tipo in ["cross_dissolve", "additive_dissolve", "film_dissolve", "dip_to_black", "dip_to_white"] {
+        let mut p = base();
+        p.video[0].dur = 5.0;
+        let mut b = p.nuevo_video("color".into(), Contenido::Color([0.2, 0.5, 0.9, 1.0]), 5.0, 5.0);
+        b.entrada = Some(transicion_nueva(tipo));
+        b.salida = Some(transicion_nueva(tipo));
+        p.video.push(b);
+        for t in [5.1, 5.5, 5.85, 9.5] {
+            let a = componer_cpu(&p, t, w, h, &mut f);
+            let Some(g) = vgpu::componer(&p, t, w, h, &mut f, vgpu::Salida::Rgba) else {
+                mal.push((tipo, t, -1.0));
+                continue;
+            };
+            let d = dif(&a, &g);
+            if d > 1.0 {
+                mal.push((tipo, t, d));
+            }
+        }
+    }
+    println!("distintas: {mal:?}");
+    assert!(mal.is_empty());
+}
+
+/// Qué estilos tienen efectos que la tarjeta no hace, y cuánto cuesta un cuadro con cada uno.
+/// `cargo test --release --test gpu estilos -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn estilos_en_la_tarjeta() {
+    let (w, h) = (1600, 900);
+    let mut f = Fija;
+    let mut filas = vec![];
+    for (i, e) in toma_uno::estilos::ESTILOS.iter().enumerate() {
+        let mut p = base();
+        let id = p.video[0].id;
+        toma_uno::estilos::aplicar(&mut p, id, i);
+        let fuera: Vec<String> = p.video[0].fx.iter().filter(|x| !vgpu::en_tarjeta(x)).map(|x| x.tipo.clone()).collect();
+        componer(&p, 3.0, w, h, &mut f);
+        let t0 = Instant::now();
+        for k in 0..5 {
+            componer(&p, 3.0 + k as f64 * 0.033, w, h, &mut f);
+        }
+        filas.push((t0.elapsed().as_secs_f64() * 1e3 / 5.0, e.nombre, fuera));
+    }
+    filas.sort_by(|a, b| b.0.total_cmp(&a.0));
+    for (ms, n, fuera) in filas {
+        println!("{ms:6.1} ms  {n:28} {}", if fuera.is_empty() { String::new() } else { format!("procesador: {fuera:?}") });
+    }
+}

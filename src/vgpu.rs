@@ -583,6 +583,26 @@ fn de_fc(m: &mut Mesa, c: &Capa, f: &FxVideo, t: f64, dur: f64, fps: f64, tam: [
 }
 
 /// ¿Ese efecto corre en la tarjeta?
+/// Las transiciones que se hacen en la tarjeta (`bc_transicion`, las mismas cuentas que `craft_trans`): su número.
+fn transicion_en_tarjeta(tipo: &str) -> Option<u32> {
+    Some(match tipo {
+        "cross_dissolve" => 0,
+        "additive_dissolve" => 1,
+        "film_dissolve" => 2,
+        "dip_to_black" => 3,
+        "dip_to_white" => 4,
+        _ => return None,
+    })
+}
+
+/// Transición de `a` a `b` con avance `p` (0 a 1), en la tarjeta.
+fn mezclar_transicion(m: &mut Mesa, tr: &Transicion, a: &Capa, b: &Capa, p: f64) -> Option<Capa> {
+    let mut d = Datos::default();
+    d.u[0][0] = transicion_en_tarjeta(&tr.tipo)?;
+    d.f[0][0] = p.clamp(0.0, 1.0) as f32;
+    m.propio("bc_transicion", a, &d, Some(b), None, None)
+}
+
 pub fn en_tarjeta(f: &FxVideo) -> bool {
     if let Some(id) = f.tipo.strip_prefix("fc:") {
         return FC.contains(&id);
@@ -807,7 +827,26 @@ fn cuadro(g: &Gpu, p: &Proyecto, t: f64, w: usize, h: usize, f: &mut dyn Fuente,
             continue;
         }
         let d = dibujar(m, c, t, p, w, h, f)?;
-        let img = if entra.is_some() || sale.is_some() {
+        let en_tarjeta = |x: Option<&Transicion>| x.is_none_or(|x| transicion_en_tarjeta(&x.tipo).is_some());
+        let img = if (entra.is_some() || sale.is_some()) && en_tarjeta(entra) && en_tarjeta(sale) {
+            // Disolvencias y pasar por un color: las dos imágenes se mezclan sin salir de la tarjeta.
+            let mut b = suelto(m, d, w, h, k)?;
+            if let Some(tr) = entra {
+                let a = match composicion::previo(p, c) {
+                    Some(q) => {
+                        let d = dibujar(m, q, t, p, w, h, f)?;
+                        suelto(m, d, w, h, k)?
+                    }
+                    None => m.vacia(w as u32, h as u32, k)?,
+                };
+                b = mezclar_transicion(m, tr, &a, &b, (t - c.inicio) / tr.dur.max(0.01))?;
+            }
+            if let Some(tr) = sale {
+                let v = m.vacia(w as u32, h as u32, k)?;
+                b = mezclar_transicion(m, tr, &b, &v, (t - (c.fin() - tr.dur)) / tr.dur.max(0.01))?;
+            }
+            Some(Dibujo { c: b, m: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0], op: 1.0, directo: true })
+        } else if entra.is_some() || sale.is_some() {
             // Las transiciones mezclan dos imágenes completas.
             let b = suelto(m, d, w, h, k)?;
             let mut b = m.bajar(&b)?.img;

@@ -38,6 +38,7 @@ rayon = "1"
 memmap2 = "0.9"
 bytemuck = "1"
 fontdue = "0.9"
+thread-priority = "1"
 
 # Linux: eframe sin sus funciones por defecto no trae con qué abrir ventanas.
 [target.'cfg(target_os = "linux")'.dependencies]

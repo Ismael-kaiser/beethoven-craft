@@ -71,6 +71,7 @@ pub(crate) const KERNELS: &[&str] = &[
     "bc_i420",
     "bc_ajuste",
     "bc_color_solido",
+    "bc_transicion",
     "bc_estirar",
     "bc_lin",
     "bc_srgb",

@@ -13,7 +13,9 @@ use std::time::{Duration, Instant, SystemTime};
 pub const MENU: Vec2 = vec2(1180.0, 740.0);
 pub const EDITOR: Vec2 = vec2(1440.0, 860.0);
 /// Lo mínimo que se ve la pantalla de carga.
-const CARGA_MIN: Duration = Duration::from_millis(900);
+const CARGA_MIN: Duration = Duration::from_millis(300);
+/// Lo más que se espera a que terminen de leerse los medios: lo que falte sigue en segundo plano, ya en el editor.
+const CARGA_MAX: Duration = Duration::from_millis(1500);
 /// Color de Beethoven DAW.
 const VIOLETA: Color32 = c(0x8f86ff);
 
@@ -323,7 +325,7 @@ impl App {
                 // Beethoven DAW ya arrancó en su ventana: el menú se cierra.
                 self.inicio.cargando = None;
                 ctx.send_viewport_cmd(ViewportCommand::Close);
-            } else if desde.elapsed() >= CARGA_MIN && !self.ocupada() {
+            } else if desde.elapsed() >= CARGA_MIN && (!self.ocupada() || desde.elapsed() >= CARGA_MAX) {
                 self.inicio.entrar();
             }
             ctx.request_repaint_after(Duration::from_millis(16));
@@ -358,9 +360,13 @@ impl App {
             return;
         }
         let l = self.libro();
+        crate::tiempos::marca("leer proyectos: empieza");
         let canciones = if self.sin_dispositivo { vec![] } else { proyectos::canciones_del_daw() };
+        crate::tiempos::marca("leer proyectos: canciones del DAW");
         self.inicio.lista = Some(l.listar(&canciones));
+        crate::tiempos::marca("leer proyectos: lista");
         self.inicio.borrados = l.papelera();
+        crate::tiempos::marca("leer proyectos: papelera");
         let vivos: HashSet<PathBuf> = self.inicio.lista.iter().flatten().map(|f| f.ruta.clone()).collect();
         self.inicio.elegidos.retain(|r| vivos.contains(r));
     }

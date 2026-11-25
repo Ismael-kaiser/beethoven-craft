@@ -340,7 +340,7 @@ impl App {
                 for (tecla, nombre) in &filas {
                     ui.horizontal(|ui| {
                         let (r, resp) = ui.allocate_exact_size(vec2(150.0, 30.0), Sense::click());
-                        ui.painter().rect_filled(r, 6, if resp.hovered() { BUTTON_HI } else { BUTTON });
+                        relieve(ui.painter(), r, 6, BUTTON, resp.hovered(), resp.is_pointer_button_down_on());
                         ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, nombre, fuente(14.5), TEXT);
                         resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, nombre));
                         if resp.clicked() {

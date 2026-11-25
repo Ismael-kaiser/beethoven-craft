@@ -74,6 +74,8 @@ pub struct Audio {
     pub cuadros: Cuadros,
     /// (mínimo, máximo) cada `PUNTO` cuadros.
     pub onda: Vec<(f32, f32)>,
+    /// Volumen promedio (RMS) cada `PUNTO` cuadros: el cuerpo de la onda que se ve más brillante.
+    pub rms: Vec<f32>,
 }
 
 impl Audio {
@@ -94,7 +96,8 @@ impl Audio {
             .chunks(PUNTO)
             .map(|c| c.iter().flatten().fold((0f32, 0f32), |(a, b), &x| (a.min(x), b.max(x))))
             .collect();
-        Audio { cuadros, onda }
+        let rms = cuadros.chunks(PUNTO).map(|c| (c.iter().flatten().map(|x| x * x).sum::<f32>() / (c.len() * 2).max(1) as f32).sqrt()).collect();
+        Audio { cuadros, onda, rms }
     }
     pub fn dur(&self) -> f64 {
         self.cuadros.len() as f64 / SR as f64

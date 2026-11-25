@@ -42,11 +42,19 @@ impl App {
             let resp = ui.interact(t, Id::new(("pestana", e as u8)), Sense::click_and_drag());
             resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, activa, nombre));
             let p = ui.painter();
-            let fondo = if activa { TOOLBAR } else if resp.hovered() { c(0x333333) } else { c(0x282828) };
+            let fondo = TOOLBAR;
             let rad = if activa { CornerRadius { nw: 9, ne: 9, sw: 0, se: 0 } } else { CornerRadius::same(8) };
-            p.rect_filled(t, rad, fondo);
             if activa {
-                p.rect_filled(Rect::from_min_size(t.min + vec2(10.0, 0.0), vec2(t.width() - 20.0, 2.5)), 1, MAIN);
+                // La de enfrente: pegada a la barra, con luz arriba y su raya encendida.
+                p.rect_filled(t, rad, fondo);
+                let arriba = Rect::from_min_max(t.min, pos2(t.right(), t.center().y));
+                p.with_clip_rect(arriba).rect_filled(t, rad, Color32::from_white_alpha(7));
+                p.hline(t.left() + 8.0..=t.right() - 8.0, t.top() + 0.75, Stroke::new(1.0, Color32::from_white_alpha(40)));
+                let raya = Rect::from_min_size(t.min + vec2(10.0, 0.0), vec2(t.width() - 20.0, 2.5));
+                p.rect_filled(raya.expand(2.0), 3, MAIN.gamma_multiply(0.15));
+                p.rect_filled(raya, 1, MAIN);
+            } else {
+                relieve(p, t, 8, c(0x2a2a2a), resp.hovered(), false);
             }
             let tinta = if activa { TEXT } else { TEXT_DIM };
             icono(p, ic, Rect::from_center_size(pos2(t.left() + 18.0, t.center().y), Vec2::splat(15.0)), if activa { MAIN } else { TEXT_DIM });

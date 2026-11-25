@@ -2016,3 +2016,46 @@ fn bc_fc_nivel(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn K_fc_nivel(t: vec2<i32>, x: f32, y: f32, p: vec4<f32>) -> vec4<f32> {
     return min(p * A(0), vec4<f32>(1.0));
 }
+
+// ---------------------------------------------------------------- transiciones (Beethoven Craft)
+// Las mismas cuentas que `craft_trans` (legacy.rs) en luz lineal, como `composicion::transicion`:
+// A en `src`, B en `aux`; P.u[0].x el tipo (0 disolvencia, 1 aditiva, 2 de cine, 3 pasar por negro, 4 por blanco),
+// P.f[0].x el avance.
+fn tr_lin(p: vec4<f32>) -> vec4<f32> {
+    let a = clamp(p.w, 0.0, 1.0);
+    if (a <= 0.0) { return vec4<f32>(0.0); }
+    let s = clamp(p.xyz / a, vec3<f32>(0.0), vec3<f32>(1.0));
+    return vec4<f32>(vec3<f32>(srgb_to_linear(s.x), srgb_to_linear(s.y), srgb_to_linear(s.z)) * a, a);
+}
+fn tr_srgb(p: vec4<f32>) -> vec4<f32> {
+    let a = clamp(p.w, 0.0, 1.0);
+    if (a <= 0.0) { return vec4<f32>(0.0); }
+    let s = clamp(p.xyz / a, vec3<f32>(0.0), vec3<f32>(1.0));
+    return vec4<f32>(vec3<f32>(linear_to_srgb(s.x), linear_to_srgb(s.y), linear_to_srgb(s.z)) * a, a);
+}
+@compute @workgroup_size(16, 16)
+fn bc_transicion(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let dims = out_dims();
+    let t = vec2<i32>(gid.xy);
+    if (t.x >= dims.x || t.y >= dims.y) { return; }
+    let a = tr_lin(textureLoad(src, t, 0));
+    let b = tr_lin(textureLoad(aux, t, 0));
+    let p = clamp(P.f[0].x, 0.0, 1.0);
+    var o = a * (1.0 - p) + b * p;
+    switch (P.u[0].x) {
+        case 1u: {
+            o = min(a * min(2.0 * (1.0 - p), 1.0) + b * min(2.0 * p, 1.0), vec4<f32>(1.0));
+        }
+        case 2u: {
+            let g = 1.0 / 2.2;
+            o = pow(pow(max(a, vec4<f32>(0.0)), vec4<f32>(g)) * (1.0 - p) + pow(max(b, vec4<f32>(0.0)), vec4<f32>(g)) * p, vec4<f32>(2.2));
+        }
+        case 3u, 4u: {
+            let fondo = select(vec4<f32>(0.0, 0.0, 0.0, 1.0), vec4<f32>(1.0), P.u[0].x == 4u);
+            let s = select(b * ((p - 0.5) * 2.0), a * (1.0 - p * 2.0), p < 0.5);
+            o = s + fondo * (1.0 - s.w);
+        }
+        default: {}
+    }
+    textureStore(out, t, tr_srgb(o));
+}
