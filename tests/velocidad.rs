@@ -1,61 +1,73 @@
-//! Cuántos cuadros por segundo se exportan en varios casos. `VIDEO=… cargo test --release --test velocidad -- --ignored --nocapture`
-use std::sync::atomic::{AtomicBool, AtomicU32};
-use toma_uno::composicion::fx_nuevo;
-use toma_uno::exportar::*;
+//! La velocidad desde el clic derecho de un clip: en porcentaje, −50 % es cámara lenta a la mitad.
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use toma_uno::modelo::*;
+use toma_uno::ui::App;
 
-fn base(seg: f64) -> Proyecto {
-    let v = std::path::PathBuf::from(std::env::var("VIDEO").unwrap());
-    let i = toma_uno::medios::sondear(&v).unwrap();
-    let (an, al, fps) = i.video.unwrap();
+#[test]
+fn una_imagen_mas_lenta_dura_mas() {
     let mut p = Proyecto::nuevo();
-    (p.ancho, p.alto, p.fps) = (an, al, fps);
-    let mut c = p.nuevo_video(v, Contenido::Archivo, 0.0, seg);
-    (c.ancho, c.alto, c.fps, c.total, c.desde) = (an, al, fps, i.dur, 60.0);
-    p.video = vec![c];
-    p
+    let c = p.nuevo_video("".into(), Contenido::Color([0.5, 0.2, 0.2, 1.0]), 0.0, 4.0);
+    let id = c.id;
+    p.video.push(c);
+    p.velocidad(id, 0.5);
+    let c = p.video.iter().find(|c| c.id == id).unwrap();
+    assert_eq!((c.dur, c.mov.velocidad), (8.0, 0.5));
+    p.velocidad(id, 2.0);
+    let c = p.video.iter().find(|c| c.id == id).unwrap();
+    assert_eq!((c.dur, c.mov.velocidad), (2.0, 2.0));
 }
 
 #[test]
-#[ignore]
-fn velocidad() {
-    let seg = 12.0;
-    let capa = |p: &mut Proyecto| p.capas.push(Capa { nombre: "V2".into(), visible: true, bloqueada: false });
-    let titulo = |p: &mut Proyecto| {
-        capa(p);
-        let mut t = p.nuevo_video("t".into(), Contenido::Titulo(toma_uno::titulos::plantilla(1).1), 0.0, seg);
-        t.capa = 1;
-        p.video.push(t);
+fn desde_el_clic_derecho() {
+    let mut h = Harness::builder().with_size([1440.0, 860.0]).wgpu().build_eframe(|cc| App::nueva(&cc.egui_ctx, true, true));
+    h.run_steps(3);
+    h.state_mut().inicio.visible = false;
+    let id = {
+        let p = &mut h.state_mut().p;
+        let c = p.nuevo_video("".into(), Contenido::Color([0.2, 0.5, 0.8, 1.0]), 0.0, 4.0);
+        let id = c.id;
+        p.video.push(c);
+        id
     };
-    let mut casos: Vec<(&str, Proyecto)> = vec![("solo video", base(seg))];
-    let mut p = base(seg);
-    titulo(&mut p);
-    casos.push(("con título", p));
-    let mut p = base(seg);
-    p.video[0].fx.push(toma_uno::filtros::efecto(50, 1).unwrap());
-    casos.push(("con filtro", p));
-    let mut p = base(seg);
-    p.video[0].mov.escala = Prop { claves: vec![(0.0, Valor::Num(100.0)), (12.0, Valor::Num(120.0))], ..Prop::num(100.0) };
-    casos.push(("acercamiento", p));
-    let mut p = base(seg);
-    p.video[0].fx.push(fx_nuevo(50, "ec.blur.gaussian").unwrap());
-    titulo(&mut p);
-    casos.push(("desenfoque y título", p));
-    let mut p = base(seg);
-    capa(&mut p);
-    let mut a = p.nuevo_video("Ajuste".into(), Contenido::Ajuste, 0.0, seg);
-    a.capa = 1;
-    a.fx.push(toma_uno::filtros::efecto(51, 1).unwrap());
-    p.video.push(a);
-    casos.push(("clip vacío con filtro", p));
-    for (n, p) in casos {
-        for c in [Codec::H264, Codec::H265] {
-            let s = std::env::temp_dir().join(format!("velocidad-{}.mp4", std::process::id()));
-            let t = std::time::Instant::now();
-            exportar_con(&p, &Default::default(), &s, Modo::Video, &Opciones { codec: c, ..Default::default() }, &AtomicU32::new(0), &AtomicBool::new(false)).unwrap();
-            let d = t.elapsed().as_secs_f64();
-            println!("{n} {c:?}: {d:.1} s, {:.0} cps, {:.2}x tiempo real, {:.1} MB", seg * p.fps / d, seg / d, std::fs::metadata(&s).unwrap().len() as f64 / 1e6);
-            let _ = std::fs::remove_file(s);
-        }
+    h.state_mut().linea.encuadrar = true;
+    h.run_steps(4);
+    h.get_by_label("Clip de video 0").click_secondary();
+    h.run_steps(4);
+    h.get_by(|n| n.label().is_some_and(|l| l.starts_with("Velocidad"))).click();
+    h.run_steps(4);
+    if let Ok(c) = std::env::var("CAPTURAS") {
+        h.render().unwrap().save(format!("{c}/velocidad-menu.png")).unwrap();
     }
+    h.get_by(|n| n.label().is_some_and(|l| l.contains("50 %") && l.starts_with('−'))).click();
+    h.run_steps(3);
+    let c = h.state().p.video.iter().find(|c| c.id == id).unwrap();
+    assert_eq!((c.mov.velocidad, c.dur), (0.5, 8.0), "cámara lenta a la mitad: dura el doble");
+}
+
+#[test]
+fn solo_el_clip_o_tambien_lo_vinculado() {
+    let mut p = Proyecto::nuevo();
+    p.pistas.clear();
+    let pista = p.nueva_pista("a");
+    let mut v = p.nuevo_video("/x.mp4".into(), Contenido::Archivo, 0.0, 4.0);
+    let g = p.id();
+    v.grupo = Some(g);
+    let vid = v.id;
+    p.video.push(v);
+    let aid = p.id();
+    p.pista(pista).unwrap().clips.push(Clip {
+        id: aid, ruta: "/x.mp4".into(), nombre: "x".into(), inicio: 0.0, desde: 0.0, dur: 4.0, total: 4.0,
+        ganancia_db: 0.0, fade_in: 0.0, fade_out: 0.0, invertido: false, grupo: Some(g), velocidad: 1.0, bus: None, color: None,
+    });
+    // Solo el video: el sonido se queda como estaba.
+    p.velocidad_con(vid, 0.5, false);
+    assert_eq!(p.video[0].mov.velocidad, 0.5);
+    assert_eq!(p.clip(aid).unwrap().velocidad, 1.0);
+    // Con su audio: los dos.
+    p.velocidad_con(vid, 2.0, true);
+    assert_eq!((p.video[0].mov.velocidad, p.clip(aid).unwrap().velocidad), (2.0, 2.0));
+    // Desde el audio, solo el audio.
+    p.velocidad_con(aid, 0.25, false);
+    assert_eq!((p.video[0].mov.velocidad, p.clip(aid).unwrap().velocidad), (2.0, 0.25));
 }

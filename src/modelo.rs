@@ -14,6 +14,32 @@ pub struct Fx {
     pub tipo: TipoFx,
     pub activo: bool,
     pub p: Vec<f32>,
+    /// Si es un plugin de Beethoven DAW: cuál y lo que guarda aparte de sus controles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin: Option<FxPlugin>,
+}
+
+impl Fx {
+    /// Cómo se llama: el del plugin, si es uno de Beethoven DAW.
+    pub fn nombre(&self) -> String {
+        match &self.plugin {
+            Some(x) if self.tipo == TipoFx::Plugin => x.nombre.clone(),
+            _ => self.tipo.nombre().to_string(),
+        }
+    }
+}
+
+/// Un plugin de Beethoven DAW puesto en Movie.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct FxPlugin {
+    /// Su clave en el DAW: no cambia aunque cambie su nombre.
+    pub clave: String,
+    /// Cómo se llama, para mostrarlo aunque falte el plugin.
+    pub nombre: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muestra: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub datos: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -814,7 +840,7 @@ impl Proyecto {
         if tipo == TipoFx::Tartamudeo {
             p[0] = self.bpm as f32;
         }
-        Fx { id: self.id(), tipo, activo: true, p }
+        Fx { id: self.id(), tipo, activo: true, p, plugin: None }
     }
 
     /// Las pistas de video con su nombre de siempre («V1», «V2»…) lo siguen según su lugar, para que la placa y el

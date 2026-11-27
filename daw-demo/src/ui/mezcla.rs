@@ -36,9 +36,35 @@ impl App {
         ScrollArea::horizontal().auto_shrink(false).show(&mut ui, |ui| {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                for i in 0..self.p.mezcla.len() {
+                let vistas = self.p.vistas.clamp(1, PRIMER_ENVIO - 1);
+                let mut hecho = std::collections::BTreeSet::new();
+                for i in (0..=vistas).chain(PRIMER_ENVIO..self.p.mezcla.len()) {
                     if i == PRIMER_ENVIO {
+                        // Una pista más, de las que esperan escondidas.
+                        if vistas < PRIMER_ENVIO - 1 {
+                            let (r, b) = ui.allocate_exact_size(vec2(30.0, alto), Sense::click());
+                            relieve(ui.painter(), r, 6, CAJA, b.hovered(), b.is_pointer_button_down_on());
+                            ui.painter().text(r.center(), Align2::CENTER_CENTER, "+", letra(22.0), ACENTO);
+                            if b.on_hover_text(t("Otra pista")).clicked() {
+                                self.p.vistas = vistas + 1;
+                            }
+                        }
                         ui.add_space(8.0);
+                    }
+                    // Los de un grupo van juntos: un lomo para plegarlo o, plegado, una sola tira.
+                    if let Some(g) = self.p.mezcla[i].grupo.and_then(|g| self.p.grupos.iter().position(|x| x.id == g)) {
+                        if !hecho.insert(g) {
+                            if self.p.grupos[g].plegado {
+                                continue;
+                            }
+                        } else {
+                            let ancho = if self.p.grupos[g].plegado { ANCHO } else { 22.0 };
+                            let (r, b) = ui.allocate_exact_size(vec2(ancho, alto), Sense::click());
+                            self.lomo(ui, g, r, b);
+                            if self.p.grupos[g].plegado {
+                                continue;
+                            }
+                        }
                     }
                     let (r, plana) = ui.allocate_exact_size(vec2(ANCHO, alto), Sense::click());
                     self.tira(ui, i, r, plana);
@@ -47,15 +73,152 @@ impl App {
         });
     }
 
+    /// El lomo de un grupo abierto (angosto) o, plegado, la tira que los junta a todos.
+    fn lomo(&mut self, ui: &mut Ui, g: usize, r: Rect, b: Response) {
+        let gr = self.p.grupos[g].clone();
+        let col = color(gr.color);
+        let p = ui.painter();
+        let miembros: Vec<usize> = (0..self.p.mezcla.len()).filter(|i| self.p.mezcla[*i].grupo == Some(gr.id)).collect();
+        if gr.plegado {
+            placa(p, r, 6);
+            p.rect_stroke(r, 6.0, Stroke::new(1.0, Color32::BLACK), StrokeKind::Inside);
+            degradado(p, Rect::from_min_size(r.min + vec2(1.0, 1.0), vec2(r.width() - 2.0, 4.0)), 2, mezcla(col, Color32::WHITE, 0.2), col);
+            let n = Rect::from_min_size(r.min + vec2(5.0, 9.0), vec2(r.width() - 10.0, 24.0));
+            hueco(p, n, 4, HUECO);
+            rotulo(p, n.shrink2(vec2(6.0, 0.0)), &gr.nombre, 14.0, col);
+            p.text(pos2(r.center().x, n.bottom() + 16.0), Align2::CENTER_CENTER, tf("{} pistas", &[&miembros.len()]), letra(12.0), TENUE);
+            flecha(p, pos2(r.center().x, n.bottom() + 40.0), 7.0, false, ACENTO);
+            // Lo que suena más fuerte del grupo.
+            let pico = miembros.iter().fold([0f32; 2], |m, i| [m[0].max(self.picos[*i][0]), m[1].max(self.picos[*i][1])]);
+            let med = Rect::from_min_max(pos2(r.center().x - 8.0, n.bottom() + 64.0), pos2(r.center().x + 8.0, r.bottom() - 14.0));
+            if med.height() > 30.0 {
+                nivel(p, med, pico);
+            }
+        } else {
+            hueco(p, r, 5, mezcla(col, HUECO, 0.7));
+            p.rect_stroke(r, 5.0, Stroke::new(1.0, col.gamma_multiply(0.7)), StrokeKind::Inside);
+            flecha(p, pos2(r.center().x, r.top() + 14.0), 6.0, true, col);
+            let g = p.layout_no_wrap(gr.nombre.clone(), letra(13.0), col);
+            let o = pos2(r.center().x - g.size().y / 2.0, r.top() + 30.0 + g.size().x);
+            p.add(epaint::TextShape::new(o, g, col).with_angle(-std::f32::consts::FRAC_PI_2));
+        }
+        let b = b.on_hover_text(t("Clic: plegar o desplegar el grupo · clic derecho: nombre"));
+        if b.clicked() {
+            self.p.grupos[g].plegado = !gr.plegado;
+        }
+        let id = gr.id;
+        b.context_menu(|ui| {
+            ui.set_min_width(180.0);
+            if let Some(x) = self.p.grupos.iter_mut().find(|x| x.id == id) {
+                ui.text_edit_singleline(&mut x.nombre);
+                colores(ui, &mut x.color);
+            }
+            if ui.button(t("Deshacer el grupo")).clicked() {
+                self.p.grupos.retain(|x| x.id != id);
+                ui.close();
+            }
+        });
+    }
+
+    /// Agrupar, clase y color: el clic derecho en el nombre de una tira.
+    fn menu_tira(&mut self, ui: &mut Ui, i: usize) {
+        let mut juntas: Vec<usize> = self.elegidas.iter().copied().chain([i]).filter(|k| (1..PRIMER_ENVIO).contains(k)).collect();
+        juntas.sort();
+        juntas.dedup();
+        if (1..PRIMER_ENVIO).contains(&i) {
+            let cuantas = juntas.len();
+            ui.separator();
+            if ui.button(tf("Agrupar ({} pistas)", &[&cuantas])).clicked() {
+                let id = self.p.id_nuevo();
+                let n = (1..).map(|n| tf("Grupo {}", &[&n])).find(|n| self.p.grupos.iter().all(|g| g.nombre != *n)).unwrap();
+                self.p.grupos.push(GrupoMezcla { id, nombre: n, color: COLORES[self.p.grupos.len() % COLORES.len()], plegado: false });
+                juntas.iter().for_each(|k| self.p.mezcla[*k].grupo = Some(id));
+                self.elegidas.clear();
+                ui.close();
+            }
+            if self.p.mezcla[i].grupo.is_some() && ui.button(t("Sacar del grupo")).clicked() {
+                self.p.mezcla[i].grupo = None;
+                ui.close();
+            }
+            ui.menu_button(t("Clase (efectos compartidos)"), |ui| {
+                ui.set_min_width(200.0);
+                if ui.button(tf("Nueva clase ({} pistas)", &[&cuantas])).clicked() {
+                    let id = self.p.id_nuevo();
+                    let n = (1..).map(|n| tf("Clase {}", &[&n])).find(|n| self.p.clases.iter().all(|g| g.nombre != *n)).unwrap();
+                    // Empieza con los efectos de esta pista.
+                    let efectos = self.p.mezcla[i].efectos.iter().filter(|e| e.plugin.is_none()).cloned().collect();
+                    self.p.clases.push(ClaseMezcla { id, nombre: n, color: COLORES[(self.p.clases.len() + 3) % COLORES.len()], efectos });
+                    // Los de esta pista pasan a la clase; las demás conservan los suyos y se les suman.
+                    self.p.mezcla[i].efectos.retain(|e| e.plugin.is_some());
+                    juntas.iter().for_each(|k| self.p.mezcla[*k].clase = Some(id));
+                    self.elegidas.clear();
+                    ui.close();
+                }
+                let clases: Vec<(u64, String, [u8; 3])> = self.p.clases.iter().map(|c| (c.id, c.nombre.clone(), c.color)).collect();
+                if !clases.is_empty() {
+                    ui.separator();
+                }
+                for (id, n, col) in clases {
+                    let si = self.p.mezcla[i].clase == Some(id);
+                    if ui.selectable_label(si, RichText::new(n).color(color(col))).clicked() {
+                        juntas.iter().for_each(|k| self.p.mezcla[*k].clase = Some(id));
+                        ui.close();
+                    }
+                }
+                if let Some(id) = self.p.mezcla[i].clase {
+                    ui.separator();
+                    if let Some(x) = self.p.clases.iter_mut().find(|x| x.id == id) {
+                        ui.text_edit_singleline(&mut x.nombre);
+                        colores(ui, &mut x.color);
+                    }
+                    if ui.button(t("Sacar de la clase")).clicked() {
+                        self.p.mezcla[i].clase = None;
+                        ui.close();
+                    }
+                    if ui.button(t("Borrar la clase")).clicked() {
+                        self.p.clases.retain(|x| x.id != id);
+                        ui.close();
+                    }
+                }
+            });
+        }
+        ui.separator();
+        let m = &mut self.p.mezcla[i];
+        let mut c = m.color.unwrap_or([0x60; 3]);
+        if colores(ui, &mut c) {
+            m.color = Some(c);
+        }
+        if m.color.is_some() && ui.button(t("Sin color")).clicked() {
+            m.color = None;
+        }
+    }
+
     fn tira(&mut self, ui: &mut Ui, i: usize, r: Rect, plana: Response) {
         self.tiras.push((i, r.intersect(ui.clip_rect())));
         if plana.clicked() {
+            if ui.input(|x| x.modifiers.command || x.modifiers.shift) {
+                if !self.elegidas.remove(&i) {
+                    self.elegidas.insert(i);
+                }
+            } else {
+                self.elegidas.clear();
+            }
             self.pista = i;
         }
         let el = self.pista == i;
         let p = ui.painter();
         placa(p, r, 6);
-        p.rect_stroke(r, 6.0, Stroke::new(1.0, if el { ACENTO.gamma_multiply(0.7) } else { Color32::BLACK }), StrokeKind::Inside);
+        let marcada = self.elegidas.contains(&i);
+        p.rect_stroke(
+            r,
+            6.0,
+            Stroke::new(if marcada { 2.0 } else { 1.0 }, if el || marcada { ACENTO.gamma_multiply(0.7) } else { Color32::BLACK }),
+            StrokeKind::Inside,
+        );
+        if let Some(c) = self.p.mezcla[i].color {
+            let c = color(c);
+            degradado(p, Rect::from_min_size(r.min + vec2(6.0, 1.5), vec2(r.width() - 12.0, 3.0)), 1, mezcla(c, Color32::WHITE, 0.2), c);
+        }
         for (k, o) in [r.left_bottom() + vec2(9.0, -9.0), r.right_bottom() - vec2(9.0, 9.0)].into_iter().enumerate() {
             tornillo(p, o, 3.2, i as f32 * 1.7 + k as f32, false);
         }
@@ -79,14 +242,16 @@ impl App {
         if x.clicked() {
             self.pista = i;
         }
-        let m = &mut self.p.mezcla[i];
         x.context_menu(|ui| {
-            ui.text_edit_singleline(&mut m.nombre);
+            ui.text_edit_singleline(&mut self.p.mezcla[i].nombre);
             if (1..PRIMER_ENVIO).contains(&i) && ui.button(t("Pasar la pista a audio")).clicked() {
                 self.pasar = Some(i);
                 ui.close();
             }
+            self.menu_tira(ui, i);
         });
+        let clase = self.p.mezcla[i].clase.and_then(|c| self.p.clases.iter().find(|x| x.id == c)).map(|c| (c.nombre.clone(), color(c.color)));
+        let m = &mut self.p.mezcla[i];
         let area = Rect::from_min_size(pos2(r.center().x - 16.0, n.bottom() + 5.0), vec2(32.0, 32.0));
         let mut c = ui.new_child(UiBuilder::new().max_rect(area).id_salt(("pan", i)));
         perilla(&mut c, "", &mut m.pan, -1.0, 1.0, 0.0, ACENTO, 32.0).on_hover_text(t("Izquierda · derecha"));
@@ -109,8 +274,18 @@ impl App {
         }
         let fx = m.efectos.len();
         let q = Rect::from_min_size(pos2(r.right() - 29.0, n.bottom() + 42.0), vec2(24.0, 20.0));
-        hueco(ui.painter(), q, 4, HUECO);
-        ui.painter().text(q.center(), Align2::CENTER_CENTER, format!("fx {fx}"), letra(11.5), if fx > 0 { ACENTO } else { TENUE });
+        match &clase {
+            // En una clase: la cajita del número de efectos va de su color.
+            Some((nombre, c)) => {
+                encendido(ui.painter(), q, 4, *c);
+                ui.painter().text(q.center(), Align2::CENTER_CENTER, format!("fx {fx}"), letra(11.5), FONDO);
+                ui.interact(q, plana.id.with("clase"), Sense::hover()).on_hover_text(tf("Clase «{}»: comparte sus efectos", &[nombre]));
+            }
+            None => {
+                hueco(ui.painter(), q, 4, HUECO);
+                ui.painter().text(q.center(), Align2::CENTER_CENTER, format!("fx {fx}"), letra(11.5), if fx > 0 { ACENTO } else { TENUE });
+            }
+        }
         let (y0, y1) = (n.bottom() + 70.0, r.bottom() - 38.0);
         if y1 - y0 > 50.0 {
             let med = Rect::from_min_max(pos2(r.right() - 24.0, y0 + 9.0), pos2(r.right() - 7.0, y1));
@@ -235,11 +410,12 @@ impl App {
     }
 
     fn nombre_efecto(&self, e: &EfectoPuesto) -> String {
-        match (&e.plugin, self.bib.ver(&e.efecto)) {
+        let n = match (&e.plugin, self.bib.ver(&e.efecto)) {
             (Some(x), _) => x.nombre.clone(),
             (_, Some(g)) => g.ficha.nombre.ver().to_string(),
             _ => e.efecto.clone(),
-        }
+        };
+        if e.de_clase { tf("{} · de la clase", &[&n]) } else { n }
     }
 
     fn ranura(&mut self, ui: &mut Ui, i: usize, k: usize) -> Option<Cambio> {
@@ -542,4 +718,34 @@ impl App {
         let mut ui = ui.new_child(UiBuilder::new().max_rect(charola.shrink2(vec2(8.0, 6.0))));
         ScrollArea::vertical().auto_shrink(false).show(&mut ui, |ui| lado::controles(ui, &g.ficha, &mut e.controles, ACENTO));
     }
+}
+
+/// Los colores de siempre, para elegir uno. Dice si se eligió.
+pub(super) fn colores(ui: &mut Ui, c: &mut [u8; 3]) -> bool {
+    let mut si = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        for x in COLORES {
+            let (r, b) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+            ui.painter().rect_filled(r, 4.0, color(x));
+            if *c == x {
+                ui.painter().rect_stroke(r, 4.0, Stroke::new(2.0, Color32::WHITE), StrokeKind::Inside);
+            }
+            if b.clicked() {
+                *c = x;
+                si = true;
+            }
+        }
+    });
+    si
+}
+
+/// Triángulo para plegar: hacia abajo si está abierto, a la derecha si no.
+fn flecha(p: &Painter, o: Pos2, r: f32, abajo: bool, c: Color32) {
+    let v = if abajo {
+        vec![o + vec2(-r, -r * 0.5), o + vec2(r, -r * 0.5), o + vec2(0.0, r * 0.6)]
+    } else {
+        vec![o + vec2(-r * 0.5, -r), o + vec2(r * 0.6, 0.0), o + vec2(-r * 0.5, r)]
+    };
+    p.add(Shape::convex_polygon(v, c, Stroke::NONE));
 }

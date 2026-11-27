@@ -2385,5 +2385,20 @@
  "Va a {} con tu cuenta: nombres, notas y ajustes; nunca tu audio": "Goes to {} with your account: names, notes and settings; never your audio",
  "Va a {} con tu cuenta: nombres, textos y ajustes; no tu video": "Goes to {} with your account: names, texts and settings; not your video",
  "Va a {} con tu cuenta: nombres, textos, ajustes y los cuadros que pida ver": "Goes to {} with your account: names, texts, settings and the frames it asks to see",
- "Software libre: MIT o Apache-2.0, como prefieras.": "Free software: MIT or Apache-2.0, as you prefer."
+ "Software libre: MIT o Apache-2.0, como prefieras.": "Free software: MIT or Apache-2.0, as you prefer.",
+  "Plugins de Beethoven DAW": "Beethoven DAW plugins",
+  "Plugin de Beethoven DAW": "Beethoven DAW plugin",
+  "Un efecto de Beethoven DAW, con su ventana": "A Beethoven DAW effect, with its own window",
+  "Abrir su ventana": "Open its window",
+  "No pude abrir el plugin {}": "Couldn't open the plugin {}",
+  "Telón": "Curtain",
+  "Humo": "Smoke",
+  "Panal": "Honeycomb",
+  "Rayo eléctrico": "Lightning strike",
+  "Más lento o más rápido": "Slower or faster",
+  "Cámara lenta: va al {} %": "Slow motion: plays at {} %",
+  "Rápido: va al {} %": "Fast: plays at {} %",
+  "A su velocidad": "At its own speed",
+  "También su video": "Its video too",
+  "También su audio": "Its audio too"
 }

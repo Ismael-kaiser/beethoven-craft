@@ -34,6 +34,8 @@ pub const LEGACY_VIDEO_TRANSITIONS: &[&str] = &["Legacy", "Video Transitions"];
 pub const OBSOLETE_VIDEO_TRANSITIONS: &[&str] = &["Obsolete", "Video Transitions"];
 
 const ANIMATION: &[&str] = &["Video Transitions", "Animation"];
+/// Las de Beethoven Craft (`transitions/propias.rs`).
+const BEETHOVEN: &[&str] = &["Video Transitions", "Beethoven"];
 const DISSOLVE: &[&str] = &["Video Transitions", "Dissolve"];
 const GRUNGE: &[&str] = &["Video Transitions", "Grunge & Distort"];
 const IMMERSIVE: &[&str] = &["Video Transitions", "Immersive Video"];
@@ -128,6 +130,13 @@ pub(crate) fn video_transition_defs() -> Vec<EffectDef> {
     use Badges::*;
     let m = A32;
     vec![
+        // ---- Beethoven ----
+        tr("bc_corazon", "Heart", BEETHOVEN, m, vec![centre(), colour("color", "Color", [1.0, 0.45, 0.6, 1.0]), feather(3.0), num("width", "Width", 18.0, 200.0, "px")]),
+        tr("bc_telon", "Curtain", BEETHOVEN, m, vec![colour("color", "Color", [0.62, 0.06, 0.08, 1.0]), num("size", "Size", 90.0, 400.0, "px")]),
+        tr("bc_tinta", "Ink", BEETHOVEN, m, vec![colour("color", "Color", [0.04, 0.03, 0.05, 1.0]), num("size", "Size", 220.0, 1000.0, "px"), seed()]),
+        tr("bc_humo", "Smoke", BEETHOVEN, m, vec![colour("color", "Color", [0.86, 0.87, 0.9, 1.0]), num("density", "Density", 100.0, 100.0, "%"), seed()]),
+        tr("bc_rayo", "Lightning", BEETHOVEN, m, vec![colour("color", "Color", [0.6, 0.75, 1.0, 1.0]), num("width", "Width", 4.0, 60.0, "px"), seed()]),
+        tr("bc_panal", "Honeycomb", BEETHOVEN, m, vec![colour("color", "Color", [1.0, 0.78, 0.3, 1.0]), num("size", "Size", 70.0, 400.0, "px"), seed()]),
         // ---- Animation ----
         tr("block_motion", "Block Motion", ANIMATION, m, vec![direction(), range("blocks", "Blocks", 6.0, 2.0, 32.0, ""), motion_blur()]),
         tr("flip_motion", "Flip Motion", ANIMATION, m, vec![direction(), num("perspective", "Perspective", 50.0, 100.0, "%"), motion_blur()]),

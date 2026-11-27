@@ -160,6 +160,8 @@ pub struct Preparado {
     nuevos: HashMap<u64, FxRT>,
     fin: i64,
     armada: Option<u64>,
+    /// Los plugins de Beethoven DAW recién abiertos: la ventana los toma para mostrarlos.
+    pub plugins: Vec<(u64, Arc<beethoven_daw_demo::instancia::Instancia>)>,
 }
 
 fn ganancias(g: f32, pan: f32) -> [f32; 2] {
@@ -176,12 +178,17 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
     // Los clips de cada mezclador, conforme se arman las pistas.
     let mut de_bus: Vec<Vec<ClipRT>> = p.buses.iter().map(|_| vec![]).collect();
     let mut nuevos = HashMap::new();
+    let mut plugins = vec![];
     for f in p.pistas.iter().flat_map(|t| &t.fx).chain(p.buses.iter().flat_map(|b| &b.fx)).chain(&p.fx_maestro) {
         if !existentes.contains(&f.id) {
-            nuevos.insert(
-                f.id,
-                FxRT { id: f.id, activo: f.activo, p: f.p.clone(), proc: efectos::crear(f.tipo, &f.p) },
-            );
+            let proc: Box<dyn Procesador> = match crate::plugins::abrir(f).filter(|_| f.tipo == TipoFx::Plugin) {
+                Some(n) => {
+                    plugins.push((f.id, n.clone()));
+                    Box::new(crate::plugins::Proc::nuevo(n))
+                }
+                None => efectos::crear(f.tipo, &f.p),
+            };
+            nuevos.insert(f.id, FxRT { id: f.id, activo: f.activo, p: f.p.clone(), proc });
         }
     }
     let pistas = p
@@ -266,6 +273,7 @@ pub fn preparar(p: &Proyecto, almacen: &Almacen, existentes: &[u64]) -> Preparad
         nuevos,
         fin: cuadros(p.fin()),
         armada: p.pistas.iter().find(|t| t.armada).map(|t| t.id),
+        plugins,
     }
 }
 

@@ -5,7 +5,7 @@ exclude = ["daw-demo"]
 
 [package]
 name = "toma-uno"
-version = "0.12.4"
+version = "0.12.5"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Compositor de video y audio"
@@ -16,6 +16,8 @@ name = "toma_uno"
 [dependencies]
 craft-gpu = { path = "crates/craft-gpu" }
 craft-trans = { path = "crates/craft-trans" }
+# Beethoven DAW: Movie toca sus plugins con el mismo motor (MIT OR Apache-2.0).
+beethoven-daw-demo = { path = "daw-demo" }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu"] }
 cpal = "0.18"
 rfd = "0.17"

@@ -339,3 +339,12 @@ pub fn aguja(p: &Painter, r: Rect, v: f32, nombre: &str, k: f32) {
     dentro.circle_filled(pos2(eje.x, r.bottom()), 6.0 * k, Color32::from_gray(0x18));
     vidrio_en(p, r, (3.0 * k) as u8, Color32::from_rgb(0xff, 0xe8, 0xb0), false, r.height() * 0.3);
 }
+
+/// Rueda dentada fina (engrane), girada `a` radianes.
+pub fn engrane(p: &Painter, o: Pos2, r: f32, dientes: usize, a: f32, col: Color32) {
+    for i in 0..dientes {
+        let d = Vec2::angled(a + i as f32 / dientes as f32 * 2.0 * PI);
+        p.line_segment([o + d * (r - 1.0), o + d * (r + 1.8)], Stroke::new(1.3, col));
+    }
+    p.circle_stroke(o, r - 0.6, Stroke::new(1.4, col));
+}

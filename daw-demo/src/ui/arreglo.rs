@@ -98,6 +98,10 @@ enum Gesto {
     Recortar,
     Entra(usize),
     Sale(usize),
+    /// El tirador del centro: sube o baja todo el audio.
+    Volumen(usize),
+    /// Un punto de la curva de volumen.
+    Punto(usize, usize),
     Borrar,
     Pintar,
     Marco,
@@ -107,6 +111,7 @@ enum Gesto {
 
 const ALTO: f32 = 48.0;
 const CABEZA: f32 = 118.0;
+const REGLA: f32 = 30.0;
 
 fn dibujo(h: Herramienta, p: &Painter, o: Pos2, c: Color32) {
     let st = Stroke::new(1.6, c);
@@ -230,7 +235,7 @@ impl App {
     pub(super) fn ver_arreglo(&mut self, ui: &mut Ui) {
         self.barra_arreglo(ui);
         let (todo, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-        let regla = Rect::from_min_max(pos2(todo.left() + CABEZA, todo.top()), pos2(todo.right(), todo.top() + 24.0));
+        let regla = Rect::from_min_max(pos2(todo.left() + CABEZA, todo.top()), pos2(todo.right(), todo.top() + REGLA));
         let mapa = Rect::from_min_max(pos2(regla.left(), todo.bottom() - 16.0), todo.max);
         let r = Rect::from_min_max(pos2(todo.left() + CABEZA, regla.bottom()), pos2(todo.right(), mapa.top() - 3.0));
         let cab = Rect::from_min_max(pos2(todo.left(), r.top()), pos2(r.left(), r.bottom()));
@@ -317,7 +322,41 @@ impl App {
             }
         }
         let pr = ui.painter_at(regla);
-        placa(&pr, regla, 0);
+        // La regla como la carátula de un reloj: acero oscuro, minutería de riel e índices aplicados, bajo un cristal.
+        let barra = Rect::from_min_max(pos2(todo.left(), regla.top()), regla.max);
+        {
+            let p = ui.painter_at(barra);
+            degradado(&p, barra, 0, Color32::from_gray(0x36), Color32::from_gray(0x1c));
+            p.hline(barra.x_range(), barra.top() + 0.5, Stroke::new(1.0, Color32::from_white_alpha(30)));
+            p.hline(barra.x_range(), barra.bottom() - 0.5, Stroke::new(1.0, Color32::from_black_alpha(160)));
+            // La ventanilla del compás, biselada y con su lupa; la esfera de segundos y sus engranes, que avanzan con el cabezal.
+            let k = self.tick();
+            let v = Rect::from_min_size(pos2(barra.left() + 5.0, barra.top() + 4.0), vec2(50.0, REGLA - 8.0));
+            p.rect_filled(v.expand(1.5), 5, Color32::from_black_alpha(140));
+            degradado(&p, v.expand(1.0), 5, Color32::from_gray(0x8a), Color32::from_gray(0x4a));
+            hueco(&p, v.shrink(0.5), 4, Color32::from_gray(0x0c));
+            let pulso = (k as u32 % COMPAS) / PPQ + 1;
+            p.text(v.center(), Align2::CENTER_CENTER, format!("{}.{}", k as u32 / COMPAS + 1, pulso), letra(14.0), ACENTO);
+            degradado_en(
+                &p,
+                Rect::from_min_max(v.min + vec2(1.5, 1.5), pos2(v.right() - 1.5, v.top() + v.height() * 0.48)),
+                CornerRadius { nw: 3, ne: 3, sw: 0, se: 0 },
+                Color32::from_white_alpha(46),
+                Color32::from_white_alpha(10),
+            );
+            let seg = k as f64 / PPQ as f64 * 60.0 / self.p.bpm as f64;
+            let re = REGLA / 2.0 - 4.0;
+            let o = pos2(barra.left() + CABEZA - re - 6.0, barra.center().y);
+            let giro = (seg * 0.8) as f32;
+            let g1 = o - vec2(re * 1.75, -1.0);
+            engrane(&p, g1, re * 0.72, 16, -giro * 1.6, Color32::from_rgb(0x8c, 0x76, 0x35));
+            p.circle_filled(g1, 2.2, Color32::from_rgb(0xc2, 0x2f, 0x4e));
+            p.circle_filled(g1 - vec2(0.6, 0.8), 0.8, Color32::from_white_alpha(170));
+            let g2 = o - vec2(re * 2.95, 1.5);
+            engrane(&p, g2, re * 0.46, 11, giro * 2.5, Color32::from_rgb(0x84, 0x86, 0x8c));
+            tornillo(&p, g2, 2.4, 0.7, true);
+            esfera(&p, o, re, seg, if self.grabando.is_some() { ROJO } else { ACENTO });
+        }
         let salto = [1, 2, 4, 8, 16, 32].into_iter().find(|s| (s * COMPAS) as f32 * zoom > 34.0).unwrap_or(64);
         if PPQ as f32 * zoom > 18.0 {
             let mut k = tick_en(r.left()) as u32 / PPQ * PPQ;
@@ -331,11 +370,36 @@ impl App {
             let x = x_de((c * COMPAS) as f32);
             p.vline(x, r.y_range(), Stroke::new(1.0, RAYA.gamma_multiply(if c.is_multiple_of(4) { 1.0 } else { 0.5 })));
             if c.is_multiple_of(salto) {
-                indice(&pr, x, regla.bottom() - 9.0, regla.bottom() - 1.0, 2.5, if c.is_multiple_of(4) { ACENTO } else { TENUE });
-                pr.text(pos2(x + 5.0, regla.center().y), Align2::LEFT_CENTER, c + 1, letra(13.0), TEXTO);
+                // Índice aplicado en el compás; entre compases, la minutería: una rayita por pulso.
+                indice(&pr, x, regla.bottom() - 13.0, regla.bottom() - 4.0, 3.0, if c.is_multiple_of(4) { ACENTO } else { Color32::from_gray(0xd2) });
+                let n = (c + 1).to_string();
+                pr.text(pos2(x + 6.0, regla.top() + 5.0), Align2::LEFT_TOP, &n, letra(13.0), Color32::from_black_alpha(160));
+                pr.text(pos2(x + 5.0, regla.top() + 4.0), Align2::LEFT_TOP, n, letra(13.0), TEXTO);
+            }
+            if PPQ as f32 * zoom > 7.0 {
+                for j in 1..COMPAS / PPQ {
+                    let xs = x_de((c * COMPAS + j * PPQ) as f32);
+                    let largo = j == COMPAS / PPQ / 2;
+                    pr.vline(
+                        xs,
+                        regla.bottom() - if largo { 11.0 } else { 9.0 }..=regla.bottom() - 4.5,
+                        Stroke::new(if largo { 1.4 } else { 1.0 }, Color32::from_gray(0xa8)),
+                    );
+                }
             }
             c += 1;
         }
+        // El riel de la minutería y el cristal de la carátula.
+        for y in [regla.bottom() - 4.0, regla.bottom() - 9.5] {
+            pr.hline(regla.x_range(), y, Stroke::new(0.7, Color32::from_white_alpha(38)));
+        }
+        degradado(
+            &ui.painter_at(barra),
+            Rect::from_min_max(barra.min, pos2(barra.right(), barra.top() + REGLA * 0.42)),
+            0,
+            Color32::from_white_alpha(22),
+            Color32::from_white_alpha(4),
+        );
         let puntero = hover.filter(|_| resp.hovered());
         // Los que se mueven van encima de los demás.
         let mut orden: Vec<usize> = (0..self.p.clips.len()).collect();
@@ -412,11 +476,27 @@ impl App {
         let Some(o) = o_raton else { return };
         let sobre = self.p.clips.iter().rposition(|c| r.contains(o) && caja(c).contains(o));
         let h = self.arreglo.herramienta;
+        let seg = 60.0 / self.p.bpm / PPQ as f32;
+        let mut punto = None;
         let zona = sobre.map_or(0, |i| {
             let (b, c) = (caja(&self.p.clips[i]), &self.p.clips[i]);
             let ancho = 8.0_f32.min(b.width() * 0.3);
             let arriba = o.y < b.top() + 16.0 && c.audio.is_some() && b.width() > 40.0;
+            let flecha = h == Herramienta::Mover;
+            // En el cuerpo de un audio: los puntos de su curva y la curva misma.
+            if let Some(a) = c.audio.as_ref().filter(|_| flecha && !arriba && b.width() > 40.0 && b.height() > 30.0) {
+                let d = cuerpo(b);
+                if let Some(j) = a.envolvente.iter().position(|q| (pos2(x_curva(b, a, q[0], zoom, seg), y_curva(d, q[1])) - o).length() < 6.0) {
+                    punto = Some(j);
+                    return 6;
+                }
+                let s = seg_curva(b, a, o.x, zoom, seg);
+                if d.contains(o) && (y_curva(d, envolvente(&a.envolvente, s)) - o.y).abs() < 5.0 {
+                    return 7;
+                }
+            }
             match o.x {
+                x if arriba && flecha && (x - b.center().x).abs() < 10.0 && b.width() > 70.0 => 5,
                 x if arriba && x < b.left() + 12.0 => 3,
                 x if arriba && x > b.right() - 12.0 => 4,
                 x if x < b.left() + ancho => 1,
@@ -509,6 +589,19 @@ impl App {
                         2 => Gesto::Alargar,
                         3 => Gesto::Entra(i),
                         4 => Gesto::Sale(i),
+                        5 => Gesto::Volumen(i),
+                        6 => Gesto::Punto(i, punto.unwrap_or(0)),
+                        7 => {
+                            // Un punto nuevo donde se hizo clic, y se arrastra.
+                            let b = caja(&self.p.clips[i]);
+                            let a = self.p.clips[i].audio.as_mut().unwrap();
+                            let s = seg_curva(b, a, o.x, zoom, seg);
+                            let g = envolvente(&a.envolvente, s);
+                            let j = a.envolvente.partition_point(|q| q[0] <= s);
+                            a.envolvente.insert(j, [s, g]);
+                            self.arreglo.base = self.p.clips.clone();
+                            Gesto::Punto(i, j)
+                        }
                         _ => Gesto::Mover(agarra),
                     }
                 }
@@ -520,6 +613,21 @@ impl App {
             self.arreglo.gesto = Some((g, o));
         }
         if resp.double_clicked()
+            && let Some(i) = sobre
+            && let Some(j) = punto
+        {
+            // Doble clic en un punto lo quita; en el tirador, el volumen vuelve a como estaba.
+            if let Some(a) = self.p.clips[i].audio.as_mut().filter(|a| j < a.envolvente.len()) {
+                a.envolvente.remove(j);
+            }
+            self.arreglo.gesto = None;
+        } else if resp.double_clicked()
+            && zona == 5
+            && let Some(a) = sobre.and_then(|i| self.p.clips[i].audio.as_mut())
+        {
+            a.volumen = 1.0;
+            self.arreglo.gesto = None;
+        } else if resp.double_clicked()
             && h == Herramienta::Mover
             && let Some(i) = sobre
         {
@@ -651,6 +759,37 @@ impl App {
                     let total = (self.p.largo() + 16 * COMPAS) as f32 * zoom;
                     self.arreglo.scroll.x += d.x / r.width() * total;
                 }
+            }
+            Gesto::Volumen(i) => {
+                let Some(a0) = base.get(i).and_then(|c| c.audio.as_ref()) else { return };
+                let fino = if mods.shift { 0.2 } else { 1.0 };
+                // Un cuarto de dB por punto; se pega a 0 dB al pasar cerca.
+                let mut db = (20.0 * a0.volumen.max(1e-4).log10() - (o.y - ini.y) * 0.25 * fino).clamp(-48.0, 12.0);
+                if db.abs() < 0.4 && fino == 1.0 {
+                    db = 0.0;
+                }
+                if let Some(a) = self.p.clips.get_mut(i).and_then(|c| c.audio.as_mut()) {
+                    a.volumen = 10f32.powf(db / 20.0);
+                }
+            }
+            Gesto::Punto(i, j) => {
+                let Some(cl) = self.p.clips.get(i) else { return };
+                let b = caja(cl);
+                let d = cuerpo(b);
+                let Some(a) = self.p.clips.get_mut(i).and_then(|c| c.audio.as_mut()) else { return };
+                if j >= a.envolvente.len() {
+                    return;
+                }
+                // Entre sus vecinos, para que no cambien de orden.
+                let fin = a.inicio + cl_dur_seg(b, zoom, seg) * a.velocidad;
+                let lo = if j > 0 { a.envolvente[j - 1][0] } else { a.inicio };
+                let hi = a.envolvente.get(j + 1).map_or(fin, |q| q[0]);
+                let s = seg_curva(b, a, o.x, zoom, seg).clamp(lo, hi.max(lo));
+                let mut g = ((d.bottom() - o.y) / d.height() * 2.0).clamp(0.0, 2.0);
+                if (g - 1.0).abs() < 0.04 {
+                    g = 1.0;
+                }
+                a.envolvente[j] = [s, g];
             }
             Gesto::Cabezal => {
                 let k = tick_en(o.x);
@@ -857,6 +996,9 @@ impl App {
                 (Herramienta::Tijera, ..) => CursorIcon::VerticalText,
                 (Herramienta::Borrador, ..) => CursorIcon::NotAllowed,
                 (_, Some(_), 1 | 2) => CursorIcon::ResizeHorizontal,
+                (_, Some(_), 5) => CursorIcon::ResizeVertical,
+                (_, Some(_), 6) => CursorIcon::Move,
+                (_, Some(_), 7) => CursorIcon::Crosshair,
                 (_, Some(_), 3 | 4) => CursorIcon::ResizeNeSw,
                 (_, Some(_), _) if self.arreglo.gesto.is_some() => CursorIcon::Grabbing,
                 (_, Some(_), _) => CursorIcon::Grab,
@@ -870,7 +1012,7 @@ impl App {
             match (h, sobre) {
                 (Herramienta::Tijera, _) => "Clic: partir el clip ahí · ⌘/Ctrl+E: partir en el cabezal",
                 (Herramienta::Borrador, _) => "Clic o arrastra: borrar",
-                (_, Some(_)) => "Arrastra: mover · Mayús: copiar · bordes: recortar · esquinas de un audio: fundidos · Alt: sin imán · doble clic: abrir",
+                (_, Some(_)) => "Arrastra: mover · Mayús: copiar · bordes: recortar · esquinas de un audio: fundidos · tirador de arriba: volumen · línea blanca: clic pone un punto, doble clic lo quita · doble clic: abrir",
                 (Herramienta::Pincel, _) => "Arrastra: pintar el patrón elegido",
                 _ => "Arrastra: elegir varios · ⌘/Ctrl y rueda: acercar · rueda en medio: mover la vista · ⌘/Ctrl+C, V, D, E: copiar, pegar, duplicar, partir",
             }
@@ -887,14 +1029,13 @@ impl App {
             if !f.intersects(cab) {
                 continue;
             }
-            placa(&pc, f, 5);
             let x = &self.p.pistas[i];
             let nombre = if x.nombre.is_empty() { tf("Pista {}", &[&(i + 1)]) } else { x.nombre.clone() };
-            let luz = if self.p.pista_suena(i) { ACENTO.gamma_multiply(0.8) } else { RAYA };
-            pc.rect_filled(Rect::from_min_size(f.min + vec2(2.0, 5.0), vec2(3.0, f.height() - 10.0)), 1.0, luz);
-            rotulo(&pc, Rect::from_min_size(f.min + vec2(11.0, 3.0), vec2(f.width() - 16.0, 18.0)), &nombre, 14.0, TEXTO);
+            let suena = self.p.pista_suena(i);
+            cabecera(&pc, f, &(i + 1).to_string(), suena, x.color.map(color));
+            rotulo(&pc, Rect::from_min_size(f.min + vec2(44.0, 4.0), vec2(f.width() - 48.0, 18.0)), &nombre, 13.5, TEXTO);
             for (k, (s, si, c)) in [("M", x.mudo, ROJO), ("S", x.solo, ACENTO)].into_iter().enumerate() {
-                let q = Rect::from_min_size(f.min + vec2(11.0 + 26.0 * k as f32, 23.0), vec2(22.0, 18.0));
+                let q = Rect::from_min_size(f.min + vec2(44.0 + 26.0 * k as f32, 24.0), vec2(22.0, 17.0));
                 let hover = puntero.is_some_and(|o| q.contains(o) && cab.contains(o));
                 if si {
                     encendido(&pc, q, 4, c);
@@ -916,6 +1057,14 @@ impl App {
     fn menu_pista(&mut self, ui: &mut Ui, i: usize) {
         ui.set_min_width(190.0);
         ui.add(TextEdit::singleline(&mut self.p.pistas[i].nombre).hint_text(t("Nombre de la pista")));
+        let x = &mut self.p.pistas[i];
+        let mut c = x.color.unwrap_or([0x60; 3]);
+        if mezcla::colores(ui, &mut c) {
+            x.color = Some(c);
+        }
+        if x.color.is_some() && ui.button(t("Sin color")).clicked() {
+            x.color = None;
+        }
         if ui.button(t("Instrumento nuevo en esta pista…")).clicked() {
             self.elegir = Some(lado::Elegir::pista(Some(i)));
             ui.close();
@@ -984,19 +1133,22 @@ impl App {
     fn dibujar_clip(&mut self, p: &Painter, r: Rect, cl: &Clip, b: Rect, zoom: f32, hover: bool, elegido: bool) {
         let apagado = !self.p.pista_suena(cl.pista);
         let (nombre, col) = match &cl.audio {
-            Some(a) => (a.nombre.clone(), Color32::from_rgb(0xd0, 0x7a, 0x7a)),
+            Some(a) => (a.nombre.clone(), self.p.pistas[cl.pista].color.map_or(Color32::from_rgb(0xd0, 0x7a, 0x7a), color)),
             None => match self.p.patron(cl.patron) {
                 Some(x) => (x.nombre.clone(), color(x.color)),
                 None => return,
             },
         };
         let col = if apagado { mezcla(col, Color32::from_gray(0x50), 0.75) } else { col };
-        degradado(p, b, 5, mezcla(col, Color32::BLACK, 0.5), mezcla(col, Color32::BLACK, 0.72));
+        p.rect_filled(b.translate(vec2(0.0, 2.0)), 6.0, Color32::from_black_alpha(70));
+        let fondo = mezcla(col, Color32::from_gray(0x14), 0.62);
+        degradado(p, b, 6, mezcla(fondo, Color32::WHITE, 0.1), mezcla(fondo, Color32::BLACK, 0.28));
         let franja = Rect::from_min_size(b.min, vec2(b.width(), 16.0));
-        degradado_en(p, franja, CornerRadius { nw: 5, ne: 5, sw: 0, se: 0 }, mezcla(col, Color32::WHITE, 0.1), mezcla(col, Color32::BLACK, 0.3));
+        let cinta = mezcla(col, Color32::from_gray(0x30), 0.3);
+        p.rect_filled(franja, CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, Color32::from_rgba_unmultiplied(cinta.r(), cinta.g(), cinta.b(), 215));
         let pc = p.with_clip_rect(b.intersect(r));
         let dentro = Rect::from_min_max(pos2(b.left(), b.top() + 17.0), b.max).shrink(2.0);
-        let luz = mezcla(col, Color32::WHITE, 0.45);
+        let luz = mezcla(col, Color32::WHITE, 0.55);
         if let Some(a) = &cl.audio {
             let o = self.onda(&a.ruta);
             let seg = 60.0 / self.p.bpm / PPQ as f32 / zoom * a.velocidad;
@@ -1032,7 +1184,10 @@ impl App {
                 pc.vline(b.left() + k as f32 * zoom, b.y_range(), Stroke::new(1.0, Color32::from_black_alpha(120)));
             }
         }
-        vidrio_en(p, b, 5, col, hover, 16.0);
+        cristal(p, b, col, hover);
+        if let Some(a) = cl.audio.as_ref().filter(|_| b.width() > 40.0 && b.height() > 30.0) {
+            self.curva_y_tirador(&pc, b, a, zoom, hover, elegido);
+        }
         if elegido {
             p.rect_stroke(b, 5.0, Stroke::new(1.5, ACENTO), StrokeKind::Outside);
         }
@@ -1043,6 +1198,121 @@ impl App {
         }
         let texto = Rect::from_min_size(b.min + vec2(if hover && cl.audio.is_some() { 14.0 } else { 7.0 }, 0.0), vec2(b.width() - 9.0, 16.0));
         rotulo(&pc, texto, &nombre, 13.0, Color32::WHITE);
+    }
+}
+
+impl App {
+    /// La curva de volumen encima de la onda, con sus puntos; y, al pasar, el tirador del centro con los dB.
+    fn curva_y_tirador(&self, p: &Painter, b: Rect, a: &ClipAudio, zoom: f32, hover: bool, elegido: bool) {
+        let seg = 60.0 / self.p.bpm / PPQ as f32;
+        let d = cuerpo(b);
+        let fuerte = hover || elegido;
+        if fuerte || !a.envolvente.is_empty() {
+            let (x0, x1) = (b.left().max(p.clip_rect().left()), b.right().min(p.clip_rect().right()));
+            let mut v = vec![];
+            let mut x = x0;
+            while x <= x1 {
+                v.push(pos2(x, y_curva(d, envolvente(&a.envolvente, seg_curva(b, a, x, zoom, seg)))));
+                x += 3.0;
+            }
+            v.push(pos2(x1, y_curva(d, envolvente(&a.envolvente, seg_curva(b, a, x1, zoom, seg)))));
+            let sombra: Vec<Pos2> = v.iter().map(|q| *q + vec2(0.0, 1.0)).collect();
+            p.add(Shape::line(sombra, Stroke::new(1.0, Color32::from_black_alpha(140))));
+            p.add(Shape::line(v, Stroke::new(if fuerte { 1.6 } else { 1.1 }, Color32::from_white_alpha(if fuerte { 230 } else { 150 }))));
+            for q in &a.envolvente {
+                let o = pos2(x_curva(b, a, q[0], zoom, seg), y_curva(d, q[1]));
+                p.circle_filled(o, 4.0, Color32::WHITE);
+                p.circle_stroke(o, 4.0, Stroke::new(1.0, Color32::from_black_alpha(170)));
+            }
+        }
+        if hover && b.width() > 70.0 {
+            // El tirador: se jala hacia arriba o abajo.
+            let o = pos2(b.center().x.clamp(p.clip_rect().left() + 12.0, p.clip_rect().right() - 12.0), b.top() + 8.0);
+            p.circle_filled(o + vec2(0.0, 1.0), 6.0, Color32::from_black_alpha(140));
+            p.circle_filled(o, 6.0, Color32::from_gray(0xe8));
+            p.circle_filled(o, 2.0, ACENTO);
+            let db = 20.0 * a.volumen.max(1e-4).log10();
+            let txt = format!("{db:+.1} dB");
+            let g = p.layout_no_wrap(txt, letra(12.0), Color32::WHITE);
+            let caja = Rect::from_min_size(pos2(o.x + 10.0, o.y - g.size().y / 2.0 - 1.0), g.size() + vec2(8.0, 2.0));
+            p.rect_filled(caja, 4.0, Color32::from_black_alpha(190));
+            p.galley(caja.min + vec2(4.0, 1.0), g, Color32::WHITE);
+        }
+    }
+}
+
+/// Dónde va la onda de un audio: debajo de su nombre.
+fn cuerpo(b: Rect) -> Rect {
+    Rect::from_min_max(pos2(b.left(), b.top() + 17.0), b.max).shrink(2.0)
+}
+
+/// Segundo del archivo bajo `x` en el clip `b`.
+fn seg_curva(b: Rect, a: &ClipAudio, x: f32, zoom: f32, seg: f32) -> f32 {
+    a.inicio + (x - b.left()) / zoom * seg * a.velocidad
+}
+
+fn x_curva(b: Rect, a: &ClipAudio, s: f32, zoom: f32, seg: f32) -> f32 {
+    b.left() + (s - a.inicio) / a.velocidad.max(0.01) / seg * zoom
+}
+
+/// La ganancia 1 va a media altura y 2 hasta arriba.
+fn y_curva(d: Rect, g: f32) -> f32 {
+    d.bottom() - g.clamp(0.0, 2.0) / 2.0 * d.height()
+}
+
+fn cl_dur_seg(b: Rect, zoom: f32, seg: f32) -> f32 {
+    b.width() / zoom * seg
+}
+
+/// Placa de la pista, como en Movie: metal con relieve, franja que se prende si suena, vidrio arriba y el número grabado
+/// en un hueco con marco pulido y tornillos azulados.
+fn cabecera(p: &Painter, r: Rect, clave: &str, suena: bool, col: Option<Color32>) {
+    let caja = r.shrink2(vec2(1.0, 0.5));
+    relieve(p, caja, 6, Color32::from_gray(0x34), false, false);
+    let luz = match col {
+        Some(c) if suena => c,
+        Some(c) => mezcla(c, Color32::from_gray(0x40), 0.7),
+        None if suena => ACENTO.gamma_multiply(0.85),
+        None => Color32::from_gray(0x55),
+    };
+    let franja = Rect::from_min_max(caja.min + vec2(1.0, 1.0), pos2(caja.left() + 5.0, caja.bottom() - 1.0));
+    degradado_en(p, franja, CornerRadius { nw: 5, sw: 5, ne: 0, se: 0 }, mezcla(luz, Color32::WHITE, 0.25), mezcla(luz, Color32::BLACK, 0.2));
+    degradado_en(
+        p,
+        Rect::from_min_max(caja.min + vec2(5.0, 1.0), pos2(caja.right() - 1.0, caja.top() + caja.height() * 0.44)),
+        CornerRadius { nw: 0, ne: 5, sw: 0, se: 0 },
+        Color32::from_white_alpha(30),
+        Color32::from_white_alpha(7),
+    );
+    let placa = Rect::from_min_max(caja.min + vec2(9.0, 4.0), pos2(caja.left() + 38.0, caja.bottom() - 4.0));
+    degradado(p, placa.expand(0.8), 5, Color32::from_gray(0x74), Color32::from_gray(0x40));
+    hueco(p, placa.shrink(0.3), 4, Color32::from_gray(0x1c));
+    for (o, g) in [(placa.left_top() + vec2(4.5, 4.5), 0.5), (placa.right_bottom() - vec2(4.5, 4.5), 2.1)] {
+        tornillo(p, o, 1.8, g, true);
+    }
+    let n = if clave.len() > 2 { 13.0 } else { 16.0 };
+    p.text(placa.center() + vec2(0.0, 1.0), Align2::CENTER_CENTER, clave, letra(n), Color32::from_black_alpha(160));
+    p.text(placa.center(), Align2::CENTER_CENTER, clave, letra(n), if suena { TEXTO } else { TENUE });
+}
+
+/// Encima del clip: un vidrio grueso, con su brillo, su luz de abajo y dos destellos en diagonal.
+fn cristal(p: &Painter, b: Rect, col: Color32, hover: bool) {
+    vidrio_en(p, b, 6, col, hover, 16.0);
+    if b.width() > 90.0 {
+        let (h, sesgo) = (b.height(), b.height() * 0.55);
+        for (x, w, a) in [(0.10, 0.5, 13u8), (0.10 + 0.62 * h / b.width(), 0.16, 9)] {
+            let x0 = b.left() + b.width().min(420.0) * x + sesgo;
+            let w = h * w;
+            let q = vec![
+                pos2(x0, b.top() + 1.0),
+                pos2(x0 + w, b.top() + 1.0),
+                pos2(x0 + w - sesgo, b.bottom() - 1.0),
+                pos2(x0 - sesgo, b.bottom() - 1.0),
+            ];
+            if q[1].x < b.right() - 4.0 {
+                p.add(Shape::convex_polygon(q, Color32::from_white_alpha(a), Stroke::NONE));
+            }
+        }
     }
 }
 

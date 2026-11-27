@@ -44,6 +44,8 @@ pub enum TipoFx {
     Moldeador,
     Vocoder,
     Balance,
+    /// Un plugin de Beethoven DAW: sus controles van en `p`, en el orden de su receta, y lo demás en `Fx::plugin`.
+    Plugin,
 }
 
 pub struct Param {
@@ -110,9 +112,15 @@ impl TipoFx {
             TipoFx::Coro | TipoFx::Faser | TipoFx::Flanger | TipoFx::Tremolo | TipoFx::Vibrato | TipoFx::Tartamudeo => "Modulación",
             TipoFx::Saturador | TipoFx::RecorteSuave | TipoFx::Bits | TipoFx::Vinilo => "Distorsión",
             TipoFx::Parametrico | TipoFx::Distorsion | TipoFx::Moldeador | TipoFx::Vocoder | TipoFx::Balance => "Beethoven",
+            TipoFx::Plugin => "Plugins de Beethoven DAW",
         }
     }
     pub const GRUPOS: [&'static str; 7] = ["Beethoven", "Voz", "Dinámica", "Tono y filtros", "Espacio", "Modulación", "Distorsión"];
+
+    /// El grupo, en el idioma de la persona.
+    pub fn grupo_ver(self) -> &'static str {
+        crate::idioma::t(self.grupo())
+    }
 
     pub fn nombre(self) -> &'static str {
         crate::idioma::t(self.nombre_es())
@@ -157,6 +165,7 @@ impl TipoFx {
             TipoFx::Moldeador => "Moldeador estéreo",
             TipoFx::Vocoder => "Vocoder",
             TipoFx::Balance => "Balance",
+            TipoFx::Plugin => "Plugin de Beethoven DAW",
         }
     }
 
@@ -203,6 +212,7 @@ impl TipoFx {
             TipoFx::Moldeador => "Mezcla, retrasa y gira la fase de cada lado del estéreo",
             TipoFx::Vocoder => "Tu voz habla por un sintetizador",
             TipoFx::Balance => "Balance entre izquierda y derecha, y volumen",
+            TipoFx::Plugin => "Un efecto de Beethoven DAW, con su ventana",
         }
     }
 
@@ -473,6 +483,7 @@ impl TipoFx {
                 ];
                 P
             }
+            TipoFx::Plugin => &[],
             TipoFx::Balance => {
                 const P: &[Param] = &[p("Balance", -100.0, 100.0, 0.0, "%", false), p("Volumen", 0.0, 125.0, 100.0, "%", false)];
                 P
@@ -583,6 +594,8 @@ pub fn crear(tipo: TipoFx, p: &[f32]) -> Box<dyn Procesador> {
         TipoFx::Faser => Box::<sonido::Faser>::default(),
         TipoFx::Filtro => Box::new(Filtro { f: Default::default(), p: [0.0; 3] }),
         TipoFx::Saturador | TipoFx::RecorteSuave | TipoFx::Distorsion | TipoFx::Amplitud | TipoFx::Balance => Box::new(Directo { tipo, p: vec![] }),
+        // Sin su plugin (lo pone `motor.rs` con `plugins::crear`): pasa el sonido igual.
+        TipoFx::Plugin => Box::new(Paso),
         TipoFx::Moldeador => Box::new(sonido::Moldeador::nuevo()),
         TipoFx::Vocoder => Box::new(Voc::nuevo()),
         TipoFx::Afinador => Box::new(propios::Afinador::nuevo()),
@@ -606,6 +619,14 @@ pub fn crear(tipo: TipoFx, p: &[f32]) -> Box<dyn Procesador> {
     e.ajustar(p);
     e.limpiar();
     e
+}
+
+struct Paso;
+
+impl Procesador for Paso {
+    fn procesar(&mut self, _: &mut [f32]) {}
+    fn ajustar(&mut self, _: &[f32]) {}
+    fn limpiar(&mut self) {}
 }
 
 /// `1 - mezcla / 2`: al mezclar copias del mismo sonido, lo seco baja menos.

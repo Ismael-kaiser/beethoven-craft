@@ -169,6 +169,8 @@ struct AudioE {
     gan: [f32; 2],
     pista: usize,
     m: Arc<Muestra>,
+    /// Su curva de volumen (`modelo::envolvente`).
+    curva: Vec<[f32; 2]>,
 }
 
 pub struct Escena {
@@ -415,6 +417,7 @@ impl Escena {
                                 gan: balance(a.volumen, a.pan),
                                 pista: a.mezcla.min(p.mezcla.len() - 1),
                                 m,
+                                curva: a.envolvente.clone(),
                             });
                         }
                     } else if let Some(x) = p.patron(c.patron) {
@@ -1122,7 +1125,12 @@ impl Motor {
                         let s = (k - a.ini) * seg;
                         // Los fundidos; al menos 3 ms en cada orilla para que el corte no truene.
                         let f = (a.fin - k) * seg;
-                        let orilla = ((s / a.entra as f64).min(1.0) * (f / a.sale as f64).min(1.0)) as f32;
+                        let orilla = ((s / a.entra as f64).min(1.0) * (f / a.sale as f64).min(1.0)) as f32
+                            * if a.curva.is_empty() {
+                                1.0
+                            } else {
+                                crate::modelo::envolvente(&a.curva, (s * a.velocidad as f64 + a.inicio as f64) as f32)
+                            };
                         let q = (s * a.velocidad as f64 + a.inicio as f64) * z.sr as f64;
                         let i = q as usize;
                         if i + 1 < x.len() {

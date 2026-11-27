@@ -229,10 +229,10 @@ impl App {
             let lista = self.fx_de(canal);
             for f in lista.iter_mut() {
                 ui.horizontal(|ui| {
-                    if led(ui, f.activo, f.tipo.nombre()).clicked() {
+                    if led(ui, f.activo, &f.nombre()).clicked() {
                         f.activo = !f.activo;
                     }
-                    ui.label(crate::idioma::t(&f.tipo.nombre()));
+                    ui.label(f.nombre());
                 });
             }
             if !lista.is_empty() {
@@ -247,8 +247,7 @@ impl App {
             self.canal = canal;
         }
         if let Some(t) = nuevo {
-            let f = self.p.nuevo_fx(t);
-            self.fx_de(canal).push(f);
+            self.agregar_fx(canal, t);
             self.canal = canal;
         }
     }
@@ -286,10 +285,10 @@ impl App {
             });
         });
         if let Some(t) = agregar {
-            let f = self.p.nuevo_fx(t);
-            self.fx_de(canal).push(f);
+            self.agregar_fx(canal, t);
         }
         let mut quitar = None;
+        let mut ventana = None;
         let mut mover = None;
         let lista = self.fx_de(canal);
         let n = lista.len();
@@ -310,10 +309,10 @@ impl App {
                         let id = Id::new(("fx-abierto", f.id));
                         let mut abierto = ui.data(|d| d.get_temp(id)).unwrap_or(true);
                         ui.horizontal(|ui| {
-                            if led(ui, f.activo, &crate::idioma::tf("Encender {}", &[&(f.tipo.nombre())])).clicked() {
+                            if led(ui, f.activo, &crate::idioma::tf("Encender {}", &[&f.nombre()])).clicked() {
                                 f.activo = !f.activo;
                             }
-                            let t = RichText::new(crate::idioma::t(&f.tipo.nombre())).size(16.0).color(if f.activo { c(0xdedede) } else { c(0x707070) });
+                            let t = RichText::new(f.nombre()).size(16.0).color(if f.activo { c(0xdedede) } else { c(0x707070) });
                             if ui.add(Label::new(t).sense(Sense::click())).on_hover_text(f.tipo.ayuda()).clicked() {
                                 abierto = !abierto;
                             }
@@ -340,7 +339,11 @@ impl App {
                             });
                         });
                         ui.data_mut(|d| d.insert_temp(id, abierto));
-                        if abierto {
+                        if abierto && f.tipo == TipoFx::Plugin {
+                            if ui.button(RichText::new(crate::idioma::t("Abrir su ventana")).color(MAIN)).clicked() {
+                                ventana = Some(f.id);
+                            }
+                        } else if abierto {
                             controles(ui, f);
                         }
                     });
@@ -351,6 +354,9 @@ impl App {
         }
         if let Some(i) = mover {
             lista.swap(i, i - 1);
+        }
+        if let Some(id) = ventana {
+            self.ventanas_plugin.insert(id);
         }
     }
 
@@ -574,7 +580,14 @@ const TINTES: [(&str, u32); 12] = [
 ];
 
 /// Los efectos por grupo. Devuelve el elegido.
-fn menu_efectos(ui: &mut Ui) -> Option<TipoFx> {
+/// Qué se agrega a una cadena de efectos.
+pub enum Agregar {
+    Tipo(TipoFx),
+    /// Un plugin de Beethoven DAW, por su clave.
+    Plugin(String),
+}
+
+fn menu_efectos(ui: &mut Ui) -> Option<Agregar> {
     let mut r = None;
     ui.set_min_width(190.0);
     for g in TipoFx::GRUPOS {
@@ -582,12 +595,52 @@ fn menu_efectos(ui: &mut Ui) -> Option<TipoFx> {
             ui.set_min_width(210.0);
             for t in TipoFx::TODOS.into_iter().filter(|t| t.grupo() == g) {
                 if ui.button(t.nombre()).on_hover_text(t.ayuda()).clicked() {
-                    r = Some(t);
+                    r = Some(Agregar::Tipo(t));
                 }
             }
         });
     }
+    // Los mismos plugins que en Beethoven DAW, con su ventana; también los que se instalaron allá.
+    ui.separator();
+    ui.menu_button(RichText::new(TipoFx::Plugin.grupo_ver()).color(MAIN), |ui| {
+        ui.set_min_width(210.0);
+        let lista = crate::plugins::efectos();
+        let mut grupos: Vec<&str> = lista.iter().map(|x| x.2.as_str()).collect();
+        grupos.dedup();
+        grupos.sort();
+        grupos.dedup();
+        for g in grupos {
+            ui.menu_button(g, |ui| {
+                ui.set_min_width(220.0);
+                for (k, n, _) in lista.iter().filter(|x| x.2 == g) {
+                    if ui.button(n).clicked() {
+                        r = Some(Agregar::Plugin(k.clone()));
+                    }
+                }
+            });
+        }
+    });
     r
+}
+
+impl App {
+    /// Agrega un efecto al final de la cadena de `canal`. Un plugin abre su ventana.
+    pub fn agregar_fx(&mut self, canal: Canal, a: Agregar) {
+        let f = match a {
+            Agregar::Tipo(t) => self.p.nuevo_fx(t),
+            Agregar::Plugin(k) => {
+                let id = self.p.id();
+                match crate::plugins::nuevo(id, &k) {
+                    Some(f) => {
+                        self.ventanas_plugin.insert(id);
+                        f
+                    }
+                    None => return self.avisar(crate::idioma::tf("No pude abrir el plugin {}", &[&k]), true),
+                }
+            }
+        };
+        self.fx_de(canal).push(f);
+    }
 }
 
 fn valor(v: f32, u: &str) -> String {

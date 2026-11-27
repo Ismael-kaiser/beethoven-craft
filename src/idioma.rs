@@ -39,6 +39,10 @@ pub fn actual() -> Idioma {
 
 pub fn poner(i: Idioma) {
     INGLES.store(i == Idioma::En, Relaxed);
+    // Los plugins de Beethoven DAW que se abren en Movie hablan igual.
+    if let Some(x) = beethoven_daw_demo::idioma::Idioma::de_codigo(i.codigo()) {
+        beethoven_daw_demo::idioma::poner(x);
+    }
 }
 
 fn tabla() -> &'static HashMap<String, String> {

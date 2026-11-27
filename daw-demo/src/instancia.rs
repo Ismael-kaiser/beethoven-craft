@@ -95,6 +95,9 @@ fn proyecto(clave: &str, tipo: Tipo, g: &Guardado) -> Proyecto {
             ancho: 1.0,
             fase: false,
             nombre: m.nombre.clone(),
+            color: None,
+            grupo: None,
+            clase: None,
         };
     }
     // Lo que entra de lado solo se oye por dentro.

@@ -1204,6 +1204,7 @@ impl App {
                 let n = clase.as_ref().map_or(crate::idioma::t("Agregar a una clase").to_string(), |k| crate::idioma::tf("Clase «{}»", &[&k.nombre]));
                 ui.menu_button(n, |ui| self.menu_clase(ui, v.id));
                 ui.menu_button(crate::idioma::t("Color del clip"), |ui| self.menu_color(ui, v.id));
+                ui.menu_button(crate::idioma::t("Velocidad"), |ui| self.menu_velocidad(ui, v.id, v.mov.velocidad));
                 ui.separator();
                 if ui.button(crate::idioma::t("Dividir en el cursor")).clicked() {
                     ac.push(Accion::Dividir(v.id, self.ahora(), false));
@@ -1301,6 +1302,60 @@ impl App {
         p.text(pos2(r.left() + 6.0, r.top() + 4.0), Align2::LEFT_TOP, tiempo(t), fuente(12.5), TEXT);
     }
 
+    /// La velocidad del clip como cambio en porcentaje: −50 % es cámara lenta a la mitad, +100 % el doble de rápido.
+    /// Lo vinculado (el sonido de un video) cambia igual.
+    fn menu_velocidad(&mut self, ui: &mut Ui, id: u64, actual: f64) {
+        ui.set_min_width(230.0);
+        ui.label(RichText::new(crate::idioma::t("Más lento o más rápido")).size(12.5).color(TEXT_DIM));
+        let mut cambio = ((actual - 1.0) * 100.0).round();
+        let mut nuevo = None;
+        let r = ui.add(
+            DragValue::new(&mut cambio)
+                .range(-90.0..=900.0)
+                .speed(1.0)
+                .custom_formatter(|v, _| if v.abs() < 0.5 { "0 %".into() } else { format!("{v:+.0} %").replace('-', "−") })
+                .custom_parser(|s| s.replace('−', "-").replace('%', "").trim().parse().ok()),
+        );
+        if r.changed() {
+            nuevo = Some(1.0 + cambio / 100.0);
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for x in [-75.0, -50.0, -25.0, 0.0, 50.0, 100.0, 200.0] {
+                let n = if x == 0.0 { crate::idioma::t("Normal").to_string() } else { format!("{x:+.0} %").replace('-', "−") };
+                if ui.selectable_label((cambio - x).abs() < 0.5, n).clicked() {
+                    nuevo = Some(1.0 + x / 100.0);
+                }
+            }
+        });
+        let v = nuevo.unwrap_or(actual);
+        let txt = if v < 0.999 {
+            crate::idioma::tf("Cámara lenta: va al {} %", &[&format!("{:.0}", v * 100.0)])
+        } else if v > 1.001 {
+            crate::idioma::tf("Rápido: va al {} %", &[&format!("{:.0}", v * 100.0)])
+        } else {
+            crate::idioma::t("A su velocidad").to_string()
+        };
+        ui.label(RichText::new(txt).size(12.0).color(TEXT_FAINT));
+        // Lo vinculado (el sonido de un video, o la imagen de un audio) cambia solo si se pide.
+        let vinculado = self.p.vinculados(id).iter().find(|t| t.id != id).map(|t| self.p.video.iter().any(|c| c.id == t.id));
+        let clave = Id::new("velocidad-juntos");
+        let mut juntos = ui.data(|d| d.get_temp::<bool>(clave)).unwrap_or(false);
+        if let Some(es_video) = vinculado {
+            let n = if es_video { "También su video" } else { "También su audio" };
+            if ui.checkbox(&mut juntos, crate::idioma::t(n)).changed() {
+                ui.data_mut(|d| d.insert_temp(clave, juntos));
+                // Al pedirlo, el otro se pone igual que este.
+                if juntos {
+                    nuevo = nuevo.or(Some(actual));
+                }
+            }
+        }
+        if let Some(v) = nuevo {
+            self.p.velocidad_con(id, v.clamp(0.1, 10.0), juntos && vinculado.is_some());
+        }
+    }
+
     fn menu_vinculo(&self, ui: &mut Ui, id: u64, grupo: Option<u64>, ac: &mut Vec<Accion>) {
         if grupo.is_some() && ui.button(crate::idioma::t("Desvincular imagen y sonido")).clicked() {
             ac.push(Accion::Desvincular(id));
@@ -1331,8 +1386,8 @@ impl App {
                         ac.push(Accion::Auto(id, d));
                     }
                 }
-                for f in &p0.fx {
-                    ui.menu_button(crate::idioma::t(&f.tipo.nombre()), |ui| {
+                for f in p0.fx.iter().filter(|f| !f.tipo.params().is_empty()) {
+                    ui.menu_button(f.nombre(), |ui| {
                         for (k, x) in f.tipo.params().iter().enumerate() {
                             if ui.button(crate::idioma::t(&x.nombre)).clicked() {
                                 ac.push(Accion::Auto(id, Destino::Fx(f.id, k)));
@@ -1493,6 +1548,7 @@ impl App {
                         k.ganancia_db = g;
                     }
                 }
+                ui.menu_button(crate::idioma::t("Velocidad"), |ui| self.menu_velocidad(ui, q.id, q.velocidad));
                 ui.separator();
                 if ui.button(crate::idioma::t("Editar audio")).clicked() {
                     ac.push(Accion::Editar(q.id));

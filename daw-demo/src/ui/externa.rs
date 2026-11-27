@@ -8,12 +8,19 @@ pub const ALTO_BARRA: f32 = 34.0;
 
 pub struct Externa {
     it: Option<Interfaz>,
+    /// Es la única ventana del programa: le pone la piel del DAW a todo.
+    sola: bool,
 }
 
 impl Externa {
     pub fn nueva(ctx: &Context, n: &Instancia) -> Externa {
         vestir(ctx);
-        Externa { it: n.interfaz() }
+        Externa { it: n.interfaz(), sola: true }
+    }
+
+    /// Dentro de otro programa hecho con egui (Movie), sin cambiarle la letra ni los colores.
+    pub fn dentro(n: &Instancia) -> Externa {
+        Externa { it: n.interfaz(), sola: false }
     }
 
     /// Cuánto mide, en puntos.
@@ -116,6 +123,8 @@ impl Externa {
             n.movidos.fetch_add(1, Relaxed);
         }
         n.poner_al_dia();
-        metal::metalizar(ui.ctx());
+        if self.sola {
+            metal::metalizar(ui.ctx());
+        }
     }
 }

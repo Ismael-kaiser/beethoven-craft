@@ -18,6 +18,7 @@ pub mod musica;
 pub mod origen;
 pub mod asistente;
 pub mod pestanas;
+pub mod plugins;
 pub mod proyecto;
 pub mod texto;
 #[rustfmt::skip]
@@ -223,6 +224,10 @@ pub struct App {
     pub pestanas: Vec<Espacio>,
     /// Pestañas sacadas a su propia ventana: Video, Audio, Efectos.
     pub ventanas: [bool; 3],
+    /// Los plugins de Beethoven DAW que suenan, por efecto.
+    pub plugins: std::collections::HashMap<u64, plugins::Abierto>,
+    /// Los efectos con su ventana de plugin abierta.
+    pub ventanas_plugin: std::collections::HashSet<u64>,
     /// Miniaturas de efectos, transiciones y estilos.
     pub muestras: HashMap<String, TextureHandle>,
     muestras_hechas: usize,
@@ -365,6 +370,8 @@ impl App {
             panel_izq: PanelIzq::Controles,
             pestanas: vec![Espacio::Playlist, Espacio::Video, Espacio::Audio, Espacio::Efectos, Espacio::Animacion, Espacio::Nodos],
             ventanas: [false; 3],
+            plugins: Default::default(),
+            ventanas_plugin: Default::default(),
             muestras: HashMap::new(),
             muestras_hechas: 0,
             muestras_pedidas: false,
@@ -1147,7 +1154,8 @@ impl App {
         // Un cambio de imagen no vuelve a preparar el sonido.
         if !self.aplicado.as_deref().is_some_and(|a| misma_mezcla(a, &self.p)) {
             let ids = self.motor.lock().unwrap().ids_fx();
-            let n = motor::preparar(&self.p, &self.almacen, &ids);
+            let mut n = motor::preparar(&self.p, &self.almacen, &ids);
+            self.tomar_plugins(std::mem::take(&mut n.plugins));
             let _viejo = self.motor.lock().unwrap().aplicar(n);
         }
         self.vista_p = Arc::new(self.p.clone());
@@ -1627,6 +1635,7 @@ impl App {
             }
             self.ventanas_ui(&ctx);
         }
+        self.plugins_ui(&ctx);
         self.atender_ia();
         if !self.inicio.visible {
             self.ventana_asistente(&ctx);

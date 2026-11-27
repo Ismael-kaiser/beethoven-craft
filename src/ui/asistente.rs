@@ -390,10 +390,10 @@ impl App {
             }).collect::<Vec<_>>(),
             "audio": self.p.pistas.iter().map(|p| json!({
                 "pista": p.id, "nombre": p.nombre, "vol_db": p.vol_db, "pan": p.pan, "mudo": p.mudo, "solo": p.solo, "bloqueada": p.bloqueada,
-                "efectos": p.fx.iter().map(|f| f.tipo.nombre()).collect::<Vec<_>>(),
+                "efectos": p.fx.iter().map(|f| f.nombre()).collect::<Vec<_>>(),
                 "clips": p.clips.iter().map(|c| json!({ "id": c.id, "nombre": c.nombre, "inicio": r(c.inicio), "fin": r(c.fin()), "desde": r(c.desde), "velocidad": c.velocidad, "ganancia_db": c.ganancia_db, "entra": r(c.fade_in), "sale": r(c.fade_out), "grupo": c.grupo })).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
-            "maestro": { "db": self.p.maestro_db, "efectos": self.p.fx_maestro.iter().map(|f| f.tipo.nombre()).collect::<Vec<_>>() },
+            "maestro": { "db": self.p.maestro_db, "efectos": self.p.fx_maestro.iter().map(|f| f.nombre()).collect::<Vec<_>>() },
             "marcas": self.p.marcas.iter().map(|m| json!([r(m.t), m.nombre])).collect::<Vec<_>>(),
         })
     }

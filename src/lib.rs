@@ -30,6 +30,7 @@ pub mod nodos;
 pub mod nombres;
 pub mod titulos;
 pub mod motor;
+pub mod plugins;
 pub mod propios;
 pub mod proyectos;
 pub mod recuperacion;

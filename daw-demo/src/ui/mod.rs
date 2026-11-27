@@ -137,6 +137,8 @@ pub struct App {
     fondo: Rect,
     /// Dónde quedó cada tira del Mixer.
     tiras: Vec<(usize, Rect)>,
+    /// Las tiras del Mixer elegidas con ⌘/Ctrl, para agruparlas o meterlas en una clase.
+    elegidas: std::collections::BTreeSet<usize>,
     altos: [f32; PISTAS_MEZCLA],
     pub canal: u32,
     pub patron: u32,
@@ -270,6 +272,7 @@ impl App {
             capas: [None; VISTAS],
             fondo: Rect::NOTHING,
             tiras: vec![],
+            elegidas: Default::default(),
             altos: [0.0; PISTAS_MEZCLA],
             cancion: !p.clips.is_empty(),
             pista: 1,
@@ -284,7 +287,7 @@ impl App {
             estado,
             _salida: salida,
             _motor: guardado_motor,
-            picos: Default::default(),
+            picos: [[0.0; 2]; PISTAS_MEZCLA],
             avisos,
             pista_ayuda: String::new(),
             pista_ayuda_vista: String::new(),
@@ -1502,6 +1505,9 @@ impl App {
         if let Some(i) = self.pasar.take() {
             self.pasar_a_audio(i);
         }
+        // Lo que se cambió en una pista de una clase pasa a las demás.
+        let antes = self.enviado.as_ref().map(|x| &x.0);
+        self.p.igualar_clases(antes);
         self.historial(ui);
         self.sincronizar();
         metalizar(ui.ctx());

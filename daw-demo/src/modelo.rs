@@ -8,7 +8,10 @@ use std::collections::BTreeMap;
 pub const PPQ: u32 = 96;
 pub const PASO: u32 = PPQ / 4;
 pub const COMPAS: u32 = PPQ * 4;
-pub const PISTAS_MEZCLA: usize = 17;
+/// La general, 32 pistas y los envíos al final. Hasta la 0.12.4 eran 12 pistas (17 en total): `de_json` las acomoda.
+pub const PISTAS_MEZCLA: usize = 37;
+/// Cuántas había antes, para abrir los proyectos viejos.
+const PISTAS_MEZCLA_VIEJAS: usize = 17;
 /// Las últimas pistas de mezcla son de envío.
 pub const ENVIOS: usize = 4;
 pub const PRIMER_ENVIO: usize = PISTAS_MEZCLA - ENVIOS;
@@ -157,6 +160,24 @@ pub struct ClipAudio {
     /// Más rápido suena más agudo.
     #[serde(default = "uno")]
     pub velocidad: f32,
+    /// La curva de volumen: puntos de (segundo del archivo, ganancia de 0 a 2). Por ir en segundos del archivo no se
+    /// mueve al recortar ni al partir el clip. Vacía es plana.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub envolvente: Vec<[f32; 2]>,
+}
+
+/// Cuánto suena la curva `e` en el segundo `s` del clip: recta entre puntos, igual antes del primero y después del último.
+pub fn envolvente(e: &[[f32; 2]], s: f32) -> f32 {
+    let i = e.partition_point(|p| p[0] <= s);
+    match (i.checked_sub(1).and_then(|k| e.get(k)), e.get(i)) {
+        (None, None) => 1.0,
+        (Some(a), None) => a[1],
+        (None, Some(b)) => b[1],
+        (Some(a), Some(b)) => {
+            let t = if b[0] > a[0] { (s - a[0]) / (b[0] - a[0]) } else { 1.0 };
+            a[1] + (b[1] - a[1]) * t
+        }
+    }
 }
 
 impl Default for ClipAudio {
@@ -171,6 +192,7 @@ impl Default for ClipAudio {
             entra: 0.0,
             sale: 0.0,
             velocidad: 1.0,
+            envolvente: vec![],
         }
     }
 }
@@ -188,6 +210,9 @@ pub struct PistaArreglo {
     pub mudo: bool,
     #[serde(default)]
     pub solo: bool,
+    /// Color de su placa y de sus audios.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 3]>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -213,6 +238,9 @@ pub struct EfectoPuesto {
     /// Textos que guarda su guion.
     #[serde(default)]
     pub datos: BTreeMap<String, String>,
+    /// Es copia de un efecto de la clase de su pista: cambiarlo cambia el de todas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub de_clase: bool,
 }
 
 impl EfectoPuesto {
@@ -227,6 +255,7 @@ impl EfectoPuesto {
             id: 0,
             vinculos: BTreeMap::new(),
             datos: BTreeMap::new(),
+            de_clase: false,
         }
     }
 }
@@ -267,6 +296,35 @@ pub struct PistaMezcla {
     pub fase: bool,
     #[serde(default)]
     pub efectos: Vec<EfectoPuesto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 3]>,
+    /// Grupo desplegable del Mixer en que va (`Proyecto::grupos`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grupo: Option<u64>,
+    /// Clase cuyos efectos comparte (`Proyecto::clases`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clase: Option<u64>,
+}
+
+/// Varias pistas del Mixer juntas, que se pliegan en una sola tira.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct GrupoMezcla {
+    pub id: u64,
+    pub nombre: String,
+    pub color: [u8; 3],
+    #[serde(default)]
+    pub plegado: bool,
+}
+
+/// Pistas que comparten los mismos efectos, como las clases de clips de Movie: cada una suena con su copia y cambiar
+/// uno cambia el de todas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ClaseMezcla {
+    pub id: u64,
+    pub nombre: String,
+    pub color: [u8; 3],
+    #[serde(default)]
+    pub efectos: Vec<EfectoPuesto>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -282,6 +340,20 @@ pub struct Proyecto {
     #[serde(default)]
     pub pistas: Vec<PistaArreglo>,
     pub mezcla: Vec<PistaMezcla>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grupos: Vec<GrupoMezcla>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clases: Vec<ClaseMezcla>,
+    /// Cuántas pistas (sin la general ni los envíos) se ven en el Mixer; «+ Pista» muestra otra.
+    #[serde(default = "doce")]
+    pub vistas: usize,
+    /// El último número dado a un grupo o una clase.
+    #[serde(default)]
+    pub sig: u64,
+}
+
+fn doce() -> usize {
+    12
 }
 
 pub const COLORES: [[u8; 3]; 8] =
@@ -312,6 +384,9 @@ impl Default for Proyecto {
                     }
                     _ => vec![],
                 },
+                color: None,
+                grupo: None,
+                clase: None,
             })
             .collect();
         let patron = Patron { id: 1, nombre: tf("Patrón {}", &[&1]), color: COLORES[0], notas: BTreeMap::new(), compases: 1 };
@@ -324,6 +399,10 @@ impl Default for Proyecto {
             clips: vec![],
             pistas: vec![Default::default(); PISTAS_ARREGLO],
             mezcla,
+            grupos: vec![],
+            clases: vec![],
+            vistas: doce(),
+            sig: 0,
         }
     }
 }
@@ -412,9 +491,47 @@ impl Proyecto {
             p.patrones = fabrica.patrones;
         }
         p.pistas.resize(PISTAS_ARREGLO, Default::default());
+        if p.mezcla.len() == PISTAS_MEZCLA_VIEJAS {
+            // De antes de la 0.12.5: los envíos pasan al final de las pistas nuevas y lo que iba a ellos los sigue.
+            let viejo = PISTAS_MEZCLA_VIEJAS - ENVIOS;
+            let envios = p.mezcla.split_off(viejo);
+            p.mezcla.extend_from_slice(&fabrica.mezcla[viejo..PRIMER_ENVIO]);
+            p.mezcla.extend(envios);
+            let corre = |i: &mut usize| {
+                if *i >= viejo {
+                    *i += PRIMER_ENVIO - viejo;
+                }
+            };
+            p.canales.iter_mut().for_each(|c| corre(&mut c.pista));
+            p.clips.iter_mut().filter_map(|c| c.audio.as_mut()).for_each(|a| corre(&mut a.mezcla));
+            for e in p.mezcla.iter_mut().flat_map(|m| &mut m.efectos) {
+                if let Some(v) = e.controles.get_mut("pista") {
+                    let mut i = v.max(0.0).round() as usize;
+                    corre(&mut i);
+                    *v = i as f32;
+                }
+            }
+        }
         p.mezcla.truncate(PISTAS_MEZCLA);
         let n = p.mezcla.len();
         p.mezcla.extend_from_slice(&fabrica.mezcla[n..]);
+        // Que se vea toda pista que ya se usa.
+        let usada = (1..PRIMER_ENVIO)
+            .filter(|i| {
+                p.canales.iter().any(|c| c.pista == *i)
+                    || p.clips.iter().any(|c| c.audio.as_ref().is_some_and(|a| a.mezcla == *i))
+                    || !p.mezcla[*i].efectos.is_empty()
+            })
+            .max()
+            .unwrap_or(0);
+        p.vistas = p.vistas.max(usada).clamp(1, PRIMER_ENVIO - 1);
+        for c in &mut p.clips {
+            if let Some(a) = &mut c.audio {
+                a.envolvente.retain(|x| x[0].is_finite() && x[1].is_finite());
+                a.envolvente.iter_mut().for_each(|x| x[1] = x[1].clamp(0.0, 2.0));
+                a.envolvente.sort_by(|x, y| x[0].total_cmp(&y[0]));
+            }
+        }
         p.bpm = if p.bpm.is_finite() { p.bpm.clamp(20.0, 400.0) } else { 120.0 };
         for c in &mut p.canales {
             c.pista = c.pista.min(PISTAS_MEZCLA - 1);
@@ -491,5 +608,57 @@ impl Proyecto {
         clip(armonia, 1, 4, 8);
         clip(melodia, 2, 8, 4);
         p
+    }
+}
+
+impl Proyecto {
+    /// Un número nuevo para un grupo o una clase.
+    pub fn id_nuevo(&mut self) -> u64 {
+        self.sig = self.sig.max(self.grupos.iter().map(|g| g.id).chain(self.clases.iter().map(|c| c.id)).max().unwrap_or(0)) + 1;
+        self.sig
+    }
+
+    /// Deja iguales los efectos de cada clase en todas sus pistas. Si en una pista cambió una copia (comparado con
+    /// `antes`), ese cambio pasa a la clase y de ahí a las demás. Las copias van primero en la cadena de cada pista.
+    pub fn igualar_clases(&mut self, antes: Option<&Proyecto>) {
+        let copias = |m: &PistaMezcla| m.efectos.iter().filter(|e| e.de_clase).cloned().collect::<Vec<_>>();
+        for k in 0..self.clases.len() {
+            let id = self.clases[k].id;
+            let mut lista = self.clases[k].efectos.clone();
+            for (i, m) in self.mezcla.iter().enumerate().filter(|(_, m)| m.clase == Some(id)) {
+                let ahora = copias(m);
+                let era = antes.and_then(|a| a.mezcla.get(i)).filter(|a| a.clase == Some(id)).map(copias);
+                if era.is_some_and(|e| e != ahora) {
+                    lista = ahora;
+                    break;
+                }
+            }
+            // Los VST3 y CLAP tienen una sola copia sonando: no se comparten.
+            lista.retain(|e| e.plugin.is_none());
+            lista.iter_mut().for_each(|e| (e.de_clase, e.id) = (true, 0));
+            self.clases[k].efectos = lista.clone();
+            for m in self.mezcla.iter_mut().filter(|m| m.clase == Some(id)) {
+                if copias(m) != lista {
+                    m.efectos.retain(|e| !e.de_clase);
+                    m.efectos.splice(0..0, lista.iter().cloned());
+                }
+            }
+        }
+        // Las que dejaron su clase se quedan solo con lo suyo.
+        let clases: Vec<u64> = self.clases.iter().map(|c| c.id).collect();
+        for m in &mut self.mezcla {
+            if m.clase.is_some_and(|c| !clases.contains(&c)) {
+                m.clase = None;
+            }
+            if m.clase.is_none() {
+                m.efectos.retain(|e| !e.de_clase);
+            }
+        }
+        let grupos: Vec<u64> = self.grupos.iter().map(|g| g.id).collect();
+        for m in &mut self.mezcla {
+            if m.grupo.is_some_and(|g| !grupos.contains(&g)) {
+                m.grupo = None;
+            }
+        }
     }
 }

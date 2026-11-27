@@ -336,6 +336,12 @@ pub const EFECTOS: &[(&str, &str, &str)] = &[
 
 /// (categoría, nombre, id en FilmCraft)
 pub const TRANSICIONES: &[(&str, &str, &str)] = &[
+    ("Beethoven", "Corazón", "bc_corazon"),
+    ("Beethoven", "Telón", "bc_telon"),
+    ("Beethoven", "Tinta", "bc_tinta"),
+    ("Beethoven", "Humo", "bc_humo"),
+    ("Beethoven", "Rayo eléctrico", "bc_rayo"),
+    ("Beethoven", "Panal", "bc_panal"),
     ("Disolver", "Disolvencia cruzada", "cross_dissolve"),
     ("Disolver", "Disolver aditivo", "additive_dissolve"),
     ("Disolver", "Disolver con desenfoque", "blur_dissolve"),

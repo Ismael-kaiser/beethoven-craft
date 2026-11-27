@@ -1,24 +1,18 @@
-Beethoven Craft 0.12.4: plugins de verdad, editor de audio y todo MIT o Apache.
-
-Beethoven DAW:
-• Editor de audio (F2): corta, normaliza, limpia ruido, cambia tono o duración sin cambiar lo otro. Tu archivo no se toca.
-• 48 efectos con ventana de equipo analógico: ecualizador paramétrico, reverb de convolución, vocoder, compresor lateral, cinta, bulbos, pedales… Los nombres ahora dicen lo que hacen; tus proyectos los encuentran igual.
-• Sintetizadores propios (FM de 6 operadores, 3 osciladores, mono analógico…), muestreador, batería de 16 pads y cortador de ritmos.
-• Las pantallas y medidores de cada plugin se mueven con el audio real que entra y sale.
-• Ventanas rediseñadas con look analógico: costados de madera, perillas con escala, bulbos que brillan con el sonido y carretes de aluminio con la cinta a la vista.
-• Afinador de voz, quita ruido, arpegiador y acordes en vivo.
-• Controladores: mueve cualquier perilla con el nivel, un LFO o una fórmula.
-• El Mixer empareja las pistas cuyos efectos se tardan.
-• Corregido: algunos efectos se quedaban sonando al detener o al acabar el clip.
-• Corregido: los instrumentos VST3 y CLAP salían en silencio dentro de un proyecto.
-
-Haz y comparte plugins:
-• Suelta una carpeta, un .zip o un .lua y funciona, sin reiniciar; los cambios se oyen al guardar.
-• Lua puede correr mientras suena, muestra por muestra o por frecuencias. Guía: daw-demo/PLUGINS.md
-• Nuestros efectos e instrumentos también como VST3 y CLAP, «Beethoven …», para usarlos en otros programas (descarga BeethovenPlugins). Es la primera versión: cuéntanos si alguno falla.
+Beethoven Craft 0.12.5: Movie y el DAW, juntos.
 
 Movie:
-• Los efectos de sonido, el sintetizador, los controles y los íconos son nuevos. Los proyectos abren igual, pero algunos efectos e instrumentos suenan un poco distinto.
+• Los plugins de Beethoven DAW en Movie: en «+ Agregar efecto» → «Plugins de Beethoven DAW» están los mismos efectos del DAW (y los que instales allá), con su ventana analógica y su onda en vivo. Suenan igual que en el DAW, al reproducir y al exportar.
+• Velocidad en el clic derecho de cualquier clip, en porcentaje: −50 % es cámara lenta a la mitad, +100 % el doble de rápido. Cambia solo ese clip; marca «También su audio» (o «También su video») para cambiar los dos.
+• Seis transiciones nuevas, propias: Corazón, Telón, Tinta, Humo, Rayo eléctrico y Panal (grupo «Beethoven»).
+
+Beethoven DAW:
+• Curva de volumen en cada audio: clic en la línea blanca pone un punto, arrástralo; doble clic lo quita. Y un tirador arriba al centro para subir o bajar todo el audio.
+• Pistas con nombre y color, en la Playlist y en el Mixer.
+• Grupos en el Mixer: elige varias tiras con ⌘/Ctrl y agrúpalas; se pliegan en una sola tira.
+• Clases: varias pistas comparten los mismos efectos; cambiar uno los cambia en todas.
+• Hasta 32 pistas en el Mixer (el botón «+» muestra otra). Los proyectos de antes abren igual.
+• La Playlist con el cristal y la relojería de Movie: clips de vidrio, placas con tornillos y la regla como carátula de reloj.
+• Ventanas de los plugins rediseñadas: costados de madera, perillas con escala, bulbos que brillan y carretes de aluminio con la cinta a la vista.
 
 Licencia: MIT o Apache-2.0, la que prefieras. Todo el código es propio.
 

@@ -331,9 +331,16 @@ impl Proyecto {
         Some(v)
     }
 
-    /// Pone la velocidad de un clip y sus vinculados.
+    /// Pone la velocidad de un clip y sus vinculados. Una imagen, un título o un color no tienen tiempo propio: más
+    /// lento solo dura más.
     pub fn velocidad(&mut self, id: u64, v: f64) {
-        for t in self.vinculados(id).into_iter().filter(|t| !t.libre) {
+        self.velocidad_con(id, v, true);
+    }
+
+    /// Como [`velocidad`](Self::velocidad); con `juntos` en falso cambia solo ese clip, no su sonido o su imagen.
+    pub fn velocidad_con(&mut self, id: u64, v: f64, juntos: bool) {
+        let v_ = if juntos { self.vinculados(id) } else { self.tramos().into_iter().filter(|t| t.id == id).collect() };
+        for t in v_ {
             let dur = (t.dur * t.vel / v).max(MIN);
             if let Some(c) = self.clip_video(t.id) {
                 c.mov.velocidad = v;
