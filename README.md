@@ -129,7 +129,7 @@ Grabaciones, voces separadas y autoguardado van en la carpeta de videos del usua
 
 ## Licencia y créditos
 
-[MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras. Las versiones hasta la 0.12.0 incluían piezas de [Lemon Studio](https://github.com/ItsAlphaNeon/Lemon-Studio) y siguen bajo GPL-3.0.
+[MIT](LICENSE-MIT) o [Apache-2.0](LICENSE-APACHE), la que prefieras. Todo el código es propio.
 
 Movie usa piezas de EffectCraft, FilmCraft y AniCraft, y el paquete de Windows trae ffmpeg, un programa aparte con su propia licencia. Todos los créditos están en [AVISOS.md](AVISOS.md).
 

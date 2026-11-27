@@ -20,7 +20,7 @@ Haz y comparte plugins:
 Movie:
 • Los efectos de sonido, el sintetizador, los controles y los íconos son nuevos. Los proyectos abren igual, pero algunos efectos e instrumentos suenan un poco distinto.
 
-Licencia: todo el código propio es MIT o Apache-2.0. Lo que venía de Lemon Studio (GPL-3.0) se quitó; las versiones hasta la 0.12.0 siguen bajo GPL.
+Licencia: MIT o Apache-2.0, la que prefieras. Todo el código es propio.
 
 Cómo instalar:
 • Mac (Apple Silicon): descomprime y arrastra «Beethoven Craft.app» a Aplicaciones. La app no está firmada por Apple: la primera vez ábrela con clic derecho → Abrir (o en Terminal: xattr -dr com.apple.quarantine "/Applications/Beethoven Craft.app"). Necesita ffmpeg: brew install ffmpeg
