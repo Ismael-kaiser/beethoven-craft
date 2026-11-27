@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beethoven Craft · Movie y DAW</title>
+<meta name="description" content="Beethoven Craft: editor de video (Movie) y estudio de música (DAW), libre, en español e inglés. Windows, Mac y Linux.">
+<link rel="icon" href="img/icono.png">
+<style>
+:root {
+  --fondo: #0d0e11; --panel: #17181c; --caja: #202127; --raya: #2c2d34;
+  --texto: #ecebe6; --tenue: #9a9ba3; --oro: #ffd95e; --oro2: #e8a93a; --azul: #8cb8ff;
+  --radio: 14px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; color: var(--texto); background: var(--fondo);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(255, 217, 94, .10), transparent 60%),
+    radial-gradient(900px 500px at -10% 30%, rgba(140, 184, 255, .07), transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px);
+}
+html[lang="es"] .en, html[lang="en"] .es { display: none; }
+a { color: var(--oro); text-decoration: none; }
+.ancho { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
+
+/* Barra */
+header.barra { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px); background: rgba(13,14,17,.72); border-bottom: 1px solid var(--raya); }
+header.barra .ancho { display: flex; align-items: center; gap: 14px; height: 60px; }
+.marca { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; color: var(--texto); }
+.marca img { width: 30px; height: 30px; border-radius: 8px; }
+nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+nav a { color: var(--tenue); font-size: 15px; }
+nav a:hover { color: var(--texto); }
+.idioma { border: 1px solid var(--raya); background: var(--caja); color: var(--texto); border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 14px; }
+
+/* Portada */
+.portada { padding: 84px 0 40px; text-align: center; }
+.esfera { width: 88px; height: 88px; margin: 0 auto 22px; border-radius: 50%; position: relative;
+  background: radial-gradient(circle at 35% 30%, #3a3c42, #101114 70%);
+  box-shadow: 0 0 0 3px #9b9ea5, 0 0 0 6px #2c2d31, 0 14px 40px rgba(0,0,0,.6), inset 0 2px 6px rgba(255,255,255,.15); }
+.esfera::before, .esfera::after { content: ""; position: absolute; left: 50%; top: 50%; transform-origin: 0 0; border-radius: 2px; }
+.esfera::before { width: 3px; height: 26px; background: #cfd2d8; transform: rotate(150deg); }
+.esfera::after { width: 2px; height: 36px; background: var(--oro); animation: segundero 60s steps(60) infinite; }
+@keyframes segundero { from { transform: rotate(180deg); } to { transform: rotate(540deg); } }
+h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.05; margin: 0 0 14px; letter-spacing: -.02em; }
+h1 .oro { background: linear-gradient(180deg, #fff1b8, var(--oro) 45%, var(--oro2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lema { color: var(--tenue); font-size: clamp(17px, 2.2vw, 21px); max-width: 720px; margin: 0 auto 30px; }
+.botones { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.boton { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 12px; font-weight: 700; font-size: 17px; color: #1a170c;
+  background: linear-gradient(180deg, #ffe58f, var(--oro) 50%, var(--oro2)); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 8px 24px rgba(255, 190, 60, .25); }
+.boton:hover { filter: brightness(1.06); }
+.boton.otro { color: var(--texto); background: linear-gradient(180deg, #34353c, #212228); box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 6px 18px rgba(0,0,0,.4); }
+.version { color: var(--tenue); font-size: 14px; margin-top: 14px; }
+
+/* Vitrina */
+.vitrina { margin: 46px auto 0; border-radius: 18px; overflow: hidden; border: 1px solid #3a3b42;
+  box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04) inset; max-width: 1040px; position: relative; }
+.vitrina img { display: block; width: 100%; }
+.vitrina::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,.07), transparent 35%); }
+
+/* Secciones */
+section { padding: 70px 0; }
+h2 { font-size: clamp(28px, 3.6vw, 40px); margin: 0 0 10px; letter-spacing: -.01em; }
+.sub { color: var(--tenue); margin: 0 0 34px; max-width: 760px; }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.tarjeta { background: linear-gradient(180deg, #1d1e23, #15161a); border: 1px solid var(--raya); border-radius: var(--radio); padding: 22px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 10px 30px rgba(0,0,0,.35); position: relative; }
+.tarjeta h3 { margin: 0 0 8px; font-size: 20px; }
+.tarjeta p { margin: 0; color: var(--tenue); }
+.tarjeta ul { margin: 10px 0 0; padding-left: 18px; color: var(--tenue); }
+.tarjeta li { margin: 4px 0; }
+.chapa { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; padding: 3px 9px; border-radius: 999px; margin-bottom: 12px; color: #1a170c; background: var(--oro); }
+.chapa.azul { background: var(--azul); }
+.chapa.verde { background: #8ae08f; }
+.tornillo { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #d4d6db, #6a6d73); box-shadow: 0 1px 1px rgba(0,0,0,.6); }
+.tornillo::after { content: ""; position: absolute; left: 1px; right: 1px; top: 3.5px; height: 1px; background: rgba(0,0,0,.55); transform: rotate(35deg); }
+.t1 { top: 10px; right: 10px; } .t2 { bottom: 10px; right: 10px; }
+
+/* Galería */
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.galeria figure { margin: 0; background: var(--panel); border: 1px solid var(--raya); border-radius: var(--radio); overflow: hidden; cursor: zoom-in; transition: transform .15s, border-color .15s; }
+.galeria figure:hover { transform: translateY(-3px); border-color: #4a4b52; }
+.galeria img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; background: #000; }
+.galeria figcaption { padding: 12px 14px; font-size: 14.5px; color: var(--tenue); }
+.galeria figcaption b { color: var(--texto); display: block; font-size: 15.5px; margin-bottom: 2px; }
+dialog { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
+dialog::backdrop { background: rgba(0,0,0,.85); }
+dialog img { max-width: 96vw; max-height: 90vh; display: block; border-radius: 10px; }
+dialog p { text-align: center; color: var(--tenue); margin: 10px 0 0; }
+
+/* Descargas */
+.descargas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.so { text-align: left; }
+.so h3 { display: flex; align-items: center; gap: 10px; }
+.so .archivo { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #0f1013; border: 1px solid var(--raya); color: var(--texto); font-size: 14.5px; }
+.so .archivo:hover { border-color: var(--oro2); }
+.so .archivo span { color: var(--tenue); font-size: 13px; white-space: nowrap; }
+.so .nota { font-size: 13.5px; margin-top: 12px; }
+code { background: #0f1013; border: 1px solid var(--raya); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+
+footer { border-top: 1px solid var(--raya); padding: 34px 0 50px; color: var(--tenue); font-size: 14.5px; }
+footer .ancho { display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between; }
+</style>
+</head>
+<body>
+<header class="barra">
+  <div class="ancho">
+    <a class="marca" href="#"><img src="img/icono.png" alt="">Beethoven Craft</a>
+    <nav>
+      <a href="#que"><span class="es">Qué hace</span><span class="en">Features</span></a>
+      <a href="#galeria"><span class="es">Capturas</span><span class="en">Screenshots</span></a>
+      <a href="#descargar"><span class="es">Descargar</span><span class="en">Download</span></a>
+      <button class="idioma" id="idioma" type="button">English</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="portada ancho">
+    <div class="esfera" aria-hidden="true"></div>
+    <h1><span class="es">Edita tu video. <span class="oro">Haz tu música.</span></span><span class="en">Edit your video. <span class="oro">Make your music.</span></span></h1>
+    <p class="lema">
+      <span class="es">Beethoven Craft junta un editor de video (Movie) y un estudio de música (DAW) que comparten sus plugins. Libre, sin cuenta, y en tu computadora.</span>
+      <span class="en">Beethoven Craft brings together a video editor (Movie) and a music studio (DAW) that share their plugins. Free, no account, on your own computer.</span>
+    </p>
+    <div class="botones">
+      <a class="boton" id="principal" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest">
+        <span class="es">Descargar</span><span class="en">Download</span> <span id="para"></span>
+      </a>
+      <a class="boton otro" href="#descargar"><span class="es">Otros sistemas</span><span class="en">Other systems</span></a>
+    </div>
+    <div class="version" id="version"><span class="es">Windows · Mac (Apple Silicon) · Linux · MIT o Apache-2.0</span><span class="en">Windows · Mac (Apple Silicon) · Linux · MIT or Apache-2.0</span></div>
+    <div class="vitrina"><img src="img/movie-plugin.jpg" alt="Beethoven Movie con un plugin de Beethoven DAW abierto"></div>
+  </div>
+
+  <section id="que">
+    <div class="ancho">
+      <h2><span class="es">Dos programas, una sola raíz</span><span class="en">Two programs, one root</span></h2>
+      <p class="sub"><span class="es">Los efectos de sonido del DAW se usan también en Movie, con la misma ventana y el mismo motor: suenan igual al reproducir y al exportar.</span><span class="en">The DAW's audio effects work inside Movie too, with the same window and engine: they sound the same while playing and when exporting.</span></p>
+      <div class="rejilla">
+        <div class="tarjeta"><i class="tornillo t1"></i><i class="tornillo t2"></i>
+          <span class="chapa">MOVIE</span>
+          <h3><span class="es">Editor de video</span><span class="en">Video editor</span></h3>
+          <p><span class="es">Línea de tiempo con clips de cristal, capas, animación con llaves y nodos de efectos.</span><span class="en">Timeline with glass clips, layers, keyframe animation and effect nodes.</span></p>
+          <ul>
+            <li><span class="es">Velocidad en el clic derecho: −50 % es cámara lenta.</span><span class="en">Speed on right-click: −50% is slow motion.</span></li>
+            <li><span class="es">Transiciones propias: corazón, telón, tinta, humo, rayo y panal.</span><span class="en">Our own transitions: heart, curtain, ink, smoke, lightning and honeycomb.</span></li>
+            <li><span class="es">Exportar para Discord: nunca pasa de 10 MB.</span><span class="en">Export for Discord: never over 10 MB.</span></li>
+          </ul>
+        </div>
+        <div class="tarjeta"><i class="tornillo t1"></i><i class="tornillo t2"></i>
+          <span class="chapa azul">DAW</span>
+          <h3><span class="es">Estudio de música</span><span class="en">Music studio</span></h3>
+          <p><span class="es">Playlist, patrones, piano roll y Mixer con piel de metal y relojería.</span><span class="en">Playlist, patterns, piano roll and a Mixer with a metal, watchmaker look.</span></p>
+          <ul>
+            <li><span class="es">Curva y tirador de volumen en cada audio.</span><span class="en">Volume curve and gain handle on every audio clip.</span></li>
+            <li><span class="es">Grupos plegables y clases con efectos compartidos.</span><span class="en">Foldable groups and classes with shared effects.</span></li>
+            <li><span class="es">Editor de audio, sintetizadores y muestreador.</span><span class="en">Audio editor, synthesizers and sampler.</span></li>
+          </ul>
+        </div>
+        <div class="tarjeta"><i class="tornillo t1"></i><i class="tornillo t2"></i>
+          <span class="chapa verde">PLUGINS</span>
+          <h3><span class="es">48 efectos analógicos</span><span class="en">48 analog effects</span></h3>
+          <p><span class="es">Bulbos, cinta, compresor, ecualizador, reverb de convolución… con ventanas que se mueven con el audio real.</span><span class="en">Tubes, tape, compressor, EQ, convolution reverb… with windows that move with the real audio.</span></p>
+          <ul>
+            <li><span class="es">También como VST3 y CLAP para otros programas.</span><span class="en">Also as VST3 and CLAP for other hosts.</span></li>
+            <li><span class="es">Haz los tuyos en Lua: suelta el archivo y funciona.</span><span class="en">Make your own in Lua: drop the file in and it works.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="galeria">
+    <div class="ancho">
+      <h2><span class="es">Capturas</span><span class="en">Screenshots</span></h2>
+      <p class="sub"><span class="es">Haz clic en una para verla grande.</span><span class="en">Click one to see it full size.</span></p>
+      <div class="galeria" id="fotos">
+        <figure data-src="img/movie-linea.jpg"><img loading="lazy" src="img/movie-linea-mini.jpg" alt=""><figcaption><b class="es">Línea de tiempo de Movie</b><b class="en">Movie timeline</b><span class="es">Clips de cristal, volumen a la mano y etiquetas.</span><span class="en">Glass clips, volume at hand and tags.</span></figcaption></figure>
+        <figure data-src="img/movie-plugin.jpg"><img loading="lazy" src="img/movie-plugin-mini.jpg" alt=""><figcaption><b class="es">Un plugin del DAW en Movie</b><b class="en">A DAW plugin in Movie</b><span class="es">El saturador de bulbos, con su onda en vivo.</span><span class="en">The tube saturator, with its live waveform.</span></figcaption></figure>
+        <figure data-src="img/movie-velocidad.jpg"><img loading="lazy" src="img/movie-velocidad-mini.jpg" alt=""><figcaption><b class="es">Velocidad en el clic derecho</b><b class="en">Speed on right-click</b><span class="es">En porcentaje, solo el clip o junto con su audio.</span><span class="en">As a percentage, the clip alone or with its audio.</span></figcaption></figure>
+        <figure data-src="img/movie-discord.jpg"><img loading="lazy" src="img/movie-discord-mini.jpg" alt=""><figcaption><b class="es">Exportar para Discord</b><b class="en">Export for Discord</b><span class="es">Se ajusta solo para no pasar de 10 MB.</span><span class="en">It adjusts itself to stay under 10 MB.</span></figcaption></figure>
+        <figure data-src="img/transiciones.jpg"><img loading="lazy" src="img/transiciones.jpg" alt=""><figcaption><b class="es">Transiciones propias</b><b class="en">Our own transitions</b><span class="es">Corazón, telón, tinta, humo, rayo y panal.</span><span class="en">Heart, curtain, ink, smoke, lightning and honeycomb.</span></figcaption></figure>
+        <figure data-src="img/daw-playlist.jpg"><img loading="lazy" src="img/daw-playlist-mini.jpg" alt=""><figcaption><b class="es">Playlist del DAW</b><b class="en">DAW playlist</b><span class="es">Regla de reloj, placas con tornillos y curva de volumen.</span><span class="en">Watch-dial ruler, screwed plates and a volume curve.</span></figcaption></figure>
+        <figure data-src="img/daw-mixer.jpg"><img loading="lazy" src="img/daw-mixer-mini.jpg" alt=""><figcaption><b class="es">Mixer con grupos y clases</b><b class="en">Mixer with groups and classes</b><span class="es">Pliega un grupo en una sola tira.</span><span class="en">Fold a group into a single strip.</span></figcaption></figure>
+        <figure data-src="img/externa-eco.jpg"><img loading="lazy" src="img/externa-eco.jpg" alt=""><figcaption><b class="es">Eco de cinta</b><b class="en">Tape echo</b><span class="es">Carretes de aluminio que giran al sonar.</span><span class="en">Aluminum reels that spin while it plays.</span></figcaption></figure>
+        <figure data-src="img/externa-fuego.jpg"><img loading="lazy" src="img/externa-fuego.jpg" alt=""><figcaption><b class="es">Saturador de bulbos</b><b class="en">Tube saturator</b><span class="es">Los bulbos brillan con el sonido.</span><span class="en">The tubes glow with the sound.</span></figcaption></figure>
+        <figure data-src="img/plugins-1.jpg"><img loading="lazy" src="img/plugins-1.jpg" alt=""><figcaption><b class="es">Ventanas de plugins (1)</b><b class="en">Plugin windows (1)</b><span class="es">Bulbos, cinta, compresor y ecualizador.</span><span class="en">Tubes, tape, compressor and EQ.</span></figcaption></figure>
+        <figure data-src="img/plugins-2.jpg"><img loading="lazy" src="img/plugins-2.jpg" alt=""><figcaption><b class="es">Ventanas de plugins (2)</b><b class="en">Plugin windows (2)</b><span class="es">Reverb, coro, órgano y afinador.</span><span class="en">Reverb, chorus, organ and tuner.</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="descargar">
+    <div class="ancho">
+      <h2><span class="es">Descargar</span><span class="en">Download</span></h2>
+      <p class="sub"><span class="es">La última versión, directo de GitHub. La app se actualiza sola cuando sale otra.</span><span class="en">The latest version, straight from GitHub. The app updates itself when a new one comes out.</span> <span id="cual"></span></p>
+      <div class="descargas">
+        <div class="tarjeta so" data-so="windows"><h3>Windows</h3>
+          <a class="archivo" data-archivo="-instalador.exe" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest"><b class="es">Instalador</b><b class="en">Installer</b><span></span></a>
+          <a class="archivo" data-archivo="-windows-portable.zip" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest"><b class="es">Portátil (zip)</b><b class="en">Portable (zip)</b><span></span></a>
+          <p class="nota"><span class="es">Ya trae ffmpeg.</span><span class="en">ffmpeg included.</span></p>
+        </div>
+        <div class="tarjeta so" data-so="mac"><h3>Mac</h3>
+          <a class="archivo" data-archivo="-mac.zip" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest"><b class="es">Apple Silicon (zip)</b><b class="en">Apple Silicon (zip)</b><span></span></a>
+          <p class="nota"><span class="es">Arrastra «Beethoven Craft.app» a Aplicaciones. La primera vez ábrela con clic derecho → Abrir. Necesita ffmpeg: <code>brew install ffmpeg</code></span><span class="en">Drag “Beethoven Craft.app” to Applications. The first time, open it with right-click → Open. Needs ffmpeg: <code>brew install ffmpeg</code></span></p>
+        </div>
+        <div class="tarjeta so" data-so="linux"><h3>Linux</h3>
+          <a class="archivo" data-archivo="-linux.tar.gz" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest"><b class="es">x86-64 (tar.gz)</b><b class="en">x86-64 (tar.gz)</b><span></span></a>
+          <p class="nota"><span class="es">Descomprime y abre «beethoven-craft». Necesita ffmpeg: <code>sudo apt install ffmpeg</code></span><span class="en">Extract and run “beethoven-craft”. Needs ffmpeg: <code>sudo apt install ffmpeg</code></span></p>
+        </div>
+        <div class="tarjeta so" data-so="plugins"><h3><span class="es">Plugins VST3 y CLAP</span><span class="en">VST3 and CLAP plugins</span></h3>
+          <a class="archivo" data-archivo="BeethovenPlugins-windows.zip" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest">Windows<span></span></a>
+          <a class="archivo" data-archivo="BeethovenPlugins-mac.zip" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest">Mac<span></span></a>
+          <a class="archivo" data-archivo="BeethovenPlugins-linux.tar.gz" href="https://github.com/Ismael-kaiser/beethoven-craft/releases/latest">Linux<span></span></a>
+          <p class="nota"><span class="es">Los efectos de Beethoven para usarlos en otros programas.</span><span class="en">Beethoven's effects to use in other programs.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="ancho">
+    <span><span class="es">Beethoven Craft · código MIT o Apache-2.0</span><span class="en">Beethoven Craft · MIT or Apache-2.0 code</span></span>
+    <span><a href="https://github.com/Ismael-kaiser/beethoven-craft">GitHub</a> · <a href="https://github.com/Ismael-kaiser/beethoven-craft/releases">
+      <span class="es">Todas las versiones</span><span class="en">All releases</span></a></span>
+  </div>
+</footer>
+
+<dialog id="grande"><img alt=""><p></p></dialog>
+
+<script>
+(() => {
+  // Idioma: el del navegador, y se recuerda si se cambia.
+  const html = document.documentElement;
+  const guardado = localStorage.getItem("idioma");
+  html.lang = guardado || ((navigator.language || "es").toLowerCase().startsWith("es") ? "es" : "en");
+  const boton = document.getElementById("idioma");
+  const poner = (l) => { html.lang = l; boton.textContent = l === "es" ? "English" : "Español"; localStorage.setItem("idioma", l); };
+  poner(html.lang);
+  boton.onclick = () => poner(html.lang === "es" ? "en" : "es");
+
+  // Capturas en grande.
+  const d = document.getElementById("grande");
+  document.querySelectorAll("#fotos figure").forEach((f) => f.onclick = () => {
+    d.querySelector("img").src = f.dataset.src;
+    d.querySelector("p").textContent = f.querySelector("figcaption b." + html.lang)?.textContent || "";
+    d.showModal();
+  });
+  d.onclick = () => d.close();
+
+  // El sistema de quien visita, para el botón grande.
+  const ua = navigator.userAgent;
+  const so = /Windows/.test(ua) ? "windows" : /Mac/.test(ua) ? "mac" : /Linux/.test(ua) ? "linux" : null;
+  const nombres = { windows: "Windows", mac: "Mac", linux: "Linux" };
+  if (so) document.getElementById("para").textContent = "· " + nombres[so];
+
+  // Los archivos de la última versión, desde GitHub.
+  const mb = (b) => (b / 1048576).toFixed(b > 104857600 ? 0 : 1) + " MB";
+  fetch("https://api.github.com/repos/Ismael-kaiser/beethoven-craft/releases/latest")
+    .then((r) => r.ok ? r.json() : Promise.reject())
+    .then((r) => {
+      document.getElementById("cual").textContent = r.tag_name;
+      document.querySelectorAll(".archivo").forEach((a) => {
+        const x = r.assets.find((y) => y.name.endsWith(a.dataset.archivo));
+        if (x) { a.href = x.browser_download_url; a.querySelector("span").textContent = mb(x.size); }
+      });
+      const primero = { windows: "-instalador.exe", mac: "-mac.zip", linux: "-linux.tar.gz" }[so];
+      const x = primero && r.assets.find((y) => y.name.endsWith(primero));
+      if (x) document.getElementById("principal").href = x.browser_download_url;
+    })
+    .catch(() => {});
+})();
+</script>
+</body>
+</html>
