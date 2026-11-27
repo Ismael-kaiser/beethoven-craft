@@ -244,7 +244,7 @@ pub struct App {
     pub origen: Option<origen::Origen>,
     pub seleccion: HashSet<u64>,
     pidiendo: HashSet<PathBuf>,
-    exportar_op: Option<exportacion::Panel>,
+    pub exportar_op: Option<exportacion::Panel>,
     export_ventana: Option<VentanaExport>,
     teclado: Option<crate::midi::Teclado>,
     midi_rec: bool,

@@ -1,4 +1,10 @@
-Beethoven Craft 0.12.5: Movie y el DAW, juntos.
+Beethoven Craft 0.12.6: manda tus videos por Discord.
+
+Movie:
+• Exportar para Discord: un ajuste listo que hace que el video no pase de 10 MB. Se ajustan solos la calidad, el tamaño y los cuadros (dos pasadas de H.264); si ya cabe, se deja igual.
+• «Peso máximo» en la ventana de exportar: 10 MB, 25 MB, Nitro Basic 50 MB o el que escribas.
+
+También, desde la 0.12.5:
 
 Movie:
 • Los plugins de Beethoven DAW en Movie: en «+ Agregar efecto» → «Plugins de Beethoven DAW» están los mismos efectos del DAW (y los que instales allá), con su ventana analógica y su onda en vivo. Suenan igual que en el DAW, al reproducir y al exportar.

@@ -1,7 +1,7 @@
 //! Ventana de exportación completa: ajustes listos a la izquierda, la imagen y el resumen al centro, y todos los ajustes
 //! (archivo, video, tramo) a la derecha.
 use super::*;
-use crate::exportar::{Codec, Opciones};
+use crate::exportar::{Codec, DISCORD, Opciones, plan_peso};
 
 /// Lo que se está eligiendo en la ventana.
 #[derive(Clone)]
@@ -35,6 +35,8 @@ struct Listo {
     tam: Tam,
     codec: Codec,
     calidad: usize,
+    /// Peso máximo del archivo.
+    peso: Option<u64>,
 }
 
 #[derive(Clone, Copy)]
@@ -44,13 +46,14 @@ enum Tam {
     Fijo(u32, u32),
 }
 
-const LISTOS: [Listo; 6] = [
-    Listo { nombre: "Como el proyecto", para: "Mismo tamaño y cuadros que tu proyecto.", tam: Tam::Proyecto, codec: Codec::H264, calidad: 1 },
-    Listo { nombre: "YouTube 1080p", para: "Full HD con buena calidad. Lo más común.", tam: Tam::Alto(1080), codec: Codec::H264, calidad: 2 },
-    Listo { nombre: "YouTube 4K", para: "La máxima nitidez. Tarda más y pesa más.", tam: Tam::Alto(2160), codec: Codec::H264, calidad: 2 },
-    Listo { nombre: "TikTok / Reels / Shorts", para: "Vertical 1080×1920 para el celular.", tam: Tam::Fijo(1080, 1920), codec: Codec::H264, calidad: 1 },
-    Listo { nombre: "WhatsApp (ligero)", para: "720p y archivo chico para mandarlo rápido.", tam: Tam::Alto(720), codec: Codec::H264, calidad: 0 },
-    Listo { nombre: "Para seguir editando", para: "ProRes: calidad máxima para otro programa.", tam: Tam::Proyecto, codec: Codec::ProRes, calidad: 1 },
+const LISTOS: [Listo; 7] = [
+    Listo { nombre: "Como el proyecto", para: "Mismo tamaño y cuadros que tu proyecto.", tam: Tam::Proyecto, codec: Codec::H264, calidad: 1, peso: None },
+    Listo { nombre: "YouTube 1080p", para: "Full HD con buena calidad. Lo más común.", tam: Tam::Alto(1080), codec: Codec::H264, calidad: 2, peso: None },
+    Listo { nombre: "YouTube 4K", para: "La máxima nitidez. Tarda más y pesa más.", tam: Tam::Alto(2160), codec: Codec::H264, calidad: 2, peso: None },
+    Listo { nombre: "TikTok / Reels / Shorts", para: "Vertical 1080×1920 para el celular.", tam: Tam::Fijo(1080, 1920), codec: Codec::H264, calidad: 1, peso: None },
+    Listo { nombre: "Discord", para: "Cabe en los 10 MB de Discord: ajusta solo la calidad y el tamaño.", tam: Tam::Proyecto, codec: Codec::H264, calidad: 1, peso: Some(DISCORD) },
+    Listo { nombre: "WhatsApp (ligero)", para: "720p y archivo chico para mandarlo rápido.", tam: Tam::Alto(720), codec: Codec::H264, calidad: 0, peso: None },
+    Listo { nombre: "Para seguir editando", para: "ProRes: calidad máxima para otro programa.", tam: Tam::Proyecto, codec: Codec::ProRes, calidad: 1, peso: None },
 ];
 
 /// El tamaño con alto `a` y la misma forma que el proyecto (siempre par).
@@ -125,12 +128,17 @@ impl App {
                     ScrollArea::vertical().id_salt("listos").show(ui, |ui| {
                         for l in &LISTOS {
                             let tam = tam_de(p, l.tam);
-                            let on = v.op.tam == tam && v.op.codec == l.codec && v.op.calidad == l.calidad && v.op.fps.is_none();
+                            let on = if l.peso.is_some() {
+                                v.op.peso_max.is_some()
+                            } else {
+                                v.op.peso_max.is_none() && v.op.tam == tam && v.op.codec == l.codec && v.op.calidad == l.calidad && v.op.fps.is_none()
+                            };
                             if tarjeta(ui, l.nombre, l.para, on).clicked() {
-                                (v.op.tam, v.op.codec, v.op.calidad, v.op.fps) = (tam, l.codec, l.calidad, None);
+                                (v.op.tam, v.op.codec, v.op.calidad, v.op.fps, v.op.peso_max) = (tam, l.codec, l.calidad, None, l.peso);
                             }
                         }
-                        let propio = !LISTOS.iter().any(|l| v.op.tam == tam_de(p, l.tam) && v.op.codec == l.codec && v.op.calidad == l.calidad && v.op.fps.is_none());
+                        let propio = v.op.peso_max.is_none()
+                            && !LISTOS.iter().any(|l| v.op.tam == tam_de(p, l.tam) && v.op.codec == l.codec && v.op.calidad == l.calidad && v.op.fps.is_none());
                         if propio {
                             tarjeta(ui, "Personalizado", "Tus propios ajustes, a la derecha.", true);
                         }
@@ -145,7 +153,17 @@ impl App {
                     ui.set_height(alto_cuerpo - 32.0);
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-                        let (w, h) = v.op.tam.unwrap_or((p.ancho, p.alto));
+                        let (mut w, mut h) = v.op.tam.unwrap_or((p.ancho, p.alto));
+                        let dur = v.op.tramo.map_or(p.fin(), |(a, b)| b - a);
+                        let mut fps = v.op.fps.unwrap_or(p.fps);
+                        // Con peso máximo, lo que va a quedar.
+                        if let Some(max) = v.op.peso_max {
+                            let (_, _, alto, f) = plan_peso(max, dur, w, h, fps);
+                            if let Some(a) = alto {
+                                (w, h) = if w >= h { ((w as f64 * a as f64 / h as f64 / 2.0).round() as u32 * 2, a) } else { (a, (h as f64 * a as f64 / w as f64 / 2.0).round() as u32 * 2) };
+                            }
+                            fps = f.unwrap_or(fps);
+                        }
                         let caja = vec2(ancho_centro, (alto_cuerpo - 32.0 - 150.0).max(160.0));
                         let (r, _) = ui.allocate_exact_size(caja, Sense::hover());
                         ui.painter().rect_filled(r, 8, Color32::BLACK);
@@ -167,15 +185,16 @@ impl App {
                         }
                         ui.painter().rect_stroke(img, 0, Stroke::new(1.0, c(0x555555)), StrokeKind::Outside);
                         ui.add_space(12.0);
-                        let fps = v.op.fps.unwrap_or(p.fps);
-                        let dur = v.op.tramo.map_or(p.fin(), |(a, b)| b - a);
-                        let chip = cfg!(target_os = "macos");
+                        let chip = cfg!(target_os = "macos") && v.op.peso_max.is_none();
                         let datos = [
                             ("Resolución", format!("{w}×{h}")),
                             ("Cuadros", proyecto::nombre_fps(fps)),
                             ("Duración", tiempo(dur)),
                             ("Formato", nombre_codec(v.op.codec).to_string()),
-                            ("Peso aprox.", peso(peso_aprox(w, h, fps, dur, &v.op))),
+                            match v.op.peso_max {
+                                Some(m) => ("Peso aprox.", crate::idioma::tf("hasta {}", &[&peso(m)])),
+                                None => ("Peso aprox.", peso(peso_aprox(w, h, fps, dur, &v.op))),
+                            },
                             ("Codifica", crate::idioma::t(if chip { "El chip de video" } else { "El procesador" }).to_string()),
                         ];
                         Grid::new("resumen-exp").num_columns(3).spacing([10.0, 10.0]).show(ui, |ui| {
@@ -263,6 +282,29 @@ impl App {
                                 ui.selectable_value(&mut v.op.fps, Some(f), proyecto::nombre_fps(f));
                             }
                         });
+                        seccion(ui, "PESO MÁXIMO");
+                        let mb = 1024 * 1024;
+                        ui.horizontal_wrapped(|ui| {
+                            if biblioteca::pastilla(ui, "Sin límite", v.op.peso_max.is_none()).clicked() {
+                                v.op.peso_max = None;
+                            }
+                            for (n, x) in [("Discord · 10 MB", DISCORD), ("25 MB", 25 * mb), ("Nitro Basic · 50 MB", 50 * mb)] {
+                                if biblioteca::pastilla(ui, n, v.op.peso_max == Some(x)).clicked() {
+                                    v.op.peso_max = Some(x);
+                                }
+                            }
+                        });
+                        if let Some(m) = &mut v.op.peso_max {
+                            let mut x = *m as f64 / mb as f64;
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(crate::idioma::t("Que no pase de")).color(TEXT_FAINT));
+                                if ui.add(DragValue::new(&mut x).range(1.0..=2000.0).speed(0.5).suffix(" MB").max_decimals(1)).changed() {
+                                    *m = (x * mb as f64) as u64;
+                                }
+                            });
+                            ui.label(RichText::new(crate::idioma::t("Se exporta en H.264 y se ajustan solos la calidad, el tamaño y los cuadros para caber; mientras más largo el video, más chico.")).color(TEXT_FAINT).size(12.5));
+                            v.op.codec = Codec::H264;
+                        }
                         seccion(ui, "TRAMO");
                         ui.horizontal_wrapped(|ui| {
                             if biblioteca::pastilla(ui, "Todo el video", v.op.tramo.is_none()).clicked() {

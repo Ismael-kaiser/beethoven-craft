@@ -2400,5 +2400,16 @@
   "Rápido: va al {} %": "Fast: plays at {} %",
   "A su velocidad": "At its own speed",
   "También su video": "Its video too",
-  "También su audio": "Its audio too"
+  "También su audio": "Its audio too",
+  "Discord": "Discord",
+  "Cabe en los 10 MB de Discord: ajusta solo la calidad y el tamaño.": "Fits Discord's 10 MB: quality and size adjust themselves.",
+  "hasta {}": "up to {}",
+  "PESO MÁXIMO": "MAX FILE SIZE",
+  "Sin límite": "No limit",
+  "Discord · 10 MB": "Discord \u00b7 10 MB",
+  "25 MB": "25 MB",
+  "Nitro Basic · 50 MB": "Nitro Basic \u00b7 50 MB",
+  "Que no pase de": "No bigger than",
+  "Se exporta en H.264 y se ajustan solos la calidad, el tamaño y los cuadros para caber; mientras más largo el video, más chico.": "Exports as H.264 and adjusts quality, size and frame rate by itself to fit; the longer the video, the smaller.",
+  "No cupo en el tamaño pedido: prueba con un tramo más corto": "It didn't fit in that size: try a shorter section"
 }

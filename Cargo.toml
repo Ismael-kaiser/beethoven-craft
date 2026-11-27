@@ -5,7 +5,7 @@ exclude = ["daw-demo"]
 
 [package]
 name = "toma-uno"
-version = "0.12.5"
+version = "0.12.6"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Compositor de video y audio"

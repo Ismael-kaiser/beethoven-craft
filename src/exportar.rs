@@ -38,11 +38,17 @@ pub struct Opciones {
     pub calidad: usize,
     /// Solo el tramo marcado.
     pub tramo: Option<(f64, f64)>,
+    /// Que el archivo no pase de tantos bytes (para mandarlo por Discord, por ejemplo). Elige solo la tasa, el tamaño
+    /// y los cuadros para caber: ver [`ajustar_peso`].
+    pub peso_max: Option<u64>,
 }
+
+/// Discord sin Nitro deja subir hasta 10 MB.
+pub const DISCORD: u64 = 10 * 1024 * 1024;
 
 impl Default for Opciones {
     fn default() -> Self {
-        Opciones { tam: None, fps: None, codec: Codec::H264, calidad: 1, tramo: None }
+        Opciones { tam: None, fps: None, codec: Codec::H264, calidad: 1, tramo: None, peso_max: None }
     }
 }
 
@@ -115,6 +121,22 @@ pub fn exportar_con(
     cancelar: &AtomicBool,
 ) -> Result<(), String> {
     baja_prioridad();
+    if let Some(max) = op.peso_max.filter(|_| modo == Modo::Video) {
+        // Primero con buena calidad a un archivo aparte; luego se vuelve a codificar justo para caber.
+        let nombre = salida.file_name().and_then(|n| n.to_str()).ok_or("Nombre inválido")?;
+        let base = salida.with_file_name(format!(".toma-uno-base-{nombre}"));
+        let alta = Opciones { peso_max: None, codec: Codec::H264, calidad: 2, ..op.clone() };
+        let r = exportar_con(p, almacen, &base, modo, &alta, avance, cancelar).and_then(|_| {
+            // Si ya cabe, se queda así.
+            if std::fs::metadata(&base).is_ok_and(|m| m.len() <= max) {
+                return std::fs::rename(&base, salida).map_err(|e| e.to_string());
+            }
+            avance.store(0, Relaxed);
+            ajustar_peso(&base, salida, max, avance, cancelar)
+        });
+        let _ = std::fs::remove_file(&base);
+        return r;
+    }
     let otro = op.fps.filter(|f| (f - p.fps).abs() > 1e-6).map(|fps| Proyecto { fps, ..p.clone() });
     let p = otro.as_ref().unwrap_or(p);
     for c in p.pistas.iter().flat_map(|t| &t.clips) {
@@ -426,6 +448,108 @@ fn escribir(
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
+    let texto = lector.join().unwrap_or_default();
+    if cancelar.load(Relaxed) {
+        return Err(crate::idioma::t("Exportación cancelada").into());
+    }
+    if !estado.success() {
+        return Err(crate::idioma::tf("ffmpeg falló: {}", &[&(texto.lines().last().unwrap_or("sin detalle"))]));
+    }
+    Ok(())
+}
+
+/// Lo que se le pide a ffmpeg para que un video de `dur` segundos y `w`×`h` a `fps` quepa en `max` bytes: kbps del
+/// video y del audio, alto de la imagen (o `None`, el mismo) y cuadros por segundo (o `None`, los mismos). Mientras
+/// menos bits quedan por segundo, más chica la imagen: se ve mejor un 720p limpio que un 1080p lleno de cuadritos.
+pub fn plan_peso(max: u64, dur: f64, w: u32, h: u32, fps: f64) -> (u32, u32, Option<u32>, Option<f64>) {
+    // Lo que se lleva el contenedor MP4, más un margen.
+    let total = (max as f64 * 8.0 * 0.95 / dur.max(0.1) / 1000.0).max(40.0);
+    let audio = if total > 900.0 { 128.0 } else if total > 350.0 { 96.0 } else if total > 140.0 { 64.0 } else { 32.0 };
+    let video = (total - audio).max(24.0);
+    let alto = match video {
+        v if v < 250.0 => 360,
+        v if v < 600.0 => 480,
+        v if v < 1500.0 => 720,
+        _ => 1080,
+    };
+    let alto = (alto < h.min(w)).then_some(alto);
+    let fps = (fps > 30.5 && video < 2500.0).then_some(30.0);
+    (video as u32, audio as u32, alto, fps)
+}
+
+/// Vuelve a codificar `base` en H.264 a dos pasadas para que pese menos de `max` bytes, y lo deja en `salida`. Si
+/// queda más pesado de la cuenta (pasa con imágenes muy movidas), lo intenta otra vez con menos.
+pub fn ajustar_peso(base: &Path, salida: &Path, max: u64, avance: &AtomicU32, cancelar: &AtomicBool) -> Result<(), String> {
+    let info = medios::sondear(base)?;
+    let (w, h, fps) = info.video.ok_or_else(|| crate::idioma::t("El proyecto no tiene video").to_string())?;
+    let dur = info.dur.max(0.1);
+    let (mut kv, ka, alto, fps2) = plan_peso(max, dur, w, h, fps);
+    let nombre = salida.file_name().and_then(|n| n.to_str()).ok_or("Nombre inválido")?;
+    let tmp = salida.with_file_name(format!(".toma-uno-{nombre}"));
+    let log = std::env::temp_dir().join(format!("beethoven-dospasadas-{}", std::process::id()));
+    let nulo = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let mut filtros = vec![];
+    if let Some(a) = alto {
+        filtros.push(format!("scale=-2:{a}:flags=lanczos"));
+    }
+    if let Some(f) = fps2 {
+        filtros.push(format!("fps={f}"));
+    }
+    let vf = if filtros.is_empty() { "null".to_string() } else { filtros.join(",") };
+    let pasada = |n: u32, kv: u32, de: u32, a: u32| -> Result<(), String> {
+        let mut c = medios::ffmpeg();
+        c.args(["-y", "-hide_banner", "-nostats", "-progress", "pipe:1", "-i"]).arg(base);
+        c.args(["-vf", &vf, "-c:v", "libx264", "-preset", "medium", "-b:v", &format!("{kv}k"), "-maxrate", &format!("{}k", kv * 3 / 2)]);
+        c.args(["-bufsize", &format!("{}k", kv * 2), "-pix_fmt", "yuv420p", "-pass", &n.to_string(), "-passlogfile"]).arg(&log);
+        if n == 1 {
+            c.args(["-an", "-f", "mp4", nulo]);
+        } else {
+            c.args(["-c:a", "aac", "-b:a", &format!("{ka}k"), "-ac", "2", "-movflags", "+faststart"]).arg(&tmp);
+        }
+        correr(c, dur, avance, de, a, cancelar)
+    };
+    let r = (|| {
+        pasada(1, kv, 0, 400)?;
+        for intento in 0..3 {
+            pasada(2, kv, 400 + intento * 200, 1000)?;
+            let pesa = std::fs::metadata(&tmp).map_err(|e| e.to_string())?.len();
+            if pesa <= max {
+                return std::fs::rename(&tmp, salida).map_err(|e| e.to_string());
+            }
+            // Se pasó: otra vez con los bits que faltan, y un poco menos.
+            kv = ((kv as f64 * max as f64 / pesa as f64) * 0.92).max(16.0) as u32;
+        }
+        Err(crate::idioma::t("No cupo en el tamaño pedido: prueba con un tramo más corto").to_string())
+    })();
+    let _ = std::fs::remove_file(&tmp);
+    for x in ["", "-0.log", "-0.log.mbtree", "-0.log.temp", "-0.log.mbtree.temp"] {
+        let _ = std::fs::remove_file(format!("{}{x}", log.display()));
+    }
+    r
+}
+
+/// Corre ffmpeg leyendo su avance (`-progress pipe:1`) para mover `avance` de `de` a `a` (de 0 a 1000).
+fn correr(mut c: std::process::Command, dur: f64, avance: &AtomicU32, de: u32, a: u32, cancelar: &AtomicBool) -> Result<(), String> {
+    c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut hijo = c.spawn().map_err(|e| crate::idioma::tf("No pude ejecutar ffmpeg: {}", &[&e]))?;
+    let mut err = hijo.stderr.take().unwrap();
+    let lector = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = err.read_to_string(&mut s);
+        s
+    });
+    let sale = hijo.stdout.take().unwrap();
+    for l in std::io::BufRead::lines(std::io::BufReader::new(sale)).map_while(Result::ok) {
+        if let Some(us) = l.strip_prefix("out_time_us=").and_then(|x| x.trim().parse::<f64>().ok()) {
+            let k = (us / 1e6 / dur).clamp(0.0, 1.0);
+            avance.store(de + ((a - de) as f64 * k) as u32, Relaxed);
+        }
+        if cancelar.load(Relaxed) {
+            let _ = hijo.kill();
+            break;
+        }
+    }
+    let estado = hijo.wait().map_err(|e| e.to_string())?;
     let texto = lector.join().unwrap_or_default();
     if cancelar.load(Relaxed) {
         return Err(crate::idioma::t("Exportación cancelada").into());
