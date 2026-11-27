@@ -24,10 +24,10 @@ return {
     return f("izq"), f("der")
   end,
   interfaz = {
-    ancho = 660, alto = 430,
+    ancho = 660, alto = 476,
     dibujar = function(d, c, m)
       local en = m.idioma == "en"
-      d.acero(0, 0, 660, 430, "#4e5560", 10)
+      d.acero(0, 0, 660, 476, "#4e5560", 10)
       d.grabado(30, 24, m.titulo, 21, "#ffb88a")
       d.texto(430, 24, m.archivo ~= "" and m.archivo or (en and "No audio yet" or "Sin audio todavía"), 13, "#f2efe6", "derecha")
       d.archivo(450, 12, 190, 26, en and "Load audio…" or "Cargar audio…")
@@ -41,6 +41,7 @@ return {
       equipo.perillas(d, c, m, { x = 26, y = 167, w = 608, claves = { "tono", "fino", "inicio", "a", "c", "s", "baja" }, color = "#ffb88a", metal = "#8d8f96", alto = 78, r = 18 })
       d.bandeja(22, 256, 616, 82, nil, 8)
       equipo.perillas(d, c, m, { x = 26, y = 259, w = 608, claves = { "corte", "filo", "abre", "cierra", "vib", "vel", "empuje" }, color = "#8fd0ff", metal = "#8d8f96", alto = 78, r = 18 })
+      d.onda(24, 426, 612, 36, "#ffb88a")
       d.teclado(26, 352, 608, 62, 48, 37)
     end,
   },

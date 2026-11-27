@@ -4,6 +4,8 @@ Beethoven DAW:
 • Editor de audio (F2): corta, normaliza, limpia ruido, cambia tono o duración sin cambiar lo otro. Tu archivo no se toca.
 • 48 efectos con ventana de equipo analógico: ecualizador paramétrico, reverb de convolución, vocoder, compresor lateral, cinta, bulbos, pedales… Los nombres ahora dicen lo que hacen; tus proyectos los encuentran igual.
 • Sintetizadores propios (FM de 6 operadores, 3 osciladores, mono analógico…), muestreador, batería de 16 pads y cortador de ritmos.
+• Las pantallas y medidores de cada plugin se mueven con el audio real que entra y sale.
+• Ventanas rediseñadas con look analógico: costados de madera, perillas con escala, bulbos que brillan con el sonido y carretes de aluminio con la cinta a la vista.
 • Afinador de voz, quita ruido, arpegiador y acordes en vivo.
 • Controladores: mueve cualquier perilla con el nivel, un LFO o una fórmula.
 • El Mixer empareja las pistas cuyos efectos se tardan.

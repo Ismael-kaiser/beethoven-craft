@@ -30,13 +30,13 @@ return {
     return f(e.izq), f(e.der)
   end,
   interfaz = {
-    ancho = 300, alto = 280,
+    ancho = 300, alto = 324,
     dibujar = function(d, c, m)
       local colores = { "#ff9a52", "#ff5f6d", "#7fd0ff", "#c58cff" }
       local nombres = m.idioma == "en" and { "Warm", "Punch", "Bright", "Max" } or { "Cálido", "Pegada", "Brillo", "Tope" }
       local modo = math.floor(c.modo + 0.5)
       local col = colores[modo + 1]
-      d.acero(0, 0, 300, 280, "#55405e", 10)
+      d.acero(0, 0, 300, 324, "#55405e", 10)
       d.grabado(150, 24, m.titulo, 22, col, "centro")
       -- El aro crece con lo que suena.
       for i = 0, 10 do
@@ -45,6 +45,7 @@ return {
       end
       d.perilla(150, 128, 68, "cuanto", col, "#8d8f96")
       d.grabado(150, 219, math.floor(c.cuanto * 100 + 0.5) .. " %", 16, "#f2ecf5", "centro")
+      d.historia(16, 276, 268, 36, col)
       d.lista(14, 238, 272, 28, "modo", nombres, col)
       d.led(30, 26, 5, col, math.min(1, m.nivel * 2))
       d.led(270, 26, 5, col, math.min(1, m.nivel * 2))

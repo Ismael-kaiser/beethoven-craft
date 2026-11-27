@@ -90,13 +90,7 @@ return {
         d.perilla(440, y, 15, "d" .. i, "#ffd95e")
         d.perilla(496, y, 15, "o" .. i, "#8ae08f", "#b4b7bd")
       end
-      d.hueco(552, 50, 130, 130, 6)
-      local v = {}
-      for i = 1, #m.onda do
-        v[#v + 1] = 554 + i * 0.49
-        v[#v + 1] = 115 - math.max(-1, math.min(1, m.onda[i] * 1.6)) * 58
-      end
-      if #m.onda > 1 then d.linea(v, "#7ff2d8", 1.4) end
+      d.onda(552, 50, 130, 130, "#7ff2d8")
       d.bandeja(552, 194, 130, 148, nil, 8)
       equipo.perillas(d, c, m, { x = 554, y = 200, w = 126, claves = { "vib", "corte", "filo" }, por = 2, color = "#8fd0ff", metal = "#8d8f96", alto = 70, r = 17 })
       d.bandeja(18, 354, 250, 92, nil, 8)

@@ -32,6 +32,7 @@ return {
         d.linea({ x, 54, x, 180 }, "#ffd95e", 1.2)
         d.texto(x + 3, 62, tostring(i), 9, "#ffd95e")
       end
+      d.onda(270, 198, 366, 28, "#b8f08a")
       d.lista(30, 198, 220, 28, "donde", en and { "Equal parts", "At the hits" } or { "Partes iguales", "En los golpes" }, "#b8f08a")
       d.bandeja(22, 240, 616, 64, nil, 8)
       equipo.perillas(d, c, m, { x = 26, y = 238, w = 608, claves = { "partes", "fino", "tono", "a", "cae", "baja", "corte" }, color = "#b8f08a", metal = "#8d8f96", alto = 64, r = 14 })

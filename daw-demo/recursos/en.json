@@ -931,5 +931,8 @@
   "falta la función «vivo»": "the “vivo” function is missing",
   "«vivo» debe devolver una función o una tabla": "“vivo” must return a function or a table",
   "tardó demasiado para sonar en vivo": "took too long to play live",
-  "«{}» se apagó: {}": "“{}” was turned off: {}"
+  "«{}» se apagó: {}": "“{}” was turned off: {}",
+  "Lo que suena (4 s)": "What is playing (4 s)",
+  "Corta graves": "Low cut",
+  "Corta agudos": "High cut"
 }

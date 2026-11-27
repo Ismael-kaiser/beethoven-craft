@@ -4,6 +4,7 @@ use crate::biblioteca::Biblioteca;
 use crate::lua::Muestras;
 use crate::modelo::*;
 use crate::muestrario::Muestra;
+use crate::ojo::Ojo;
 use crate::plugin::{EVENTOS, Evento as EvPlugin, Plugin, Tiempo};
 use crate::receta::{self, BLOQUE, Buf, DatosVoz, Receta};
 use crate::vivo::{Emitida, Momento as EnVivo, Vivo};
@@ -76,6 +77,7 @@ fn vinculos(p: &Proyecto, bib: &mut Biblioteca, r: &Receta, v: &std::collections
 }
 
 struct CanalE {
+    ojo: Arc<Ojo>,
     rueda: f32,
     /// Lua en vivo: el instrumento mismo, o lo que cambia sus notas.
     vivo: Option<Arc<Vivo>>,
@@ -108,6 +110,7 @@ struct CanalE {
 }
 
 struct EfectoE {
+    ojo: Option<Arc<Ojo>>,
     vivo: Option<Arc<Vivo>>,
     latencia: u32,
     vinculos: Vec<Vinculo>,
@@ -271,6 +274,7 @@ impl Escena {
             let desde = lee("inicio").clamp(0.0, 0.99);
             let vinculos = vinculos(p, bib, &receta, &c.vinculos);
             canales.push(CanalE {
+                ojo: bib.ojo(&format!("canal {}", c.id)),
                 rueda: 1.0,
                 vinculos,
                 pads: ajustes,
@@ -305,6 +309,7 @@ impl Escena {
                     if let Ok(plugin) = bib.rack.dar(x, sr) {
                         let latencia = plugin.latencia();
                         efectos.push(EfectoE {
+                            ojo: None,
                             receta: None,
                             plugin: Some(plugin),
                             ctl: vec![],
@@ -332,6 +337,7 @@ impl Escena {
                 let pista = receta.controles.iter().position(|c| c.clave == "pista").map_or(0.0, |k| meta[k]);
                 let lateral = if receta.con_lateral() { (pista.round().max(0.0) as usize).min(p.mezcla.len() - 1) } else { 0 };
                 efectos.push(EfectoE {
+                    ojo: Some(bib.ojo(&format!("efecto {i} {k}"))),
                     vivo,
                     latencia,
                     vinculos,
@@ -1032,6 +1038,9 @@ impl Motor {
                     continue;
                 }
                 c.callada = if pico < 1e-5 { c.callada.saturating_add(n as u32) } else { 0 };
+                if c.ojo.mirando() {
+                    c.ojo.anotar(&mudo, &b, n);
+                }
                 let destino = &mut pistas[c.pista];
                 if pico > 0.0 {
                     destino.callada = 0;
@@ -1052,6 +1061,7 @@ impl Motor {
             let destino = &mut pistas[c.pista];
             destino.callada = 0;
             let cola = (r.cola * *sr) as u32;
+            let antes_de = c.ojo.mirando().then_some(destino.mezcla);
             for (i, v) in c.voces.iter_mut().enumerate().filter(|(_, v)| v.viva) {
                 vivas += 1;
                 if !v.a_mano {
@@ -1087,6 +1097,13 @@ impl Motor {
                 if v.callada > aguanta || v.suelta > 20 * *sr as u64 {
                     v.viva = false;
                 }
+            }
+            if let Some(q) = antes_de {
+                let mut solo = destino.mezcla;
+                for l in 0..2 {
+                    solo[l][..n].iter_mut().zip(&q[l][..n]).for_each(|(s, q)| *s -= q);
+                }
+                c.ojo.anotar(&mudo, &solo, n);
             }
         }
         if t.tocando {
@@ -1203,6 +1220,9 @@ impl Motor {
                     p.mezcla.iter_mut().for_each(|m| m.fill(0.0));
                 }
                 junta(&mut p.mezcla);
+                if let Some(o) = e.ojo.as_ref().filter(|o| o.mirando()) {
+                    o.anotar(&seco, &p.mezcla, n);
+                }
             }
             // Una cola que no baja no es una cola: un silbido, un ruido. Se calla sola hasta que entre algo.
             if p.quieta as f32 > *sr && !p.efectos.is_empty() && !p.efectos.iter().any(|e| e.receta.as_ref().is_some_and(|r| r.sostiene)) {

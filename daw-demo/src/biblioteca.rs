@@ -75,6 +75,8 @@ pub struct Biblioteca {
     vivos: HashMap<String, (Arc<Receta>, BTreeMap<String, String>, Arc<crate::vivo::Vivo>)>,
     /// Cómo estaba la carpeta de plugins la última vez que se miró.
     pub(crate) visto: crate::instalar::Vista,
+    /// Lo que entra y sale de cada efecto y canal, por su lugar.
+    ojos: HashMap<String, Arc<crate::ojo::Ojo>>,
     /// Lo que mide cada efecto puesto, por pista y ranura.
     pub medidas: HashMap<(usize, usize), Arc<Medidas>>,
 }
@@ -92,6 +94,7 @@ impl Biblioteca {
             huellas: HashMap::new(),
             armadas: HashMap::new(),
             vivos: HashMap::new(),
+            ojos: HashMap::new(),
             visto: Default::default(),
             medidas: HashMap::new(),
         }
@@ -413,6 +416,11 @@ impl Biblioteca {
                 None
             }
         }
+    }
+
+    /// El ojo de ese lugar: «efecto 1 0», «canal 3».
+    pub fn ojo(&mut self, lugar: &str) -> Arc<crate::ojo::Ojo> {
+        self.ojos.entry(lugar.into()).or_default().clone()
     }
 
     /// Los guiones en vivo que hay, con el nombre de su lugar.

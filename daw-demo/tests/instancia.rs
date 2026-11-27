@@ -85,3 +85,31 @@ fn se_ofrecen_todos_menos_los_controladores() {
     let nombres: std::collections::BTreeSet<_> = v.iter().map(|x| x.1.nombre.es.clone()).collect();
     assert_eq!(nombres.len(), v.len(), "dos se llaman igual");
 }
+
+#[test]
+fn la_ventana_ve_lo_que_entra_y_sale_de_verdad() {
+    let n = Instancia::nueva("balance", SR, serde_json::from_str(r#"{"controles":{"volumen":0.5}}"#).unwrap()).unwrap();
+    // Nadie mira: no hay nada que ver. Al mirar, se empieza a anotar.
+    assert!(!n.para_ver().4.suena);
+    let x: Vec<f32> = (0..24000).map(|i| (i as f32 * 0.05).sin() * 0.6).collect();
+    let y = pasar(&n, &x, 256);
+    let v = n.para_ver().4;
+    assert!(v.suena && v.sale.len() == 2048);
+    let (a, b) = (&x[24000 - 2048..], &y[24000 - 2048..]);
+    assert!(v.entra.iter().zip(a).all(|(p, q)| (p - q).abs() < 1e-6) && v.sale.iter().zip(b).all(|(p, q)| (p - q).abs() < 1e-3));
+    // La historia guarda lo más alto de cada rato.
+    assert!((v.historia[0][255] - 0.6).abs() < 0.01 && (v.historia[1][255] - 0.3).abs() < 0.01);
+    let [e, s] = v.quieta(256);
+    assert!(e.len() == 256 && e[0].abs() < 0.05 && s[0].abs() < 0.05, "empieza donde cruza");
+    // Al callar, la pantalla se vacía.
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    assert!(!n.para_ver().4.suena);
+    // Un instrumento también.
+    let n = Instancia::nueva("barras", SR, Default::default()).unwrap();
+    n.para_ver();
+    let (mut a, mut b) = (vec![0.0; 24000], vec![0.0; 24000]);
+    let t = Tiempo { bpm: 120.0, pos: 0.0, tocando: false, sr: SR as f64 };
+    n.procesar(&[(0, Evento::Nota { tono: 60, fuerza: 1.0 })], [&[], &[]], [&[], &[]], [&mut a, &mut b], &t);
+    let v = n.para_ver().4;
+    assert!(v.suena && v.sale.iter().zip(&a[24000 - 2048..]).all(|(p, q)| (p - q).abs() < 0.02));
+}

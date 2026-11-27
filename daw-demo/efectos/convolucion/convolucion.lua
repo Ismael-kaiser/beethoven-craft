@@ -24,10 +24,10 @@ return {
     ancho = 680, alto = 362,
     dibujar = function(d, c, m)
       local en = m.idioma == "en"
-      d.acero(0, 0, 680, 362, "#3a4250", 9)
-      d.asa(13, 26, 17, 310) d.asa(650, 26, 17, 310)
-      d.grabado(48, 25, m.titulo, 20, "#8fe0ff")
-      d.prender(612, 60, 12, "#8fe0ff", "palanca")
+      d.madera(0, 0, 22, 362) d.madera(658, 0, 22, 362)
+      d.acero(20, 0, 640, 362, "#3a4250", 3)
+      d.grabado(44, 25, m.titulo, 20, "#8fe0ff")
+      d.prender(628, 25, 10, "#8fe0ff", "palanca")
       d.hueco(48, 48, 520, 128, 8)
       -- La huella del lugar, tal como se va a usar.
       local n = #m.huella

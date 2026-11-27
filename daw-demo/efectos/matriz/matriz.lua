@@ -21,7 +21,7 @@ return {
     dibujar = function(d, c, m)
       d.acero(0, 0, 560, 260, "#4c5a74", 9)
       d.grabado(34, 25, m.titulo, 20, "#a8d0ff")
-      d.prender(516, 62, 12, "#a8d0ff", "palanca")
+      d.prender(526, 25, 10, "#a8d0ff", "palanca")
       d.hueco(40, 50, 180, 180, 8)
       -- Los cuatro caminos: más gruesos cuanto más pasa; rojos si van volteados.
       for _, p in ipairs({ { "ii", 60, 90, 200, 90 }, { "di", 60, 190, 200, 90 }, { "id", 60, 90, 200, 190 }, { "dd", 60, 190, 200, 190 } }) do

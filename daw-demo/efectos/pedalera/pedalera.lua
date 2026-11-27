@@ -29,10 +29,11 @@ return {
     return f(e.izq), f(e.der)
   end,
   interfaz = {
-    ancho = 420, alto = 230,
+    ancho = 420, alto = 274,
     dibujar = function(d, c, m)
-      d.acero(0, 0, 420, 230, "#4a4a52", 10)
+      d.acero(0, 0, 420, 274, "#4a4a52", 10)
       local en = m.idioma == "en"
+      d.onda(16, 226, 388, 36, "#ffe08a")
       local function pedal(x, w, color, titulo, cual)
         d.acero(x, 12, w, 206, color, 10)
         d.grabado(x + w / 2, 30, titulo, 15, "#fff4e0", "centro")

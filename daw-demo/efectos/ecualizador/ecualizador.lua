@@ -11,7 +11,7 @@ return {
     { "h5", "5 Hz", 500, 16000, 4500 }, { "g5", "5 dB", -18, 18, 0 }, { "q5", "5 ancho", 0.3, 12, 1 },
     { "h6", "Agudos Hz", 1000, 18000, 9000 }, { "g6", "Agudos dB", -18, 18, 0 }, { "q6", "Agudos ancho", 0.3, 4, 0.7 },
     { "t1", "Tipo 1", 0, 3, 1 }, { "t2", "Tipo 2", 0, 3, 0 }, { "t3", "Tipo 3", 0, 3, 0 }, { "t4", "Tipo 4", 0, 3, 0 }, { "t5", "Tipo 5", 0, 3, 0 }, { "t6", "Tipo 6", 0, 3, 2 },
-    { "corta", "Corta graves Hz", 20, 1000, 20 }, { "tope", "Corta agudos Hz", 1000, 20000, 20000 },
+    { "corta", "Corta graves", 20, 1000, 20 }, { "tope", "Corta agudos", 1000, 20000, 20000 },
     { "sale", "Salida dB", -18, 18, 0 },
   },
   presets = {
@@ -40,7 +40,7 @@ return {
       local en = m.idioma == "en"
       d.acero(0, 0, 760, 500, "#3e4858", 9)
       d.grabado(34, 24, m.titulo, 20, "#ffd95e")
-      d.prender(728, 60, 12, "#ffd95e", "palanca")
+      d.prender(732, 25, 10, "#ffd95e", "palanca")
       d.ecualizador(22, 46, 678, 270)
       d.bandeja(20, 330, 720, 154, "#2a2c30", 8)
       local tonos = { "#ff8a6a", "#ffc85e", "#a8e070", "#5ed8c8", "#7aaeff", "#c890ff" }

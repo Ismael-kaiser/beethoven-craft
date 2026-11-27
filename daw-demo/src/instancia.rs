@@ -213,9 +213,11 @@ impl Instancia {
     }
 
     /// Lo que mide, la huella o la onda de su audio, y sus cortes: para la ventana.
-    pub fn para_ver(&self) -> (Vec<(String, f32)>, Vec<f32>, Vec<f32>, Guardado) {
+    pub fn para_ver(&self) -> (Vec<(String, f32)>, Vec<f32>, Vec<f32>, Guardado, crate::ojo::Visto) {
         let g = self.guardado();
-        let Ok(mut p) = self.principal.try_lock() else { return (vec![], vec![], vec![], g) };
+        let Ok(mut p) = self.principal.try_lock() else { return (vec![], vec![], vec![], g, Default::default()) };
+        let lugar = if self.ficha.tipo == Tipo::Efecto { "efecto 1 0" } else { "canal 1" };
+        let visto = p.bib.ojo(lugar).ver();
         let medidas =
             p.bib.medidas.get(&(1, 0)).map_or(vec![], |x| {
                 self.receta.nombres_medidas().zip(x.iter()).map(|(n, v)| (n.to_string(), f32::from_bits(v.load(Relaxed)))).collect()
@@ -232,7 +234,7 @@ impl Instancia {
                 cortes = p.bib.cortes(r, &g.controles).map_or(vec![], |m| m.cortes.clone());
             }
         }
-        (medidas, huella, cortes, g)
+        (medidas, huella, cortes, g, visto)
     }
 
     /// Los archivos de su carpeta y su guion, para armar la ventana.

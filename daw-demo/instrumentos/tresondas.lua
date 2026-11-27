@@ -57,6 +57,7 @@ return {
       d.acero(0, 0, 520, 330, "#5a6474", 10)
       local en = m.idioma == "en"
       d.grabado(30, 24, m.titulo, 22, "#ffd95e")
+      d.onda(300, 10, 196, 28, "#ffd95e")
       local ondas = { "~", "/|", "[]", "/\\" }
       for i = 1, 3 do
         local y = 44 + (i - 1) * 64

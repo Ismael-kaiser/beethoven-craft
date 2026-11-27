@@ -181,6 +181,38 @@ pub fn perilla_de(ui: &mut Ui, nombre: &str, v: &mut f32, min: f32, max: f32, fa
     if con { resp } else { resp.on_hover_text(numero(*v)) }
 }
 
+/// La perilla de los plugins: se mueve igual que las del programa y se ve como de aparato de antes.
+#[allow(clippy::too_many_arguments)]
+pub fn perilla_vieja(ui: &mut Ui, v: &mut f32, min: f32, max: f32, fabrica: f32, c: Color32, tam: f32, metal: Color32, k: f32) -> Response {
+    let (r, mut resp) = ui.allocate_exact_size(Vec2::splat(tam), Sense::click_and_drag());
+    let antes = *v;
+    let log = min > 0.0 && max / min > 20.0;
+    let a01 = |x: f32| if log { (x / min).ln() / (max / min).ln() } else { (x - min) / (max - min) };
+    let de01 = |x: f32| if log { min * (max / min).powf(x) } else { min + (max - min) * x };
+    if resp.dragged() {
+        let fino = if ui.input(|i| i.modifiers.shift) { 0.1 } else { 1.0 };
+        let d = resp.drag_delta();
+        *v = de01((a01(*v) + (d.x - d.y) / 160.0 * fino).clamp(0.0, 1.0));
+    }
+    if resp.double_clicked() {
+        *v = fabrica;
+    }
+    if resp.hovered() {
+        let y = ui.input(|i| i.smooth_scroll_delta.y);
+        if y != 0.0 && ui.input(|i| i.modifiers.command) {
+            *v = de01((a01(*v) + y / 1500.0).clamp(0.0, 1.0));
+        }
+    }
+    if *v != antes {
+        resp.mark_changed();
+    }
+    // Deja lugar para la escala alrededor.
+    let d = tam / 2.0 / 1.3;
+    super::torno::perilla_vieja(ui.painter(), r.center(), d, a01(*v).clamp(0.0, 1.0), c, metal, resp.hovered() || resp.dragged(), k);
+    resp.widget_info(|| WidgetInfo::slider(true, *v as f64, ""));
+    resp.on_hover_text(numero(*v))
+}
+
 pub fn numero(v: f32) -> String {
     if v.abs() >= 100.0 {
         format!("{v:.0}")

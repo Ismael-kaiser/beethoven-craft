@@ -84,13 +84,7 @@ return {
       equipo.perillas(d, c, m, { x = 296, y = 52, w = 320, claves = { "corte", "filo", "abre", "cierra", "empuje" }, color = "#8fd0ff", metal = "#8d8f96", alto = 92, r = 19 })
       d.bandeja(20, 158, 260, 88, nil, 8)
       equipo.perillas(d, c, m, { x = 24, y = 160, w = 252, claves = { "a", "r", "vib" }, color = "#8ae08f", metal = "#8d8f96", alto = 84, r = 20 })
-      d.hueco(296, 162, 320, 80, 8)
-      local v = {}
-      for i = 1, #m.onda do
-        v[#v + 1] = 298 + i * 1.24
-        v[#v + 1] = 202 - math.max(-1, math.min(1, m.onda[i] * 1.5)) * 36
-      end
-      if #m.onda > 1 then d.linea(v, "#ffb060", 1.5) end
+      d.onda(296, 162, 320, 80, "#ffb060")
       d.teclado(24, 260, 592, 66, 36, 37)
     end,
   },

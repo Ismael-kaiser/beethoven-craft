@@ -101,8 +101,8 @@ A la mano: `fft(re, im)` y `fft(re, im, true)` (hasta 4096), `espectral(n, funct
 - **Piezas de metal:** `acero` `bandeja` `hueco` `grabado` `led` `aguja` `palanca` `pisoton` `lista` `rota` `valvula` `carrete` `asa`
 - **Dibujo:** `caja` `degradado` `borde` `circulo` `aro` `linea` `poligono` `texto` `imagen` `vidrio` `tornillo`
 - **Controles:** `perilla` `tirador` `boton` `pad` y `poner(clave, valor)`
-- **Que hacen cosas:** `prender` (bypass), `grafica(x,y,w,h,"niveles"/"agudos"/"frecuencias"/"cola"/"movimiento"/"onda")`, `ecualizador` (controles `h1`,`g1`,`q1`,`t1`…, `corta`, `tope`), `teclado`, `archivo`, `pads`, `pista`, `escribir`
-- **`m`:** `titulo` `nombre` `nombres[clave]` `idioma` `tiempo` `nivel` `tocando` `activo` `onda` `espectro` `medidas` `huella` `cortes` `pad` `archivo` `x` `y` `clic` `apretado`
+- **Que hacen cosas:** `prender` (bypass), `grafica(x,y,w,h,"niveles"/"agudos"/"frecuencias"/"cola"/"movimiento"/"onda")`, `onda(x,y,w,h,color)` (lo que entra y sale en este momento), `historia(x,y,w,h,color)` (los últimos segundos), `ecualizador` (controles `h1`,`g1`,`q1`,`t1`…, `corta`, `tope`), `teclado`, `archivo`, `pads`, `pista`, `escribir`
+- **`m`:** `titulo` `nombre` `nombres[clave]` `idioma` `tiempo` `nivel` `tocando` `activo` `onda` `onda_entra` `espectro` `espectro_entra` `historia` `historia_entra` `nivel_entra` `medidas` `huella` `cortes` `pad` `archivo` `x` `y` `clic` `apretado`
 
 ## En otros programas
 

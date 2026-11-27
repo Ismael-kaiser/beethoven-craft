@@ -36,6 +36,7 @@ return {
       d.acero(0, 0, 430, 260, "#6e3a2c", 10)
       local en = m.idioma == "en"
       d.grabado(30, 24, m.titulo, 22, "#ffae6a")
+      d.onda(220, 10, 180, 28, "#ffae6a")
       d.hueco(14, 42, 270, 110, 6)
       -- Cómo se apaga y cómo cae el tono, según las perillas.
       local nivel, tono = {}, {}

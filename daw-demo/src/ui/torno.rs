@@ -147,44 +147,82 @@ fn cepillar(p: &Painter, r: Rect, rad: f32, k: f32, fuerza: f32) {
     p.add(RectShape::filled(r, CornerRadius::same(rad as u8), Color32::WHITE.gamma_multiply(fuerza)).with_texture(t.id(), uv));
 }
 
-/// Tornillo avellanado: agujero con su canto, cabeza torneada y ranura en cruz.
+/// Tornillo de cabeza redonda, chico: sombrita, cabeza que toma la luz arriba y su ranura.
 pub fn tornillo(p: &Painter, o: Pos2, r: f32, giro: f32) {
     let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
+    p.circle_filled(o + vec2(0.0, r * 0.35), r * 1.08, Color32::from_black_alpha(110));
     let mut m = Mesh::default();
-    let hoyo = |a: f32| velo(-da(Vec2::angled(a)), 190.0);
-    aro(&mut m, o, r * 1.0, r * 1.55, 28, |_| Color32::from_black_alpha(190), hoyo, true);
-    aro(&mut m, o, 0.0, r * 0.8, 28, |a| gris(0.2 + 0.62 * torneado(a + giro)), |a| gris(0.24 + 0.6 * torneado(a + giro)), false);
-    aro(&mut m, o, r * 0.8, r, 28, |a| gris(0.5 + 0.4 * da(Vec2::angled(a))), |a| gris(0.36 + 0.34 * da(Vec2::angled(a))), true);
+    aro(&mut m, o, 0.0, r, 32, |a| gris(0.42 + 0.3 * torneado(a + giro)), |a| gris(0.3 + 0.36 * da(Vec2::angled(a)).max(-0.4)), true);
     p.add(Shape::mesh(m));
-    for g in [giro, giro + PI / 2.0] {
-        let d = Vec2::angled(g) * r * 0.62;
-        p.line_segment([o - d + vec2(0.0, 0.7), o + d + vec2(0.0, 0.7)], Stroke::new((r * 0.34).max(0.8), Color32::from_white_alpha(70)));
-        p.line_segment([o - d, o + d], Stroke::new((r * 0.3).max(0.8), Color32::from_black_alpha(220)));
+    p.circle_stroke(o, r - 0.4, Stroke::new(0.6, Color32::from_black_alpha(90)));
+    let d = Vec2::angled(giro) * r * 0.66;
+    p.line_segment([o - d + vec2(0.0, 0.6), o + d + vec2(0.0, 0.6)], Stroke::new((r * 0.24).max(0.7), Color32::from_white_alpha(50)));
+    p.line_segment([o - d, o + d], Stroke::new((r * 0.24).max(0.7), Color32::from_black_alpha(200)));
+}
+
+/// Frente de aparato: metal pintado, mate, con un grano fino y la luz cayendo de arriba. Tornillos chicos en las esquinas.
+pub fn acero(p: &Painter, r: Rect, rad: f32, tinte: Color32, k: f32) {
+    let cr = rad as u8;
+    sombra(p, r, rad, 3.0 * k, 10.0 * k, 160);
+    super::metal::degradado(p, r, cr, mezcla(tinte, Color32::WHITE, 0.1), mezcla(tinte, Color32::BLACK, 0.28));
+    cepillar(p, r, rad, k * 1.6, 0.32);
+    // Viñeta: las orillas un poco más oscuras, como la pintura vieja.
+    let pc = p.with_clip_rect(r.intersect(p.clip_rect()));
+    let (n, t) = (Color32::from_black_alpha(46), Color32::TRANSPARENT);
+    let w = (r.width() * 0.12).min(40.0 * k);
+    franja(&pc, Rect::from_min_max(r.min, pos2(r.left() + w, r.bottom())), n, t, true);
+    franja(&pc, Rect::from_min_max(pos2(r.right() - w, r.top()), r.max), t, n, true);
+    franja(&pc, Rect::from_min_max(pos2(r.left(), r.bottom() - w), r.max), t, n, false);
+    bisel(p, r, rad, 1.6 * k, false, 110.0);
+    p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(200)), StrokeKind::Inside);
+    if r.width() > 90.0 * k && r.height() > 60.0 * k {
+        let m = 8.0 * k;
+        let esquinas = [r.left_top() + vec2(m, m), r.right_top() + vec2(-m, m), r.left_bottom() + vec2(m, -m), r.right_bottom() + vec2(-m, -m)];
+        for (j, o) in esquinas.into_iter().enumerate() {
+            tornillo(p, o, 2.6 * k, 0.4 + j as f32 * 1.3);
+        }
     }
 }
 
-/// Panel grueso de acero cepillado: sombra, bisel ancho, reflejo que lo cruza y tornillos avellanados.
-pub fn acero(p: &Painter, r: Rect, rad: f32, tinte: Color32, k: f32) {
-    let cr = rad as u8;
-    super::metal::degradado(p, r, cr, mezcla(tinte, Color32::WHITE, 0.16), mezcla(tinte, Color32::BLACK, 0.4));
-    let d = r.shrink(2.5 * k);
-    // El reflejo: una banda clara que no llega a las orillas.
-    let (c, medio) = (Color32::from_white_alpha(34), d.left() + d.width() * 0.38);
-    let pc = p.with_clip_rect(d.intersect(p.clip_rect()));
-    franja(&pc, Rect::from_min_max(pos2(d.left() + rad, d.top()), pos2(medio, d.bottom())), Color32::TRANSPARENT, c, true);
-    franja(&pc, Rect::from_min_max(pos2(medio, d.top()), pos2(d.right() - rad, d.bottom())), c, Color32::TRANSPARENT, true);
-    cepillar(p, r, rad, k, 1.0);
-    bisel(p, r, rad, 3.0 * k, false, 150.0);
-    // El filo donde termina el bisel.
-    p.rect_stroke(r.shrink(3.0 * k), (rad - 3.0 * k).max(0.0), Stroke::new(1.0, Color32::from_black_alpha(46)), StrokeKind::Inside);
-    p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(210)), StrokeKind::Inside);
-    if r.width() > 90.0 * k && r.height() > 60.0 * k {
-        let m = 9.0 * k;
-        let esquinas = [r.left_top() + vec2(m, m), r.right_top() + vec2(-m, m), r.left_bottom() + vec2(m, -m), r.right_bottom() + vec2(-m, -m)];
-        for (j, o) in esquinas.into_iter().enumerate() {
-            tornillo(p, o, 3.2 * k, 0.5 + j as f32 * 1.9);
-        }
+/// Costado de nogal barnizado, como los aparatos de antes.
+pub fn madera(p: &Painter, r: Rect, rad: f32, k: f32) {
+    let base = Color32::from_rgb(0x6e, 0x40, 0x24);
+    let cr = CornerRadius::same(rad as u8);
+    p.add(eframe::epaint::RectShape::filled(r, cr, base));
+    let pc = p.with_clip_rect(r.intersect(p.clip_rect()));
+    // La veta: rayas largas que se ondulan, más claras y más oscuras.
+    let mut s = 0x2545_F491u32 ^ (r.top() as u32).wrapping_mul(31) ^ (r.left() as u32).wrapping_mul(977);
+    let mut azar = || {
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        s as f32 / u32::MAX as f32
+    };
+    let rayas = (r.width() / (1.6 * k)) as usize + 2;
+    for i in 0..rayas {
+        let x0 = r.left() + (i as f32 + azar() * 0.6) * 1.6 * k;
+        let (fase, onda, luz) = (azar() * 6.3, 0.8 + azar() * 2.2, azar());
+        let col = if luz > 0.55 {
+            Color32::from_rgba_unmultiplied(0xd8, 0x9a, 0x62, (luz * 80.0) as u8)
+        } else {
+            Color32::from_rgba_unmultiplied(0x24, 0x10, 0x06, ((1.0 - luz) * 120.0) as u8)
+        };
+        let pasos = (r.height() / (6.0 * k)) as usize + 2;
+        let v: Vec<Pos2> = (0..pasos)
+            .map(|j| {
+                let y = r.top() + r.height() * j as f32 / (pasos - 1) as f32;
+                pos2(x0 + (y / (37.0 * k) + fase).sin() * onda * k + (y / (11.0 * k) + fase * 2.0).sin() * 0.35 * k, y)
+            })
+            .collect();
+        pc.add(Shape::line(v, Stroke::new((0.6 + azar() * 1.1) * k, col)));
     }
+    // Barniz: luz de un lado y sombra del otro, porque es redondeado.
+    let canto = (3.0 * k).min(r.width() * 0.2);
+    franja(&pc, Rect::from_min_max(r.min, pos2(r.left() + canto, r.bottom())), Color32::from_black_alpha(60), Color32::TRANSPARENT, true);
+    franja(&pc, Rect::from_min_max(pos2(r.right() - canto, r.top()), r.max), Color32::TRANSPARENT, Color32::from_black_alpha(80), true);
+    p.vline(r.left() + canto, r.y_range(), Stroke::new(1.0, Color32::from_white_alpha(22)));
+    franja(&pc, Rect::from_min_max(r.min, pos2(r.right(), r.top() + 14.0 * k)), Color32::from_white_alpha(30), Color32::TRANSPARENT, false);
+    p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(220)), StrokeKind::Inside);
 }
 
 /// Sombra que cae dentro de algo hundido.
@@ -204,23 +242,36 @@ pub fn bandeja(p: &Painter, r: Rect, rad: f32, tinte: Color32, k: f32) {
     p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(170)), StrokeKind::Inside);
 }
 
-/// Pantalla: marco biselado, vidrio oscuro y su reflejo.
+/// Pantalla de tubo: bisel negro, vidrio un poco abombado, fondo verde muy oscuro y una rejilla tenue.
 pub fn pantalla(p: &Painter, r: Rect, rad: f32, k: f32) {
-    let marco = r.expand(3.5 * k);
-    p.rect_filled(marco, rad + 3.5 * k, Color32::from_gray(0x1b));
-    bisel(p, marco, rad + 3.5 * k, 2.2 * k, false, 95.0);
-    bisel(p, r.expand(1.3 * k), rad + 1.3 * k, 1.3 * k, true, 190.0);
-    super::metal::degradado(p, r, rad as u8, Color32::from_rgb(0x05, 0x06, 0x07), Color32::from_rgb(0x14, 0x16, 0x19));
-    adentro(p, r, rad, k, 160);
+    let marco = r.expand(3.0 * k);
+    p.rect_filled(marco, rad + 3.0 * k, Color32::from_gray(0x14));
+    bisel(p, marco, rad + 3.0 * k, 1.6 * k, false, 70.0);
+    bisel(p, r.expand(1.0 * k), rad + 1.0 * k, 1.0 * k, true, 170.0);
+    super::metal::degradado(p, r, rad as u8, Color32::from_rgb(0x0a, 0x10, 0x0d), Color32::from_rgb(0x04, 0x07, 0x06));
     let pc = p.with_clip_rect(r.intersect(p.clip_rect()));
+    // El fósforo encendido en el centro, apagándose hacia las orillas.
     let (w, h) = (r.width(), r.height());
+    for (e, a) in [(0.9, 10u8), (0.6, 8), (0.35, 6)] {
+        pc.rect_filled(Rect::from_center_size(r.center(), vec2(w * e, h * e)), rad * 2.0, Color32::from_rgba_unmultiplied(0x40, 0x90, 0x60, a));
+    }
+    if h > 30.0 * k {
+        let paso = (h / 4.0).max(10.0 * k);
+        let mut y = r.top() + paso;
+        while y < r.bottom() - 2.0 {
+            pc.hline(r.x_range(), y, Stroke::new(0.6, Color32::from_rgba_unmultiplied(0x60, 0xc0, 0x90, 10)));
+            y += paso;
+        }
+    }
+    adentro(p, r, rad, k, 150);
+    // Reflejo del vidrio, arriba a la izquierda.
     let q = vec![
-        r.left_top() + vec2(w * 0.04, 2.0),
-        r.left_top() + vec2(w * 0.46, 2.0),
-        r.left_top() + vec2(w * 0.34, h - 2.0),
-        r.left_top() + vec2(w * 0.01, h - 2.0),
+        r.left_top() + vec2(w * 0.03, 2.0),
+        r.left_top() + vec2(w * 0.4, 2.0),
+        r.left_top() + vec2(w * 0.25, h * 0.45),
+        r.left_top() + vec2(w * 0.02, h * 0.6),
     ];
-    pc.add(Shape::convex_polygon(q, Color32::from_white_alpha(7), Stroke::NONE));
+    pc.add(Shape::convex_polygon(q, Color32::from_white_alpha(6), Stroke::NONE));
 }
 
 /// Letras fresadas y pintadas: sombra en el filo de arriba y luz en el de abajo.
@@ -232,36 +283,32 @@ pub fn grabado(p: &Painter, o: Pos2, a: Align2, s: &str, n: f32, c: Color32) {
     p.text(o, a, s, f, c);
 }
 
-/// Tecla de metal: canto biselado y cara un poco hundida. Prendida brilla con su color.
+/// Tecla de aparato: cuerpo de baquelita mate con su canto. Prendida, una lámpara la alumbra por dentro.
 pub fn tecla(p: &Painter, r: Rect, rad: f32, c: Color32, si: bool, encima: bool, apretada: bool, k: f32) {
-    let baja = si || apretada;
-    if !baja {
-        sombra(p, r, rad, 2.5 * k, 5.0 * k, 170);
+    let rad = rad.min(4.0 * k);
+    let baja = (apretada || si) as u8 as f32 * 1.0 * k;
+    p.rect_filled(r.expand(1.5 * k), rad + 1.5 * k, Color32::from_black_alpha(170));
+    if !apretada {
+        sombra(p, r, rad, 2.0 * k, 3.0 * k, 150);
     }
-    p.rect_filled(r.expand(1.2 * k), rad + 1.2 * k, Color32::from_black_alpha(220));
-    let base = if si { c } else { Color32::from_gray(if encima { 0x58 } else { 0x4b }) };
+    let r = r.translate(vec2(0.0, baja));
     if si {
-        for (e, a) in [(7.0, 0.05), (4.5, 0.08), (2.5, 0.12)] {
+        // Cristal de color, encendido de abajo: luz cálida y su halo.
+        for (e, a) in [(5.0, 0.05), (3.0, 0.09)] {
             p.rect_filled(r.expand(e * k), rad + e * k, c.gamma_multiply(a));
         }
+        super::metal::degradado(p, r, rad as u8, mezcla(c, Color32::WHITE, 0.42), mezcla(c, Color32::BLACK, 0.18));
+        let brillo = Rect::from_center_size(r.center() + vec2(0.0, r.height() * 0.1), vec2(r.width() * 0.8, r.height() * 0.5));
+        p.rect_filled(brillo, rad * 2.0, Color32::from_white_alpha(40));
+    } else {
+        let base = Color32::from_gray(if encima { 0x3c } else { 0x30 });
+        super::metal::degradado(p, r, rad as u8, mezcla(base, Color32::WHITE, 0.1), mezcla(base, Color32::BLACK, 0.3));
     }
-    super::metal::degradado(p, r, rad as u8, mezcla(base, Color32::WHITE, 0.2), mezcla(base, Color32::BLACK, 0.45));
-    let g = (2.2 * k).min(r.height() * 0.2);
-    bisel(p, r, rad, g, baja && !si, 150.0);
-    let cara = r.shrink(g);
-    let rr = (rad - g).max(0.0);
-    // La cara va al revés que el canto: por eso se ve cóncava.
-    super::metal::degradado(
-        p,
-        cara,
-        rr as u8,
-        mezcla(base, Color32::BLACK, if si { 0.1 } else { 0.28 }),
-        mezcla(base, Color32::WHITE, if si { 0.3 } else { 0.1 }),
-    );
-    if !si {
-        cepillar(p, cara, rr, k * 0.6, 0.45);
-    }
-    p.rect_stroke(cara, rr, Stroke::new(1.0, Color32::from_black_alpha(60)), StrokeKind::Inside);
+    // El canto de arriba toma la luz.
+    let f = (rad * 0.8).max(1.5);
+    p.hline(r.left() + f..=r.right() - f, r.top() + 0.8, Stroke::new(1.0, Color32::from_white_alpha(if si { 120 } else { 40 })));
+    p.hline(r.left() + f..=r.right() - f, r.bottom() - 0.8, Stroke::new(1.0, Color32::from_black_alpha(90)));
+    p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(200)), StrokeKind::Inside);
 }
 
 /// Foco con aro de cromo y cristal abombado.
@@ -419,111 +466,203 @@ pub fn pisoton(p: &Painter, o: Pos2, r: f32, abajo: bool) {
     p.add(Shape::mesh(m));
 }
 
-/// Palanca con su tuerca y su vástago cromado.
+/// Interruptor de palanca: tuerca de seis caras, arandela y la palanca de cromo, que se inclina hacia arriba o abajo.
 pub fn palanca(p: &Painter, o: Pos2, si: bool, k: f32) {
     let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
-    let r = 11.0 * k;
+    let r = 8.0 * k;
+    p.circle_filled(o + vec2(0.0, 1.5 * k), r * 1.25, Color32::from_black_alpha(120));
     let mut m = Mesh::default();
-    aro(&mut m, o, 0.0, r, 32, |a| gris(0.2 + 0.5 * torneado(a)), |a| gris(0.5 + 0.42 * da(Vec2::angled(a))), true);
-    aro(&mut m, o, 0.0, r * 0.55, 32, |_| gris(0.02), |a| gris(0.16 - 0.14 * da(Vec2::angled(a))), true);
-    let punta = o + vec2(0.0, if si { -15.0 } else { 15.0 }) * k;
-    let sombra_ = punta + vec2(2.0, 4.0) * k;
-    p.add(Shape::mesh(m));
-    p.line_segment([o + vec2(2.0, 3.0) * k, sombra_], Stroke::new(8.0 * k, Color32::from_black_alpha(90)));
-    for (g, x, c) in [(8.0, 0.0, gris(0.22)), (5.6, -0.6, gris(0.56)), (2.0, -1.5, gris(0.95))] {
-        p.line_segment([o + vec2(x, 0.0) * k, punta + vec2(x, 0.0) * k], Stroke::new(g * k, c));
+    // La tuerca.
+    let v: Vec<Pos2> = (0..6).map(|i| o + Vec2::angled(TAU * i as f32 / 6.0 + PI / 6.0) * r * 1.12).collect();
+    for i in 0..6 {
+        let (a, b) = (v[i], v[(i + 1) % 6]);
+        let u = ((a + (b - a) * 0.5) - o).normalized();
+        let j = m.vertices.len() as u32;
+        punto(&mut m, o, gris(0.5 + 0.3 * da(u)));
+        punto(&mut m, a, gris(0.38 + 0.4 * da(u)));
+        punto(&mut m, b, gris(0.38 + 0.4 * da(u)));
+        m.indices.extend([j, j + 1, j + 2]);
     }
-    let mut m = Mesh::default();
-    aro(&mut m, punta, 0.0, 7.0 * k, 28, |_| gris(0.72), |a| gris(0.48 + 0.46 * da(Vec2::angled(a))), true);
+    aro(&mut m, o, 0.0, r * 0.62, 24, |a| gris(0.3 + 0.5 * torneado(a)), |a| gris(0.25 + 0.4 * da(Vec2::angled(a))), true);
     p.add(Shape::mesh(m));
-    p.circle_filled(punta + LUZ * 2.6 * k, 2.0 * k, Color32::from_white_alpha(220));
+    // La palanca, más angosta en la base y redonda en la punta.
+    let hacia = if si { -1.0 } else { 1.0 };
+    let punta = o + vec2(1.5 * k, 15.0 * k * hacia);
+    let ancho = |t: f32| (2.0 + 1.8 * t) * k;
+    let largo = (punta - o).length();
+    let u = (punta - o) / largo;
+    let n = vec2(-u.y, u.x);
+    p.line_segment([o + vec2(2.0, 3.0) * k, punta + vec2(3.0, 4.0) * k], Stroke::new(5.0 * k, Color32::from_black_alpha(80)));
+    let cuerpo: Vec<Pos2> = [(0.0, -1.0), (1.0, -1.0), (1.0, 1.0), (0.0, 1.0)].iter().map(|(t, l)| o + u * largo * *t + n * ancho(*t) * *l).collect();
+    p.add(Shape::convex_polygon(cuerpo, gris(0.55), Stroke::new(0.8, gris(0.2))));
+    p.line_segment([o + n * ancho(0.0) * 0.4, punta + n * ancho(1.0) * 0.4], Stroke::new(1.3 * k, gris(0.95)));
+    p.circle_filled(punta, ancho(1.0) * 1.1, gris(0.62));
+    p.circle_filled(punta - vec2(0.8, 1.0) * k, ancho(1.0) * 0.5, gris(0.97));
+    p.circle_stroke(punta, ancho(1.0) * 1.1, Stroke::new(0.7, gris(0.25)));
 }
 
-/// Bulbo de vidrio sobre su base, con el filamento encendido según `v`.
+/// Lámpara piloto: aro de cromo y un cristal tallado que se enciende.
+pub fn lampara(p: &Painter, o: Pos2, r: f32, c: Color32, v: f32) {
+    let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
+    for (e, a) in [(3.2, 0.06), (2.2, 0.1), (1.6, 0.16)] {
+        p.circle_filled(o, r * e, c.gamma_multiply(a * v));
+    }
+    p.circle_filled(o + vec2(0.0, r * 0.15), r * 1.45, Color32::from_black_alpha(150));
+    let mut m = Mesh::default();
+    aro(&mut m, o, r * 1.0, r * 1.38, 32, |a| gris(0.3 - 0.2 * da(Vec2::angled(a))), |a| gris(0.55 + 0.4 * da(Vec2::angled(a))), true);
+    // El cristal tiene caras: cada una toma la luz distinto.
+    let apagado = mezcla(c, Color32::BLACK, 0.72);
+    let prendido = mezcla(c, Color32::WHITE, 0.25);
+    let cara = |a: f32| mezcla(apagado, prendido, (v * (0.75 + 0.25 * ((a * 6.0).sin()))).clamp(0.0, 1.0));
+    aro(&mut m, o, 0.0, r, 36, |_| mezcla(apagado, mezcla(c, Color32::WHITE, 0.6), v), cara, false);
+    p.add(Shape::mesh(m));
+    p.circle_filled(o + vec2(-0.35, -0.4) * r, r * 0.28, Color32::from_white_alpha(70 + (140.0 * v) as u8));
+}
+
+/// Bulbo: zócalo de baquelita con sus patas, vidrio redondo con su punta, placa gris, discos de mica y el filamento que se
+/// pone naranja. `v` de 0 a 1 es qué tan caliente está.
 pub fn valvula(p: &Painter, r: Rect, v: f32, k: f32) {
     let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
-    let (o, w) = (r.center(), r.width());
-    let fuego = Color32::from_rgb(0xff, 0x8a, 0x2c);
-    let medio = pos2(o.x, r.top() + r.height() * 0.58);
-    for (e, a) in [(1.1, 0.05), (0.8, 0.09), (0.52, 0.14)] {
-        p.circle_filled(medio, w * e, fuego.gamma_multiply(a * (0.25 + 0.75 * v)));
+    let (w, h) = (r.width(), r.height());
+    let fuego = Color32::from_rgb(0xff, 0x7a, 0x22);
+    // Zócalo.
+    let zocalo = Rect::from_min_max(pos2(r.left() + w * 0.08, r.bottom() - h * 0.14), pos2(r.right() - w * 0.08, r.bottom()));
+    sombra(p, zocalo, 4.0 * k, 3.0 * k, 7.0 * k, 200);
+    cilindro(p, zocalo, 4.0 * k, Color32::from_rgb(0x2a, 0x22, 0x1c), 0.5);
+    // El vidrio: cuerpo derecho, hombros redondos y la punta donde se selló.
+    let vidrio = Rect::from_min_max(pos2(r.left() + w * 0.14, r.top() + h * 0.07), pos2(r.right() - w * 0.14, zocalo.top() + 1.0));
+    let medio = vidrio.center();
+    // Calor dentro del vidrio.
+    let calor = pos2(medio.x, vidrio.top() + vidrio.height() * 0.62);
+    for (e, a) in [(1.3, 0.06), (0.9, 0.1), (0.55, 0.18), (0.32, 0.26)] {
+        p.circle_filled(calor, vidrio.width() * e, fuego.gamma_multiply(a * v));
     }
-    let base = Rect::from_min_max(pos2(r.left() + w * 0.06, r.bottom() - r.height() * 0.2), pos2(r.right() - w * 0.06, r.bottom()));
-    sombra(p, base, 3.0 * k, 4.0 * k, 8.0 * k, 190);
-    // Cuerpo de vidrio: domo arriba y costados derechos.
-    let vidrio = Rect::from_min_max(pos2(r.left() + w * 0.12, r.top() + r.height() * 0.06), pos2(r.right() - w * 0.12, base.top() + 2.0));
-    let rr = vidrio.width() / 2.0;
-    super::metal::degradado(
-        p,
-        vidrio,
-        rr as u8,
-        Color32::from_rgba_unmultiplied(120, 132, 146, 120),
-        Color32::from_rgba_unmultiplied(40, 24, 14, 170),
-    );
     let pc = p.with_clip_rect(vidrio.intersect(p.clip_rect()));
-    // Placas y filamento.
-    let placa = Rect::from_center_size(pos2(o.x, medio.y), vec2(w * 0.42, r.height() * 0.4));
-    super::metal::degradado(&pc, placa, 2, gris(0.34), gris(0.12));
-    pc.rect_stroke(placa, 2.0, Stroke::new(1.0, gris(0.04)), StrokeKind::Inside);
-    for d in [-0.28, 0.28] {
-        pc.vline(o.x + w * d, placa.y_range().expand(4.0 * k), Stroke::new(1.6 * k, gris(0.5)));
-    }
-    for (g, c) in
-        [(6.0, fuego.gamma_multiply(0.2 + 0.4 * v)), (3.0, fuego.gamma_multiply(0.4 + 0.6 * v)), (1.2, mezcla(fuego, Color32::WHITE, 0.2 + 0.6 * v))]
-    {
-        pc.vline(o.x, placa.y_range().shrink(placa.height() * 0.12), Stroke::new(g * k, c));
-    }
-    // El getter, plateado, y los reflejos del vidrio.
-    pc.rect_filled(Rect::from_min_size(vidrio.min, vec2(vidrio.width(), rr * 0.5)), rr, Color32::from_white_alpha(40));
-    pc.rect_filled(
-        Rect::from_min_size(vidrio.min + vec2(vidrio.width() * 0.12, rr * 0.7), vec2(vidrio.width() * 0.1, vidrio.height() * 0.6)),
-        4.0,
-        Color32::from_white_alpha(62),
+    // Lo de adentro primero, el vidrio después.
+    let mica = |y: f32| {
+        let q = Rect::from_center_size(pos2(medio.x, y), vec2(vidrio.width() * 0.8, 2.4 * k));
+        pc.rect_filled(q, 1.0, Color32::from_rgba_unmultiplied(0xd8, 0xd0, 0xb8, 120));
+    };
+    let placa = Rect::from_min_max(
+        pos2(medio.x - vidrio.width() * 0.26, vidrio.top() + vidrio.height() * 0.32),
+        pos2(medio.x + vidrio.width() * 0.26, vidrio.bottom() - vidrio.height() * 0.1),
     );
-    pc.rect_filled(
-        Rect::from_min_size(vidrio.right_top() + vec2(-vidrio.width() * 0.16, rr * 0.8), vec2(vidrio.width() * 0.05, vidrio.height() * 0.5)),
-        3.0,
-        Color32::from_white_alpha(34),
-    );
-    p.rect_stroke(vidrio, rr, Stroke::new(1.3, Color32::from_white_alpha(120)), StrokeKind::Inside);
-    super::metal::degradado(p, base, (3.0 * k) as u8, gris(0.2), gris(0.06));
-    bisel(p, base, 3.0 * k, 1.5 * k, false, 120.0);
+    for d in [-0.3, 0.3] {
+        pc.vline(medio.x + vidrio.width() * d, vidrio.top() + vidrio.height() * 0.26..=vidrio.bottom(), Stroke::new(1.0 * k, gris(0.55)));
+    }
+    cilindro(&pc, placa, 1.5 * k, Color32::from_gray(0x50), 0.7);
+    pc.vline(medio.x, placa.y_range().shrink(placa.height() * 0.1), Stroke::new(2.4 * k, Color32::from_black_alpha(200)));
+    // El filamento se ve por la ranura de la placa.
+    for (g, a) in [(9.0, 0.22), (4.4, 0.5), (2.0, 1.0)] {
+        let c = mezcla(fuego, Color32::from_rgb(0xff, 0xe6, 0xa8), (v * a).min(1.0) * 0.6);
+        pc.vline(medio.x, placa.y_range().shrink(placa.height() * 0.16), Stroke::new(g * k, c.gamma_multiply((a * (0.15 + 0.85 * v)).min(1.0))));
+    }
+    mica(placa.top() - 2.0 * k);
+    mica(placa.bottom() + 2.0 * k);
+    // El espejito de arriba (el getter).
+    let tapa = Rect::from_min_max(vidrio.min, pos2(vidrio.right(), vidrio.top() + vidrio.height() * 0.22));
+    franja(&pc, tapa, Color32::from_rgba_unmultiplied(0xb8, 0xb8, 0xbc, 150), Color32::from_rgba_unmultiplied(0x70, 0x70, 0x78, 30), false);
+    // El vidrio: transparente, más claro en las orillas por donde se dobla la luz.
+    let rad = vidrio.width() / 2.0;
+    let orilla = Color32::from_white_alpha(46);
+    let w2 = vidrio.width() * 0.22;
+    franja(&pc, Rect::from_min_max(vidrio.min, pos2(vidrio.left() + w2, vidrio.bottom())), orilla, Color32::TRANSPARENT, true);
+    franja(&pc, Rect::from_min_max(pos2(vidrio.right() - w2, vidrio.top()), vidrio.max), Color32::TRANSPARENT, orilla, true);
+    let brillo = Rect::from_min_size(vidrio.min + vec2(vidrio.width() * 0.2, rad * 0.5), vec2(vidrio.width() * 0.1, vidrio.height() * 0.62));
+    pc.rect_filled(brillo, 3.0 * k, Color32::from_white_alpha(70));
+    p.rect_stroke(vidrio, rad, Stroke::new(1.0, Color32::from_white_alpha(70)), StrokeKind::Inside);
+    p.circle_filled(pos2(medio.x, vidrio.top() + 0.5), 2.2 * k, Color32::from_white_alpha(90));
 }
 
-/// Carrete de cinta visto de frente.
+/// Un cilindro visto de frente: oscuro en los lados, luz en el centro un poco a la izquierda.
+fn cilindro(p: &Painter, r: Rect, rad: f32, base: Color32, brillo: f32) {
+    let pc = p.with_clip_rect(r.intersect(p.clip_rect()));
+    let (os, cl) = (mezcla(base, Color32::BLACK, 0.55), mezcla(base, Color32::WHITE, brillo * 0.6));
+    let x1 = r.left() + r.width() * 0.38;
+    p.rect_filled(r, rad, base);
+    franja(&pc, Rect::from_min_max(r.min, pos2(x1, r.bottom())), os, cl, true);
+    franja(&pc, Rect::from_min_max(pos2(x1, r.top()), r.max), cl, os, true);
+    p.rect_stroke(r, rad, Stroke::new(1.0, Color32::from_black_alpha(160)), StrokeKind::Inside);
+}
+
+/// Pedazo de aro de `r0` a `r1` entre los ángulos `a0` y `a1`; el color según el radio y el ángulo.
+fn sector(m: &mut Mesh, o: Pos2, r0: f32, r1: f32, a0: f32, a1: f32, n: usize, col: impl Fn(f32, f32) -> Color32) {
+    let base = m.vertices.len() as u32;
+    for i in 0..=n {
+        let a = a0 + (a1 - a0) * i as f32 / n as f32;
+        let u = Vec2::angled(a);
+        punto(m, o + u * r0, col(r0, a));
+        punto(m, o + u * r1, col(r1, a));
+    }
+    for i in 0..n as u32 {
+        let (x, y) = (base + i * 2, base + i * 2 + 2);
+        m.indices.extend([x, x + 1, y, x + 1, y + 1, y]);
+    }
+}
+
+/// Carrete de cinta de estudio visto de frente: tapa de aluminio torneado con tres ventanas por donde se ve
+/// la cinta enrollada, brillosa, y el centro con sus tres muescas. Todo gira con `giro`.
 pub fn carrete(p: &Painter, o: Pos2, r: f32, giro: f32, lleno: f32, k: f32) {
     let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
-    sombra(p, Rect::from_center_size(o, Vec2::splat(r * 2.0)), r, 4.0 * k, 12.0 * k, 190);
+    sombra(p, Rect::from_center_size(o, Vec2::splat(r * 2.0)), r, 5.0 * k, 14.0 * k, 200);
+    let g0 = TAU * giro;
+    // La tapa: aluminio torneado, con su brillo que no gira (la luz está quieta).
     let mut m = Mesh::default();
-    aro(&mut m, o, 0.0, r * 0.98, 72, |a| gris(0.16 + 0.1 * torneado(a)), |a| gris(0.2 + 0.2 * torneado(a)), true);
-    // La cinta enrollada: café, con sus vueltas.
-    let cinta = r * (0.42 + 0.46 * lleno);
-    let cafe = |t: f32| mezcla(Color32::from_rgb(0x1c, 0x0f, 0x08), Color32::from_rgb(0x8a, 0x58, 0x38), t.clamp(0.0, 1.0));
-    aro(&mut m, o, r * 0.34, cinta, 72, |a| cafe(0.1 + 0.5 * torneado(a)), |a| cafe(0.16 + 0.6 * torneado(a)), true);
+    aro(&mut m, o, 0.0, r, 96, |a| gris(0.5 + 0.32 * torneado(a)), |a| gris(0.46 + 0.4 * torneado(a)), true);
     p.add(Shape::mesh(m));
-    let mut q = r * 0.4;
-    while q < cinta {
-        p.circle_stroke(o, q, Stroke::new(0.7, Color32::from_black_alpha(50)));
-        q += 2.6 * k;
+    let mut q = r * 0.3;
+    let mut par = false;
+    while q < r * 0.94 {
+        p.circle_stroke(o, q, Stroke::new(0.6, if par { Color32::from_white_alpha(14) } else { Color32::from_black_alpha(16) }));
+        q += 2.2 * k;
+        par = !par;
     }
-    // Tres brazos de aluminio.
+    // Las tres ventanas: se ve la cinta (café, con brillo de laca) y, más allá, la oscuridad del aparato.
+    let cinta = r * (0.36 + 0.5 * lleno);
+    let (v0, v1) = (r * 0.3, r * 0.86);
+    let cafe = |t: f32| mezcla(Color32::from_rgb(0x1a, 0x0d, 0x06), Color32::from_rgb(0x9a, 0x66, 0x40), t.clamp(0.0, 1.0));
+    let ancho = 0.6;
     for i in 0..3 {
-        let a = TAU * (giro + i as f32 / 3.0);
-        let (u, t) = (Vec2::angled(a), Vec2::angled(a + PI / 2.0));
-        let v = vec![o + u * r * 0.2 + t * r * 0.12, o + u * r * 0.95 + t * r * 0.2, o + u * r * 0.95 - t * r * 0.2, o + u * r * 0.2 - t * r * 0.12];
-        let luz = 0.42 + 0.2 * da(t);
-        p.add(Shape::convex_polygon(v, gris(luz), Stroke::new(1.0, gris(0.1))));
-        p.line_segment([o + u * r * 0.2 + t * r * 0.11, o + u * r * 0.94 + t * r * 0.18], Stroke::new(1.0, Color32::from_white_alpha(80)));
+        let c = g0 + TAU * i as f32 / 3.0;
+        let (a0, a1) = (c - ancho, c + ancho);
+        let mut m = Mesh::default();
+        sector(&mut m, o, v0, cinta.max(v0), a0, a1, 24, |rr, a| cafe(0.12 + 0.55 * torneado(a) * (0.6 + 0.4 * rr / cinta)));
+        if cinta < v1 {
+            sector(&mut m, o, cinta, v1, a0, a1, 24, |rr, _| gris(0.04 + 0.05 * (rr - cinta) / (v1 - cinta)));
+        }
+        p.add(Shape::mesh(m));
+        // Las vueltas de la cinta y la orilla del rollo.
+        let arco = |rr: f32| (0..=24).map(|j| o + Vec2::angled(a0 + (a1 - a0) * j as f32 / 24.0) * rr).collect::<Vec<_>>();
+        let mut q = v0 + 2.0 * k;
+        while q < cinta - 1.0 {
+            p.add(Shape::line(arco(q), Stroke::new(0.6, Color32::from_black_alpha(40))));
+            q += 2.8 * k;
+        }
+        if cinta < v1 {
+            p.add(Shape::line(arco(cinta), Stroke::new(1.2, Color32::from_rgba_unmultiplied(0xd8, 0xa0, 0x70, 90))));
+        }
+        // El corte en el aluminio: sombra arriba, filo con luz abajo.
+        let mut borde = arco(v1);
+        borde.extend(arco(v0).into_iter().rev());
+        borde.push(borde[0]);
+        p.add(Shape::line(borde.clone(), Stroke::new(1.6 * k, Color32::from_black_alpha(150))));
+        let filo: Vec<Pos2> = borde.iter().map(|q| *q + vec2(0.0, 0.8 * k)).collect();
+        p.add(Shape::line(filo, Stroke::new(0.7 * k, Color32::from_white_alpha(46))));
     }
+    // Canto doblado de la tapa.
     let mut m = Mesh::default();
-    aro(&mut m, o, r * 0.9, r, 72, |a| gris(0.32 + 0.2 * da(Vec2::angled(a))), |a| gris(0.46 + 0.34 * da(Vec2::angled(a))), true);
-    aro(&mut m, o, 0.0, r * 0.32, 48, |a| gris(0.22 + 0.6 * torneado(a)), |a| gris(0.36 + 0.5 * torneado(a)), true);
+    aro(&mut m, o, r * 0.94, r, 96, |a| gris(0.4 + 0.3 * da(Vec2::angled(a))), |a| gris(0.3 + 0.4 * da(Vec2::angled(a))), true);
+    // El centro: anillo cromado y maza negra.
+    aro(&mut m, o, r * 0.2, r * 0.27, 64, |a| gris(0.5 + 0.45 * torneado(a)), |a| gris(0.3 + 0.4 * torneado(a)), false);
+    aro(&mut m, o, 0.0, r * 0.2, 48, |a| gris(0.1 + 0.08 * torneado(a)), |a| gris(0.16 + 0.12 * torneado(a)), false);
     p.add(Shape::mesh(m));
+    p.circle_stroke(o, r * 0.27, Stroke::new(1.0, Color32::from_black_alpha(140)));
     for i in 0..3 {
-        let u = Vec2::angled(TAU * (giro + i as f32 / 3.0 + 0.16));
-        p.line_segment([o + u * r * 0.06, o + u * r * 0.2], Stroke::new(r * 0.07, Color32::from_black_alpha(220)));
+        let u = Vec2::angled(g0 + TAU * (i as f32 / 3.0 + 1.0 / 6.0));
+        p.line_segment([o + u * r * 0.07, o + u * r * 0.17], Stroke::new(r * 0.06, gris(0.02)));
+        p.line_segment([o + u * r * 0.07 + vec2(0.0, 0.8), o + u * r * 0.17 + vec2(0.0, 0.8)], Stroke::new(0.6, Color32::from_white_alpha(30)));
     }
-    tornillo(p, o, r * 0.07, giro * TAU);
+    tornillo(p, o, r * 0.06, g0);
 }
 
 /// Asa de aparato de estudio, parada.
@@ -539,4 +678,51 @@ pub fn asa(p: &Painter, r: Rect, k: f32) {
     franja(&pc, Rect::from_min_max(barra.min, pos2(medio, barra.bottom())), gris(0.24), gris(0.95), true);
     franja(&pc, Rect::from_min_max(pos2(medio, barra.top()), barra.max), gris(0.95), gris(0.12), true);
     p.rect_stroke(barra, 1.0, Stroke::new(1.0, gris(0.08)), StrokeKind::Inside);
+}
+
+/// Perilla de aparato de antes: escala impresa en el frente, falda negra de baquelita, tapa de aluminio y su raya.
+/// `x` de 0 a 1. El color va en la raya y en el número de la escala.
+pub fn perilla_vieja(p: &Painter, o: Pos2, d: f32, x: f32, c: Color32, metal: Color32, encima: bool, k: f32) {
+    let ang = |x: f32| PI * (0.75 + 1.5 * x);
+    let tinta = Color32::from_rgba_unmultiplied(0xf2, 0xec, 0xdc, 200);
+    // La escala, como pintada en el frente: once rayas y la de donde está, de color.
+    for i in 0..=10 {
+        let t = i as f32 / 10.0;
+        let u = Vec2::angled(ang(t));
+        let (a, b) = (d * 1.12, d * if i % 5 == 0 { 1.34 } else { 1.24 });
+        p.line_segment([o + u * a, o + u * b], Stroke::new(if i % 5 == 0 { 1.4 } else { 1.0 } * k, tinta));
+    }
+    let u = Vec2::angled(ang(x));
+    p.line_segment([o + u * d * 1.1, o + u * d * 1.4], Stroke::new(2.4 * k, c.gamma_multiply(0.35)));
+    p.line_segment([o + u * d * 1.1, o + u * d * 1.4], Stroke::new(1.4 * k, mezcla(c, Color32::WHITE, 0.3)));
+    // Sombra en el frente.
+    let caja = Rect::from_center_size(o, Vec2::splat(d * 2.0));
+    sombra(p, caja, d, d * 0.28, d * 0.55, 200);
+    let gris = |v: f32| Color32::from_gray((v * 255.0).clamp(0.0, 255.0) as u8);
+    let negro = |t: f32| mezcla(Color32::from_rgb(0x0e, 0x0d, 0x0c), Color32::from_rgb(0x4a, 0x47, 0x44), t.clamp(0.0, 1.0));
+    let mut m = Mesh::default();
+    // La falda, con estrías suaves que giran con la perilla.
+    let dientes = ((d * 1.0) as usize).clamp(14, 36);
+    let estria = |a: f32, fondo: f32| negro(0.22 + 0.26 * da(Vec2::angled(a)) + 0.12 * ((a - ang(x)) * dientes as f32).sin() - fondo);
+    aro(&mut m, o, d * 0.72, d, dientes * 6, |a| estria(a, 0.0), |a| estria(a, 0.12), true);
+    // El hombro y la tapa de aluminio torneado.
+    aro(&mut m, o, d * 0.62, d * 0.74, 64, |a| negro(0.1 + 0.4 * da(Vec2::angled(a)).max(0.0)), |a| negro(0.3 + 0.5 * da(Vec2::angled(a))), false);
+    let claro = mezcla(metal, Color32::WHITE, if encima { 0.75 } else { 0.62 });
+    let oscuro = mezcla(metal, Color32::BLACK, 0.5);
+    aro(
+        &mut m,
+        o,
+        0.0,
+        d * 0.58,
+        64,
+        |a| mezcla(oscuro, claro, 0.35 + 0.5 * torneado(a)),
+        |a| mezcla(oscuro, claro, 0.25 + 0.6 * torneado(a)),
+        false,
+    );
+    p.add(Shape::mesh(m));
+    p.circle_stroke(o, d * 0.58, Stroke::new(1.0, gris(0.08)));
+    // La raya de la perilla, grabada en la falda.
+    let (a, b) = (o + u * d * 0.6, o + u * d * 0.97);
+    p.line_segment([a, b], Stroke::new(2.4 * k, Color32::from_black_alpha(200)));
+    p.line_segment([a, b], Stroke::new(1.3 * k, Color32::from_rgb(0xf4, 0xee, 0xde)));
 }

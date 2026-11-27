@@ -163,6 +163,22 @@ pub enum Pieza {
         h: f32,
         clase: String,
     },
+    /// La onda que entra (detrás) y la que sale, en su pantalla.
+    Onda {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        c: Color,
+    },
+    /// Los últimos segundos: lo que entra y lo que sale.
+    Historia {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        c: Color,
+    },
     /// La curva de un ecualizador, con sus puntos.
     Ecualizador {
         x: f32,
@@ -251,6 +267,13 @@ pub enum Pieza {
         giro: f32,
         lleno: f32,
     },
+    /// Costado de madera.
+    Madera {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
     /// Asa de aparato de estudio.
     Asa {
         x: f32,
@@ -330,6 +353,13 @@ pub struct Momento {
     /// Lo que suena en su pista: la onda (de -1 a 1) y el espectro (de 0 a 1, de graves a agudos).
     pub onda: Vec<f32>,
     pub espectro: Vec<f32>,
+    /// Lo mismo de lo que entra, y la historia de los últimos segundos: entra, sale a la izquierda y a la derecha.
+    pub onda_entra: Vec<f32>,
+    pub espectro_entra: Vec<f32>,
+    pub historia: [Vec<f32>; 3],
+    pub nivel_entra: f32,
+    /// La onda completa que sale, para el analizador.
+    pub cruda: Vec<f32>,
     /// Si el efecto está prendido.
     pub activo: bool,
     /// Lo que el guion midió con `mide`.
@@ -454,6 +484,8 @@ fn cargar_(fuente: &str, archivos: Arc<Archivos>) -> mlua::Result<Option<Interfa
         Ok(Pieza::Lista { x, y, w, h, clave: clave.clone(), textos, c: color(Some(c.clone().unwrap_or("#ffd95e".into())))? })
     });
     pieza!("grafica", (x, y, w, h, clase) : (f32, f32, f32, f32, S) => |_: H| Ok(Pieza::Grafica { x, y, w, h, clase: clase.clone().unwrap_or_default() }));
+    pieza!("onda", (x, y, w, h, c) : (f32, f32, f32, f32, S) => |_: H| Ok(Pieza::Onda { x, y, w, h, c: color(Some(c.clone().unwrap_or("#ffd95e".into())))? }));
+    pieza!("historia", (x, y, w, h, c) : (f32, f32, f32, f32, S) => |_: H| Ok(Pieza::Historia { x, y, w, h, c: color(Some(c.clone().unwrap_or("#ffd95e".into())))? }));
     pieza!("ecualizador", (x, y, w, h) : (f32, f32, f32, f32) => |_: H| Ok(Pieza::Ecualizador { x, y, w, h }));
     pieza!("rota", (x, y, w, h, clave, textos, c) : (f32, f32, f32, f32, String, Table, S) => |hay: H| {
         hay(&clave)?;
@@ -469,6 +501,7 @@ fn cargar_(fuente: &str, archivos: Arc<Archivos>) -> mlua::Result<Option<Interfa
     pieza!("escribir", (x, y, w, h, s) : (f32, f32, f32, f32, String) => |_: H| Ok(Pieza::Escribir { x, y, w, h, s: s.chars().take(60).collect() }));
     pieza!("valvula", (x, y, w, h, v) : (f32, f32, f32, f32, f32) => |_: H| Ok(Pieza::Valvula { x, y, w, h, v: if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 } }));
     pieza!("carrete", (x, y, r, giro, lleno) : (f32, f32, f32, f32, Option<f32>) => |_: H| Ok(Pieza::Carrete { x, y, r: r.clamp(8.0, 200.0), giro: if giro.is_finite() { giro.fract() } else { 0.0 }, lleno: lleno.unwrap_or(0.7).clamp(0.0, 1.0) }));
+    pieza!("madera", (x, y, w, h) : (f32, f32, f32, f32) => |_: H| Ok(Pieza::Madera { x, y, w, h }));
     pieza!("asa", (x, y, w, h) : (f32, f32, f32, f32) => |_: H| Ok(Pieza::Asa { x, y, w, h }));
     pieza!("poner", (clave, v) : (String, f32) => |hay: H| { hay(&clave)?; Ok(Pieza::Poner { clave: clave.clone(), v: if v.is_finite() { v } else { 0.0 } }) });
     pieza!("pad", (x, y, w, h, cx, cy) : (f32, f32, f32, f32, String, String) => |hay: H| { hay(&cx)?; hay(&cy)?; Ok(Pieza::Pad { x, y, w, h, cx: cx.clone(), cy: cy.clone() }) });
@@ -484,6 +517,26 @@ fn cargar_(fuente: &str, archivos: Arc<Archivos>) -> mlua::Result<Option<Interfa
     }
     lua.globals().set("__d", d)?;
     Ok(Some(Interfaz { lua, dibujar, piezas, ancho, alto, claves, error: None, archivos }))
+}
+
+impl Momento {
+    /// Lo que se ve de verdad en ese plugin.
+    pub fn poner(&mut self, v: &crate::ojo::Visto, sr: f32) {
+        let alto = |h: &[f32]| h.iter().rev().take(4).fold(0f32, |m, x| m.max(*x));
+        let puntos = 256;
+        self.tocando |= v.suena;
+        if !v.suena {
+            self.nivel = 0.0;
+            return;
+        }
+        let e = |x: &[f32]| -> Vec<f32> { crate::ui::espectro(x, sr, 64).iter().map(|d| ((d + 84.0) / 84.0).clamp(0.0, 1.0)).collect() };
+        [self.onda_entra, self.onda] = v.quieta(puntos);
+        (self.espectro_entra, self.espectro) = (e(&v.entra), e(&v.sale));
+        self.nivel = alto(&v.historia[1]).max(alto(&v.historia[2]));
+        self.nivel_entra = alto(&v.historia[0]);
+        self.historia = v.historia.clone();
+        self.cruda = v.sale.clone();
+    }
 }
 
 impl Interfaz {
@@ -518,6 +571,16 @@ impl Interfaz {
             q.set("apretado", m.apretado)?;
             q.set("clic", m.clic)?;
             q.set("onda", self.lua.create_sequence_from(m.onda.iter().copied())?)?;
+            q.set("nivel_entra", m.nivel_entra)?;
+            for (k, v) in [
+                ("onda_entra", &m.onda_entra),
+                ("espectro_entra", &m.espectro_entra),
+                ("historia_entra", &m.historia[0]),
+                ("historia", &m.historia[1]),
+                ("historia_der", &m.historia[2]),
+            ] {
+                q.set(k, self.lua.create_sequence_from(v.iter().copied())?)?;
+            }
             q.set("espectro", self.lua.create_sequence_from(m.espectro.iter().copied())?)?;
             if let Some([x, y]) = m.raton {
                 q.set("x", x)?;

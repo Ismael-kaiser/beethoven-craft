@@ -376,23 +376,6 @@ impl App {
     /// Las ventanas de los efectos abiertos.
     pub(super) fn ver_efectos(&mut self, ui: &mut Ui, z: Rect) {
         self.fx_abiertos.retain(|(i, k)| self.p.mezcla.get(*i).is_some_and(|m| *k < m.efectos.len()));
-        // Se escucha la pista del ecualizador o de la interfaz propia que esté más al frente.
-        let mira = self
-            .fx_abiertos
-            .clone()
-            .into_iter()
-            .rev()
-            .find(|(i, k)| {
-                let e = self.p.mezcla[*i].efectos[*k].efecto.clone();
-                self.lienzo(&e).is_some()
-            })
-            .map(|x| x.0)
-            // Si no, la del instrumento que se está viendo.
-            .or_else(|| {
-                let c = self.p.canales.iter().find(|c| c.id == self.canal).map(|c| (c.instrumento.clone(), c.pista))?;
-                (self.abierta(Vista::Canal) && self.lienzo(&c.0).is_some()).then_some(c.1)
-            });
-        self.estado.escucha.store(mira.map_or(u32::MAX, |i| i as u32), Relaxed);
         let mut cerrar = None;
         for (n, (i, k)) in self.fx_abiertos.clone().into_iter().enumerate() {
             let e = self.p.mezcla[i].efectos[k].clone();
@@ -452,9 +435,8 @@ impl App {
     }
 
     fn cuerpo_efecto(&mut self, ui: &mut Ui, i: usize, k: usize) {
-        let onda = (self.estado.escucha.load(Relaxed) == i as u32 && self.tocando()).then(|| self.estado.onda());
         let sr = self.bib.sr;
-        let mut momento = self.momento(ui, i);
+        let mut momento = self.momento(ui, &format!("efecto {i} {k}"));
         if let Some(g) = self.bib.ver(&self.p.mezcla[i].efectos[k].efecto)
             && let Some(r) = g.receta.clone()
         {
@@ -510,7 +492,7 @@ impl App {
                 activo: Some(&mut e.activo),
                 datos: Some(e.datos.clone()),
                 receta: g.receta.as_deref(),
-                onda: onda.clone(),
+                onda: (!momento.cruda.is_empty()).then(|| momento.cruda.clone()),
                 sr,
                 pistas,
                 controladores,
@@ -552,7 +534,7 @@ impl App {
         let mut ui = ui.new_child(UiBuilder::new().max_rect(panel.shrink2(vec2(18.0, 17.0))));
         let ui = &mut ui;
         if let (Some(c), Some(r)) = (super::grafica::Clase::de(&g.ficha.grupo.es), g.receta.as_deref()) {
-            super::grafica::pintar(ui, c, r, &e.controles, sr, false, ui.id().with(("grafica", i, k, &clave)));
+            super::grafica::pintar(ui, c, r, &e.controles, sr, false, ui.id().with(("grafica", i, k, &clave)), &momento);
         }
         ui.add_space(7.0);
         let charola = ui.available_rect_before_wrap();

@@ -44,6 +44,7 @@ return {
       d.acero(0, 0, 470, 280, "#5c3d28", 10)
       local en = m.idioma == "en"
       d.grabado(30, 24, m.titulo, 22, "#ffe1a8")
+      d.onda(250, 10, 190, 28, "#ffe1a8")
       d.bandeja(14, 42, 356, 224, "#2a1c12", 8)
       local pies = { "16", "5⅓", "8", "4", "2⅔", "2", "1⅗", "1⅓", "1" }
       for i = 1, 9 do

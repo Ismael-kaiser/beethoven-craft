@@ -34,15 +34,16 @@ return {
     return f(e.izq), f(e.der)
   end,
   interfaz = {
-    ancho = 620, alto = 330,
+    ancho = 620, alto = 372,
     dibujar = function(d, c, m)
-      d.acero(0, 0, 620, 330, "#54602e", 9)
+      d.acero(0, 0, 620, 372, "#54602e", 9)
       d.grabado(34, 25, m.titulo, 20, "#d8f06a")
-      d.prender(582, 60, 12, "#d8f06a", "palanca")
+      d.prender(590, 25, 10, "#d8f06a", "palanca")
       d.lista(330, 14, 210, 26, "tipo", m.idioma == "en" and { "Low", "High", "Band" } or { "Graves", "Agudos", "Banda" }, "#d8f06a")
       d.bandeja(24, 50, 520, 170, "#1c2010", 8)
       for i = 1, 16 do d.tirador(32 + (i - 1) * 32, 60, 24, 150, "p" .. i, (i - 1) % 8 < 4 and "#d8f06a" or "#ffd95e") end
       d.aguja(552, 130, 56, 60, m.medidas.paso or 0, "")
+      d.historia(26, 326, 568, 34, "#d8f06a")
       d.bandeja(24, 232, 572, 86, nil, 8)
       equipo.perillas(d, c, m, { x = 30, y = 236, w = 560, claves = { "div", "suave", "filo", "empuje", "mezcla" }, color = "#d8f06a", metal = "#8d8f96", alto = 82, r = 20 })
     end,

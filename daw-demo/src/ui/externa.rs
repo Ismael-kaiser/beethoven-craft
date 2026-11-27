@@ -8,13 +8,12 @@ pub const ALTO_BARRA: f32 = 34.0;
 
 pub struct Externa {
     it: Option<Interfaz>,
-    pico: f32,
 }
 
 impl Externa {
     pub fn nueva(ctx: &Context, n: &Instancia) -> Externa {
         vestir(ctx);
-        Externa { it: n.interfaz(), pico: 0.0 }
+        Externa { it: n.interfaz() }
     }
 
     /// Cuánto mide, en puntos.
@@ -50,24 +49,16 @@ impl Externa {
                 });
             }
         });
-        let (medidas, huella, cortes, g) = n.para_ver();
-        let nivel = n.estado.pico(1);
-        self.pico = nivel[0].max(nivel[1]).max(self.pico * 0.88);
+        let (medidas, huella, cortes, g, visto) = n.para_ver();
         let mut m = Momento {
             tiempo: ui.input(|i| i.time),
-            nivel: self.pico,
-            tocando: self.pico > 1e-3,
             medidas,
             huella,
             cortes,
             archivo: g.muestra.as_ref().map_or(String::new(), |r| Path::new(r).file_name().unwrap_or_default().to_string_lossy().into()),
             ..Default::default()
         };
-        let onda = n.estado.onda();
-        if m.tocando {
-            m.espectro = ecualizador::espectro(&onda, n.sr, 64).iter().map(|d| ((d + 84.0) / 84.0).clamp(0.0, 1.0)).collect();
-            m.onda = onda.iter().step_by(onda.len() / 256).copied().collect();
-        }
+        m.poner(&visto, n.sr);
         let dentro = Rect::from_min_max(todo.min + vec2(8.0, ALTO_BARRA), todo.max - vec2(8.0, 8.0));
         let mut h = ui.new_child(UiBuilder::new().max_rect(dentro));
         let mut activo = n.activo();
@@ -75,7 +66,7 @@ impl Externa {
             activo: Some(&mut activo),
             receta: Some(&n.receta),
             sr: n.sr,
-            onda: m.tocando.then(|| onda.clone()),
+            onda: (!m.cruda.is_empty()).then(|| m.cruda.clone()),
             pads: g.pads.clone(),
             datos: Some(g.datos.clone()),
             ..Default::default()

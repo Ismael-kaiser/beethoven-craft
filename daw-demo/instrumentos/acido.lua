@@ -38,6 +38,7 @@ return {
       local en = m.idioma == "en"
       d.hueco(20, 14, 150, 30, 5)
       d.texto(32, 29, m.titulo, 20, "#c8ff3d")
+      d.onda(206, 14, 84, 28, "#c8ff3d")
       d.led(184, 27, 6, "#c8ff3d", math.min(1, m.nivel * 3))
       d.lista(300, 14, 144, 28, "forma", { en and "Saw" or "Sierra", en and "Square" or "Cuadrada" }, "#c8ff3d")
       d.bandeja(14, 54, 432, 154, "#3a3d42", 8)

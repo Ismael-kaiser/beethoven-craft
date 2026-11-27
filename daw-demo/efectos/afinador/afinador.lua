@@ -95,7 +95,7 @@ return {
       local en = m.idioma == "en"
       d.acero(0, 0, 560, 300, "#6a3f5a", 10)
       d.grabado(34, 25, m.titulo, 20, "#ffa8d8")
-      d.prender(524, 60, 12, "#ffa8d8", "palanca")
+      d.prender(530, 25, 10, "#ffa8d8", "palanca")
       d.hueco(24, 50, 460, 76, 8)
       local nombres = en and { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" } or { "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si" }
       local nota, meta, voz = m.medidas.nota or 0, m.medidas.meta or 0, (m.medidas.voz or 0) > 0.5 and m.tocando

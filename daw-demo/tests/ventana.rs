@@ -702,16 +702,31 @@ fn soltar_un_plugin_y_usarlo() {
 fn la_ventana_en_otro_programa() {
     let _g = UNA.lock().unwrap_or_else(|e| e.into_inner());
     idioma::poner(Idioma::Es);
-    for k in ["compresor", "afinador", "monoanalogico", "ecualizador"] {
-        let n = beethoven_daw_demo::instancia::Instancia::nueva(k, 48000.0, Default::default()).unwrap();
+    for k in ["compresor", "fuego", "eco", "coro", "ecualizador", "convolucion", "barras", "afinador"] {
+        let n = std::sync::Arc::new(beethoven_daw_demo::instancia::Instancia::nueva(k, 48000.0, Default::default()).unwrap());
         let ctx = egui::Context::default();
         let t = beethoven_daw_demo::ui::externa::Externa::nueva(&ctx, &n).tam(&n);
-        let mut e = None;
+        let (mut e, q) = (None, n.clone());
         let mut h = Harness::builder().with_size(t).wgpu().build_ui(move |ui| {
-            let e = e.get_or_insert_with(|| beethoven_daw_demo::ui::externa::Externa::nueva(ui.ctx(), &n));
-            e.pintar(ui, &n);
+            let e = e.get_or_insert_with(|| beethoven_daw_demo::ui::externa::Externa::nueva(ui.ctx(), &q));
+            e.pintar(ui, &q);
         });
-        h.run_steps(4);
+        h.run_steps(2);
+        // Suena mientras se mira: golpes que se apagan, con graves y agudos.
+        let x: Vec<f32> = (0..192_000)
+            .map(|i| {
+                let t = i as f32 / 48000.0;
+                (0.4 * (691.0 * t).sin() + 0.3 * (2400.0 * t).sin() + 0.2 * (19000.0 * t).sin()) * (-((i % 18000) as f32) / 5000.0).exp()
+            })
+            .collect();
+        for (b, c) in x.chunks(1024).enumerate() {
+            let (mut a, mut d) = (vec![0.0; c.len()], vec![0.0; c.len()]);
+            let t = beethoven_daw_demo::plugin::Tiempo { bpm: 120.0, pos: b as f64 * 0.04, tocando: true, sr: 48000.0 };
+            let ev: &[beethoven_daw_demo::instancia::En] =
+                if b == 100 { &[(0, beethoven_daw_demo::plugin::Evento::Nota { tono: 48, fuerza: 1.0 })] } else { &[] };
+            n.procesar(ev, [c, c], [&[], &[]], [&mut a, &mut d], &t);
+        }
+        h.run_steps(1);
         if let Ok(c) = std::env::var("CAPTURAS") {
             h.render().unwrap().save(format!("{c}/externa-{k}.png")).unwrap();
         }

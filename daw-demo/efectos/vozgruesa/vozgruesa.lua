@@ -37,6 +37,7 @@ return {
       local l = 46 + m.nivel * 10
       d.imagen(36 - l / 2, 34 - l / 2, l, l, "logo.png")
       d.texto(68, 34, m.idioma == "en" and "THICK VOICE" or "VOZ GRUESA", 22, "#ffd95e")
+      d.onda(196, 22, 132, 26, "#ffd95e")
       d.tornillo(344, 14, 4)
       ayuda.perilla(d, 42, 128, "cuerpo", "Cuerpo", "Body", m.idioma)
       ayuda.perilla(d, 111, 128, "grave", "Grave", "Low end", m.idioma)

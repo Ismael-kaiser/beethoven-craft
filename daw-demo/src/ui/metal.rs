@@ -302,32 +302,40 @@ pub fn vidrio_en(p: &Painter, r: Rect, rad: u8, col: Color32, hover: bool, alto:
 
 /// Medidor de aguja: carátula color crema, escala con zona roja y cristal.
 pub fn aguja(p: &Painter, r: Rect, v: f32, nombre: &str, k: f32) {
-    p.rect_filled(r.expand(3.0 * k), (6.0 * k) as u8, Color32::from_gray(0x16));
-    degradado(p, r, (4.0 * k) as u8, Color32::from_rgb(0xf6, 0xee, 0xd2), Color32::from_rgb(0xd6, 0xc8, 0x9e));
+    p.rect_filled(r.expand(4.0 * k), (7.0 * k) as u8, Color32::from_gray(0x12));
+    p.rect_stroke(r.expand(4.0 * k), 7.0 * k, Stroke::new(1.0, Color32::from_white_alpha(28)), StrokeKind::Inside);
+    // Papel color hueso alumbrado por un foquito detrás: más claro en el centro.
+    degradado(p, r, (3.0 * k) as u8, Color32::from_rgb(0xf4, 0xe2, 0xae), Color32::from_rgb(0xd8, 0xbc, 0x7c));
     let dentro = p.with_clip_rect(r.intersect(p.clip_rect()));
-    let eje = pos2(r.center().x, r.bottom() + r.height() * 0.18);
-    let largo = (r.height() * 0.95).min(r.width() * 0.62);
+    dentro.circle_filled(pos2(r.center().x, r.bottom()), r.width() * 0.5, Color32::from_rgba_unmultiplied(0xff, 0xf0, 0xc0, 60));
+    let eje = pos2(r.center().x, r.bottom() + r.height() * 0.22);
+    let largo = (r.height() * 1.0).min(r.width() * 0.66);
     let ang = |x: f32| PI * (1.25 + 0.5 * x);
-    for i in 0..=20 {
-        let x = i as f32 / 20.0;
+    let tinta = Color32::from_rgb(0x2a, 0x22, 0x18);
+    // El arco de la escala y la zona roja.
+    let arco = |a: f32, b: f32, col: Color32, g: f32| {
+        let v: Vec<Pos2> = (0..=20).map(|i| eje + Vec2::angled(ang(a + (b - a) * i as f32 / 20.0)) * largo).collect();
+        dentro.add(Shape::line(v, Stroke::new(g * k, col)));
+    };
+    arco(0.0, 0.75, tinta, 1.0);
+    arco(0.75, 1.0, Color32::from_rgb(0xb8, 0x24, 0x18), 3.0);
+    for i in 0..=10 {
+        let x = i as f32 / 10.0;
         let u = Vec2::angled(ang(x));
-        let col = if x > 0.75 { Color32::from_rgb(0xb0, 0x2c, 0x20) } else { Color32::from_rgb(0x30, 0x2a, 0x1e) };
-        let l = if i % 5 == 0 { 0.14 } else { 0.07 };
-        dentro.line_segment([eje + u * largo, eje + u * largo * (1.0 + l)], Stroke::new(if i % 5 == 0 { 1.6 } else { 0.9 } * k, col));
+        let col = if x > 0.75 { Color32::from_rgb(0xb8, 0x24, 0x18) } else { tinta };
+        let l = if i % 5 == 0 { 0.16 } else { 0.08 };
+        dentro.line_segment([eje + u * largo, eje + u * largo * (1.0 + l)], Stroke::new(if i % 5 == 0 { 1.5 } else { 0.9 } * k, col));
     }
     dentro.text(
-        pos2(r.center().x, r.bottom() - r.height() * 0.3),
+        pos2(r.center().x, r.bottom() - r.height() * 0.32),
         Align2::CENTER_CENTER,
         nombre,
-        FontId::proportional(11.0 * k),
-        Color32::from_rgb(0x4a, 0x40, 0x2c),
+        FontId::proportional(10.5 * k),
+        Color32::from_rgb(0x4a, 0x3a, 0x22),
     );
     let u = Vec2::angled(ang(v));
-    dentro.line_segment(
-        [eje + vec2(2.0 * k, 2.0 * k), eje + u * largo * 1.1 + vec2(2.0 * k, 2.0 * k)],
-        Stroke::new(2.0 * k, Color32::from_black_alpha(60)),
-    );
-    dentro.line_segment([eje, eje + u * largo * 1.1], Stroke::new(1.6 * k, Color32::from_rgb(0x20, 0x14, 0x10)));
-    dentro.circle_filled(pos2(eje.x, r.bottom()), 7.0 * k, Color32::from_gray(0x1c));
-    vidrio_en(p, r, (4.0 * k) as u8, Color32::from_rgb(0xff, 0xe8, 0xb0), false, r.height() * 0.32);
+    dentro.line_segment([eje + vec2(2.5, 2.5) * k, eje + u * largo * 1.12 + vec2(2.5, 2.5) * k], Stroke::new(1.6 * k, Color32::from_black_alpha(50)));
+    dentro.line_segment([eje, eje + u * largo * 1.12], Stroke::new(1.3 * k, Color32::from_rgb(0x18, 0x10, 0x0c)));
+    dentro.circle_filled(pos2(eje.x, r.bottom()), 6.0 * k, Color32::from_gray(0x18));
+    vidrio_en(p, r, (3.0 * k) as u8, Color32::from_rgb(0xff, 0xe8, 0xb0), false, r.height() * 0.3);
 }

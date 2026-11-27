@@ -666,7 +666,8 @@ impl App {
         let (mut edita, mut abrir) = (None, None);
         let clave = self.p.canales[k].instrumento.clone();
         self.lienzo(&clave);
-        let mut momento = self.momento(ui, self.p.canales[k].pista);
+        let id = self.p.canales[k].id;
+        let mut momento = self.momento(ui, &format!("canal {id}"));
         if let Some(n) = self.p.canales[k].notas.clone() {
             self.lienzo(&n);
         }

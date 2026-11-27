@@ -43,6 +43,7 @@ return {
       d.acero(0, 0, 460, 250, "#6a3f5a", 10)
       local en = m.idioma == "en"
       d.grabado(30, 24, m.titulo, 22, "#ff9ad0")
+      d.onda(220, 10, 210, 28, "#ff9ad0")
       d.hueco(14, 42, 432, 96, 6)
       local desvios = { -1, -0.63, -0.31, 0, 0.29, 0.65, 0.98 }
       for i, v in ipairs(desvios) do

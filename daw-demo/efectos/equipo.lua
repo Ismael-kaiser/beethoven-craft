@@ -38,23 +38,23 @@ function E.perillas(d, c, m, o)
     local en_fila = math.min(por, n - f * por)
     local x = o.x + (o.w - en_fila * paso) / 2 + paso * ((i - 1) % por + 0.5)
     local y = o.y + f * alto + 13 + r
-    d.grabado(x, y - r - 7, m.nombres[k] or k, math.min(11.5, paso * 0.16 + 1), o.tinta or "#f2efe6", "centro")
+    d.grabado(x, y - r - 9, m.nombres[k] or k, math.min(11.5, paso * 0.16 + 1), o.tinta or "#f2efe6", "centro")
     d.perilla(x, y, r, k, o.color, o.metal)
-    d.texto(x, y + r + 8, E.numero(c[k]), 10.5, o.color, "centro")
+    d.texto(x, y + r + 9, E.numero(c[k]), 10.5, o.tinta or "#e8e0cc", "centro")
   end
   return math.ceil(n / por) * alto
 end
 
 local function filas(n, por) return math.ceil(n / por) end
 
+-- Madera a los lados y el frente pintado en medio, con su nombre y su encendido arriba.
+local MADERA = 22
 local function frente(d, m, o, w, h)
-  d.acero(0, 0, w, h, o.tinte, 9)
-  if o.asas ~= false then
-    d.asa(13, 26, 17, h - 52)
-    d.asa(w - 30, 26, 17, h - 52)
-  end
-  d.grabado(48, 25, m.titulo, 20, o.letras or o.color)
-  d.prender(w - 60, 60, 12, o.foco or o.color, "palanca")
+  d.madera(0, 0, MADERA, h)
+  d.madera(w - MADERA, 0, MADERA, h)
+  d.acero(MADERA - 2, 0, w - 2 * MADERA + 4, h, o.tinte, 3)
+  d.grabado(MADERA + 22, 25, m.titulo, 20, o.letras or o.color)
+  d.prender(w - MADERA - 30, 25, 10, o.foco or o.color, "palanca")
 end
 
 -- Rack de estudio: gráfica, aguja y perillas.
@@ -67,8 +67,8 @@ function E.rack(o)
     ancho = w, alto = h,
     dibujar = function(d, c, m)
       frente(d, m, o, w, h)
-      local x = 48
-      local libre = w - 48 - 92
+      local x = MADERA + 22
+      local libre = w - 2 * x
       if o.aguja then libre = libre - 168 end
       if o.grafica ~= false then
         d.grafica(x, 46, libre, 108, o.que)
@@ -78,9 +78,9 @@ function E.rack(o)
         local v, nombre = o.aguja(c, m)
         d.aguja(x + 2, 50, 146, 100, v, nombre)
       end
-      if o.arriba then o.arriba(d, c, m, 48, 46, w - 48 - 92, 108) end
-      d.bandeja(44, arriba, w - 88, h - arriba - 16, o.charola, 8)
-      E.perillas(d, c, m, { x = 50, y = arriba + 8, w = w - 100, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
+      if o.arriba then o.arriba(d, c, m, MADERA + 22, 46, w - 2 * MADERA - 44, 108) end
+      d.bandeja(MADERA + 18, arriba, w - 2 * MADERA - 36, h - arriba - 16, o.charola, 6)
+      E.perillas(d, c, m, { x = MADERA + 22, y = arriba + 8, w = w - 2 * MADERA - 44, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
     end,
   }
 end
@@ -113,18 +113,28 @@ function E.cinta(o)
     ancho = w, alto = h,
     dibujar = function(d, c, m)
       frente(d, m, o, w, h)
-      d.bandeja(48, 44, w - 140, 196, "#17181a", 10)
+      d.bandeja(MADERA + 18, 46, w - 2 * MADERA - 36, 194, "#17181a", 8)
       local giro = (m.tocando and m.activo) and m.tiempo * (o.vueltas and o.vueltas(c) or 0.5) or 0
-      d.carrete(134, 136, 78, giro, 0.8)
-      d.carrete(w - 178, 136, 78, giro * 1.25, 0.45)
-      -- La cinta pasa por la cabeza.
-      local cabeza = w / 2 - 22
-      d.linea({ 100, 206, cabeza - 34, 228, cabeza + 34, 228, w - 146, 206 }, "#7a4c30", 3)
-      d.acero(cabeza - 30, 206, 60, 28, "#8a8d92", 4)
+      local cabeza = w / 2
+      local izq, der = MADERA + 112, w - MADERA - 112
+      local rollo = function(lleno) return 76 * (0.36 + 0.5 * lleno) end
+      local y = 222
+      -- La cinta sale de cada rollo, baja por un rodillo guía y roza las cabezas.
+      local g1, g2 = izq + 94, der - 94
+      local cinta = { izq, 140 + rollo(0.8), g1 - 6, y - 14, g1 + 2, y - 1, g2 - 2, y - 1, g2 + 6, y - 14, der, 140 + rollo(0.45) }
+      d.linea(cinta, "#2e1a0e", 4)
+      d.linea(cinta, "#7a4c2e", 2)
+      for _, x in ipairs({ g1, g2 }) do
+        d.circulo(x, y - 8, 8, "#2a2b2e") d.aro(x, y - 8, 8, "#c8ccd2", 1.4) d.tornillo(x, y - 8, 3)
+      end
+      d.carrete(izq, 140, 76, giro, 0.8)
+      d.carrete(der, 140, 76, giro * 1.25, 0.45)
+      -- Las cabezas: borra, graba y lee.
+      for i = -1, 1 do d.acero(cabeza - 11 + i * 34, y, 22, 14, "#a4a8ae", 3) d.caja(cabeza - 1 + i * 34, y, 2, 4, "#101010") end
       d.aguja(cabeza - 56, 66, 112, 78, E.vu(m.nivel), "VU")
       for i = 0, 5 do d.led(cabeza - 40 + i * 16, 170, 3.6, i > 3 and "#ff5a4a" or o.color, m.nivel * 6 > i and 1 or 0) end
-      d.bandeja(44, 256, w - 88, h - 272, o.charola, 8)
-      E.perillas(d, c, m, { x = 50, y = 264, w = w - 100, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
+      d.bandeja(MADERA + 18, 256, w - 2 * MADERA - 36, h - 272, o.charola, 6)
+      E.perillas(d, c, m, { x = MADERA + 22, y = 264, w = w - 2 * MADERA - 44, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
     end,
   }
 end
@@ -138,13 +148,13 @@ function E.bulbos(o)
     ancho = w, alto = h,
     dibujar = function(d, c, m)
       frente(d, m, o, w, h)
-      d.hueco(48, 46, 196, 128, 8)
+      d.bandeja(MADERA + 22, 46, 196, 128, "#140e0a", 6)
       local empuje = o.empuje and o.empuje(c) or 0.5
-      local brilla = m.activo and (0.18 + 0.3 * empuje + math.min(0.6, m.nivel * (0.5 + empuje))) or 0
-      for i = 0, 2 do d.valvula(60 + i * 60, 54, 50, 114, brilla) end
-      d.grafica(258, 46, w - 258 - 92, 128, o.que)
-      d.bandeja(44, 190, w - 88, h - 206, o.charola, 8)
-      E.perillas(d, c, m, { x = 50, y = 198, w = w - 100, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
+      local brilla = m.activo and math.min(1, 0.35 + 0.35 * empuje + m.nivel * (0.8 + empuje)) or 0.05
+      for i = 0, 2 do d.valvula(MADERA + 30 + i * 62, 50, 58, 122, brilla) end
+      d.grafica(MADERA + 232, 46, w - 2 * MADERA - 254, 128, o.que)
+      d.bandeja(MADERA + 18, 190, w - 2 * MADERA - 36, h - 206, o.charola, 6)
+      E.perillas(d, c, m, { x = MADERA + 22, y = 198, w = w - 2 * MADERA - 44, claves = o.claves, por = por, color = o.color, metal = o.metal, alto = 92, r = 23 })
     end,
   }
 end

@@ -40,6 +40,7 @@ return {
       local en = m.idioma == "en"
       d.acero(0, 0, 660, 440, "#3a3d44", 10)
       d.grabado(30, 24, m.titulo, 21, "#ff8a6a")
+      d.onda(330, 10, 300, 28, "#ff8a6a")
       d.bandeja(20, 46, 390, 376, "#1a1b1e", 10)
       d.pads(24, 50, 382, 368, "#ff8a6a")
       local p = m.pad

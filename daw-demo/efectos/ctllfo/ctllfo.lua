@@ -20,7 +20,7 @@ return {
     dibujar = function(d, c, m)
       d.acero(0, 0, 520, 250, "#4a4a58", 9)
       d.grabado(34, 25, m.titulo, 20, "#b8ffb0")
-      d.prender(480, 60, 12, "#b8ffb0", "palanca")
+      d.prender(490, 25, 10, "#b8ffb0", "palanca")
       local v = m.medidas.control or 0
       d.aguja(34, 50, 150, 92, v, string.format("%.0f %%", v * 100))
       for i = 0, 9 do d.led(210 + i * 24, 70, 6, "#b8ffb0", v * 10 > i and 1 or 0) end

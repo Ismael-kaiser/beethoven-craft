@@ -112,7 +112,7 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
                 let lado = r * 2.0 * k;
                 let mut h = ui.new_child(UiBuilder::new().max_rect(Rect::from_center_size(en(x, y), Vec2::splat(lado))).id_salt((id, n)));
                 let mut val = lee(v, q);
-                let resp = perilla_de(&mut h, "", &mut val, q.min, q.max, q.valor, col(c), lado, col(metal));
+                let resp = perilla_vieja(&mut h, &mut val, q.min, q.max, q.valor, col(c), lado, col(metal), k);
                 if resp.changed() {
                     pone(v, q, val);
                 }
@@ -181,7 +181,7 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
                 let resp = ui.interact(Rect::from_center_size(en(x, y), Vec2::splat(r * 2.4 * k)), id.with((n, "pi")), Sense::click());
                 let si = lee(v, q) > (q.min + q.max) / 2.0;
                 torno::pisoton(&p, en(x, y), r * k, resp.is_pointer_button_down_on());
-                torno::foco(&p, en(x, y - r * 2.1), 4.5 * k, col(c), if si { 1.0 } else { 0.0 });
+                torno::lampara(&p, en(x, y - r * 2.1), 4.2 * k, col(c), if si { 1.0 } else { 0.0 });
                 resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, si, q.nombre.ver()));
                 if resp.clicked() {
                     pone(v, q, if si { q.min } else { q.max });
@@ -195,7 +195,7 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
                 let si = lee(v, q) > (q.min + q.max) / 2.0;
                 torno::palanca(&p, en(x, y), si, k);
                 if si {
-                    torno::foco(&p, en(x, y - 32.0), 3.0 * k, col(c), 1.0);
+                    torno::lampara(&p, en(x - 22.0, y), 3.6 * k, col(c), 1.0);
                 }
                 if resp.clicked() {
                     pone(v, q, if si { q.min } else { q.max });
@@ -228,9 +228,11 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
                 // La que pide el guion o, si no dice, la de su familia.
                 let cual = super::grafica::Clase::pedida(&clase).or_else(|| Some((super::grafica::Clase::de(&f.grupo.es)?, false)));
                 if let (Some((c, agudo)), Some(r)) = (cual, ent.receta) {
-                    super::grafica::en(ui, rect(x, y, w, h), c, r, v, ent.sr, agudo, id.with((n, "g")), k);
+                    super::grafica::en(ui, rect(x, y, w, h), c, r, v, ent.sr, agudo, id.with((n, "g")), k, &m);
                 }
             }
+            Pieza::Onda { x, y, w, h, c } => super::grafica::onda(&p, rect(x, y, w, h), &m, col(c), k),
+            Pieza::Historia { x, y, w, h, c } => super::grafica::historia(&p, rect(x, y, w, h), &m, col(c), k),
             Pieza::Ecualizador { x, y, w, h } => {
                 let r = rect(x, y, w, h);
                 let mut dentro = ui.new_child(UiBuilder::new().max_rect(r).id_salt((id, n, "eq")));
@@ -253,14 +255,18 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
             }
             Pieza::Prender { x, y, r, c, pie } => {
                 let Some(si) = ent.activo.as_deref_mut() else { continue };
-                let zona = Rect::from_center_size(en(x, y), if pie { Vec2::splat(r * 2.4) } else { vec2(26.0, 46.0) } * k);
+                let zona = Rect::from_center_size(
+                    en(x, y) - if pie { Vec2::ZERO } else { vec2(10.0, 0.0) * k },
+                    if pie { Vec2::splat(r * 2.4) } else { vec2(44.0, 40.0) } * k,
+                );
                 let resp = ui.interact(zona, id.with((n, "on")), Sense::click());
                 if pie {
                     torno::pisoton(&p, en(x, y), r * k, resp.is_pointer_button_down_on());
-                    torno::foco(&p, en(x, y - r * 2.1), 5.0 * k, col(c), if *si { 1.0 } else { 0.0 });
+                    torno::lampara(&p, en(x, y - r * 2.1), 4.6 * k, col(c), if *si { 1.0 } else { 0.0 });
                 } else {
+                    // Palanca con su lámpara al lado.
                     torno::palanca(&p, en(x, y), *si, k);
-                    torno::foco(&p, en(x, y - 34.0), 4.5 * k, col(c), if *si { 1.0 } else { 0.0 });
+                    torno::lampara(&p, en(x - 22.0, y), 4.2 * k, col(c), if *si { 1.0 } else { 0.0 });
                 }
                 resp.widget_info(|| WidgetInfo::selected(WidgetType::Button, true, *si, t(if *si { "Prendido" } else { "Apagado" })));
                 if resp.clicked() {
@@ -391,6 +397,7 @@ pub fn pintar(ui: &mut Ui, it: &mut Interfaz, f: &Ficha, v: &mut BTreeMap<String
             Pieza::Valvula { x, y, w, h, v } => torno::valvula(&p, rect(x, y, w, h), v, k),
             Pieza::Carrete { x, y, r, giro, lleno } => torno::carrete(&p, en(x, y), r * k, giro, lleno, k),
             Pieza::Asa { x, y, w, h } => torno::asa(&p, rect(x, y, w, h), k),
+            Pieza::Madera { x, y, w, h } => torno::madera(&p, rect(x, y, w, h), 6.0 * k, k),
             Pieza::Poner { clave, v: x } => {
                 if let Some(q) = control(&clave) {
                     pone(v, q, x);

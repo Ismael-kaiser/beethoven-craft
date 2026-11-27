@@ -187,6 +187,7 @@ enum Pendiente {
 }
 
 /// La carpeta del usuario.
+pub use ecualizador::espectro;
 pub use lado::picos;
 
 pub fn carpeta() -> PathBuf {
@@ -641,14 +642,13 @@ impl App {
         self.lienzos.get_mut(clave)?.1.as_mut()
     }
 
-    fn momento(&self, ui: &Ui, pista: usize) -> crate::interfaz::Momento {
-        let nivel = self.picos[pista][0].max(self.picos[pista][1]);
-        let mut m = crate::interfaz::Momento { tiempo: ui.input(|i| i.time), nivel, tocando: self.tocando() || nivel > 1e-3, ..Default::default() };
-        if self.estado.escucha.load(Relaxed) == pista as u32 && m.tocando {
-            let x = self.estado.onda();
-            m.espectro = ecualizador::espectro(&x, self.bib.sr, 64).iter().map(|d| ((d + 84.0) / 84.0).clamp(0.0, 1.0)).collect();
-            m.onda = x.iter().step_by(x.len() / 256).copied().collect();
-        }
+    /// Lo que sabe la ventana de un plugin. `lugar`: de quién se ve la onda.
+    fn momento(&mut self, ui: &Ui, lugar: &str) -> crate::interfaz::Momento {
+        let v = self.bib.ojo(lugar).ver();
+        let mut m = crate::interfaz::Momento { tiempo: ui.input(|i| i.time), tocando: self.tocando(), ..Default::default() };
+        m.poner(&v, self.bib.sr);
+        // Aunque la canción esté parada, si se toca con las manos también se mueve.
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(60));
         m
     }
 

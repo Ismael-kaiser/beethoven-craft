@@ -39,6 +39,7 @@ return {
       d.acero(0, 0, 430, 240, "#7a5a30", 10)
       local en = m.idioma == "en"
       d.grabado(30, 24, m.titulo, 22, "#ffd98a")
+      d.onda(240, 10, 165, 28, "#ffd98a")
       d.hueco(14, 42, 402, 100, 8)
       for i = 1, 6 do
         local v = {}

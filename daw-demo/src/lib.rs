@@ -18,6 +18,7 @@ pub mod midi;
 pub mod modelo;
 pub mod motor;
 pub mod muestrario;
+pub mod ojo;
 pub mod paquete;
 pub mod plugin;
 pub mod receta;
