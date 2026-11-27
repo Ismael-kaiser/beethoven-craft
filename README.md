@@ -9,59 +9,62 @@ Creado por **mixter-ha99**. Software libre, MIT o Apache-2.0.
 
 > *English: a free video editor (Beethoven Movie) and music studio (Beethoven DAW) in one app, written in Rust. The interface is available in Spanish and English. Docs are in Spanish for now.*
 
+**Descargar:** [ismael-kaiser.github.io/beethoven-craft](https://ismael-kaiser.github.io/beethoven-craft/) · [todas las versiones](https://github.com/Ismael-kaiser/beethoven-craft/releases)
+
 ![Menú principal](docs/img/menu.jpg)
 
-## Novedades de la 0.12.4
+## Novedades de la 0.12.6
 
-- **DAW**: editor de audio, 48 efectos con ventana analógica, sintetizadores, muestreador, pads y cortador; afinador de voz, quita ruido y arpegiador en vivo; el Mixer compensa la latencia.
-- **Plugins**: suelta una carpeta, un `.zip` o un `.lua` y funciona. Lua puede correr mientras suena. Guía: [PLUGINS.md](daw-demo/PLUGINS.md). Los nuestros también salen como **VST3 y CLAP** («BeethovenPlugins» en las descargas).
-- **Movie**: sonido, controles e íconos nuevos, todo MIT o Apache-2.0.
+**Exportar para Discord.** Un ajuste listo que hace que el video no pase de 10 MB (o el peso que elijas: 25 MB, Nitro Basic 50 MB…). Se ajustan solos la calidad, el tamaño y los cuadros, con dos pasadas de H.264.
 
-### Antes, en la 0.12.0
+![Exportar para Discord](docs/img/movie-discord.jpg)
 
-- **Beethoven DAW nuevo**, escrito desde cero. Las canciones del anterior (`.beethoven`) se abren con la 0.11.
-- **Asistente de IA** en Movie y en el DAW, con la IA que tú tengas.
-- **Vistas previas al instante** al meter un video.
+## Novedades de la 0.12.5: Movie y el DAW, juntos
 
-## Novedades de la 0.11
+**Los plugins del DAW en Movie**, con la misma ventana y el mismo motor: suenan igual al reproducir y al exportar.
 
-**Interfaz de metal y línea de tiempo nueva.** Botones, perillas y faders con relieve; clips de cristal con etiquetas (efectos, animación, transición, velocidad); regla profesional, cursor con cabeza de metal y minimapa para hacer zoom.
+![Un plugin del DAW en Movie](docs/img/movie-plugin.jpg)
 
-![Línea de tiempo](docs/img/v11-linea.jpg)
-
-| Volumen dentro de cada clip de audio | Perillas y mezclador de metal |
+| Velocidad en el clic derecho (−50 % es cámara lenta) | Transiciones propias en el catálogo |
 |---|---|
-| ![Volumen](docs/img/v11-volumen.jpg) | ![Perillas](docs/img/v11-perillas.jpg) |
+| ![Velocidad](docs/img/movie-velocidad.jpg) | ![Catálogo de transiciones](docs/img/movie-transiciones.jpg) |
 
-![Mezclador](docs/img/v11-mezclador.jpg)
+**Seis transiciones nuevas, propias:** corazón, telón, tinta, humo, rayo eléctrico y panal.
 
-| Biblioteca con vista previa | Apartado Texto | Agregar una fuente |
-|---|---|---|
-| ![Biblioteca](docs/img/v11-biblioteca.jpg) | ![Texto](docs/img/v11-texto.jpg) | ![Fuente](docs/img/v11-fuente.jpg) |
+![Transiciones](docs/img/transiciones.jpg)
 
-| Mover, escalar, estirar y girar en la vista previa | Ventana de exportación |
+**En el DAW:** curva y tirador de volumen en cada audio, pistas con nombre y color, grupos plegables y clases con efectos compartidos en el Mixer (hasta 32 pistas), y la Playlist con el cristal y la relojería de Movie.
+
+| Playlist con regla de reloj y curva de volumen | Mixer con grupos y clases |
 |---|---|
-| ![Vista previa](docs/img/v11-vista.jpg) | ![Exportar](docs/img/v11-exportar.jpg) |
+| ![Playlist](docs/img/daw-playlist.jpg) | ![Mixer](docs/img/daw-mixer.jpg) |
 
-| Videos que tu computadora no lee bien | Explorador de archivos |
+**Ventanas de plugins rediseñadas:** costados de madera, perillas con escala, bulbos que brillan con el sonido y carretes de aluminio con la cinta a la vista.
+
+| Eco de cinta | Saturador de bulbos |
 |---|---|
-| ![Convertir](docs/img/v11-convertir.jpg) | ![Archivos](docs/img/v11-archivos.jpg) |
+| ![Eco de cinta](docs/img/externa-eco.jpg) | ![Saturador de bulbos](docs/img/externa-fuego.jpg) |
 
-**Sin tirones:** en pausa se preparan las transiciones pesadas; la barra verde de la regla marca lo que ya se verá fluido.
+<details><summary>Más ventanas de plugins</summary>
 
-![Barra de preparación](docs/img/v11-preparado.jpg)
+![Plugins](docs/img/plugins-1.jpg)
+![Plugins](docs/img/plugins-2.jpg)
 
-| Recuperación si la app se cierra de golpe | Actualizaciones automáticas |
-|---|---|
-| ![Recuperar](docs/img/v11-recuperar.jpg) | ![Actualizar](docs/img/v11-actualizar.jpg) |
+</details>
 
 Todo lo nuevo, en las [notas de cada versión](https://github.com/Ismael-kaiser/beethoven-craft/releases).
 
 ## Beethoven Movie
 
+![Línea de tiempo](docs/img/movie-linea.jpg)
+
 | Animación | Nodos y mezcla de color |
 |---|---|
 | ![Animación](docs/img/movie-animacion.jpg) | ![Nodos](docs/img/movie-nodos.jpg) |
+
+| Consola de audio | Archivos |
+|---|---|
+| ![Audio](docs/img/movie-audio.jpg) | ![Archivos](docs/img/movie-archivos.jpg) |
 
 - Edición por pistas con cuchilla, recorte ondulado, rodar, estirar, deslizar y transiciones.
 - **Animación libre**: llaves con clic derecho (posición, giro, escala, opacidad…), puntos con clic y caminos dibujados a mano.
@@ -71,7 +74,9 @@ Todo lo nuevo, en las [notas de cada versión](https://github.com/Ismael-kaiser/
 - **66 filtros** propios, ruedas de color, onda RGB, histograma y vectorscopio.
 - **Panel de archivos**: carpetas, subcarpetas, búsqueda, miniaturas y vista previa; todo se arrastra a las pistas.
 - **Clip vacío**: aplica efectos a todo lo que hay debajo, textos incluidos.
-- **Audio** con ecualizador de siete bandas, vocoder, moldeador estéreo y más.
+- **Audio** con ecualizador de siete bandas, vocoder, moldeador estéreo y más, y los plugins de Beethoven DAW.
+- **Velocidad** de cualquier clip en el clic derecho, sola o junto con su sonido.
+- **Exportar** a YouTube, TikTok, WhatsApp, Discord (sin pasar de 10 MB) o ProRes.
 - Consola de audio, instrumentos, grabación y separador de voz en tu propia máquina.
 - **Atajos de teclado** que se pueden cambiar todos.
 
@@ -82,7 +87,8 @@ Guía completa: [docs/movie.md](docs/movie.md)
 El estudio de música, escrito desde cero para Beethoven Craft (carpeta `daw-demo/`, MIT o Apache-2.0).
 
 - **La Playlist es el fondo**; el **Mixer** es otra pestaña o ventana; Ritmo, Piano roll e Instrumento son ventanas encima. Con el metal y el vidrio de Movie.
-- **Pistas de audio** (WAV, MP3, OGG, FLAC, M4A, video…), grabación, Mixer de 12 pistas con envíos y 25 efectos.
+- **Pistas de audio** (WAV, MP3, OGG, FLAC, M4A, video…) con curva y tirador de volumen, editor de audio y grabación.
+- **Mixer** de hasta 32 pistas con envíos, grupos plegables, clases con efectos compartidos, color y 48 efectos con ventana analógica.
 - **Instrumentos grabados** nota por nota (banco MuseScore General, MIT), por familia: pianos, guitarras, cuerdas, orquesta, metales, maderas, coros, sintetizadores, baterías y percusión.
 - **Crear en Lua**: tus propios instrumentos y efectos, con editor dentro de la app; cada uno puede traer su carpeta con imágenes PNG y su propio logo.
 - **Plugins VST3 y CLAP**, SoundFont (.sf2 y .sf3), SFZ y audio suelto como instrumentos; teclados MIDI.
